@@ -25,6 +25,7 @@ import {
   toggleAdminPromo,
   deleteAdminPromo,
 } from './controllers/promoController.js';
+import { getOnlineStats, pingOnlineStatus } from './controllers/statsController.js';
 
 // Telegraf Bot
 import { bot } from './bot/telegrafInstance.js';
@@ -67,6 +68,10 @@ app.get('/api/withdraw/history', authMiddleware, getWithdrawalHistory);
 
 // Promo Codes
 app.post('/api/promos/redeem', authMiddleware, redeemPromo);
+
+// Real-time Online Telemetry
+app.get('/api/stats/online', getOnlineStats);
+app.post('/api/stats/ping', pingOnlineStatus);
 
 // Admin Routes (Protected by ADMIN_TELEGRAM_IDS)
 app.get('/api/admin/config', authMiddleware, adminMiddleware, getRewardConfigs);

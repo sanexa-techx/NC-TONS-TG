@@ -96,3 +96,10 @@ export interface PromoRedeemResponse {
     ton_balance: string;
   };
 }
+
+export interface OnlineStats {
+  onlineCount: number;
+  peak24h: number;
+  activeRealUsers?: number;
+  timestamp?: number;
+}

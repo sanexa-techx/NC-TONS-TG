@@ -3,7 +3,7 @@ import { UserProfile, MiningState } from '../types/index.js';
 import { DualCurrencyBar } from '../components/DualCurrencyBar.js';
 import { CircularBatteryGauge } from '../components/CircularBatteryGauge.js';
 import { RechargeModal } from '../components/RechargeModal.js';
-import { Cpu, Gamepad2, Target, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Gamepad2, Target, ArrowRight, ShieldCheck } from 'lucide-react';
 
 interface MiningDashboardProps {
   user: UserProfile | null;
@@ -55,9 +55,9 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-cyber-card border border-cyber-border">
-          <Cpu size={14} className="text-cyber-cyan" />
-          <span className="text-[11px] font-mono text-cyber-cyan font-bold">RIG v2.4</span>
+        <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-cyber-card/80 border border-cyber-border text-xs font-mono">
+          <span className="w-1.5 h-1.5 rounded-full bg-cyber-cyan animate-pulse" />
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">NODE ONLINE</span>
         </div>
       </div>
 

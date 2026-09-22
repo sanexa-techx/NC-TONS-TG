@@ -1,4 +1,4 @@
-import { MiningState, Mission, RewardConfig, UserProfile, WithdrawalRecord, GameFinishResponse, PromoCode, PromoRedeemResponse } from '../types/index.js';
+import { MiningState, Mission, RewardConfig, UserProfile, WithdrawalRecord, GameFinishResponse, PromoCode, PromoRedeemResponse, OnlineStats } from '../types/index.js';
 
 let devUserId = localStorage.getItem('nctons_dev_user_id') || '9990001';
 let devUsername = localStorage.getItem('nctons_dev_username') || 'CyberMiner';
@@ -241,6 +241,21 @@ export const api = {
     const res = await fetch(`/api/admin/promos/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  // Online Players Telemetry
+  async getOnlineStats(): Promise<OnlineStats> {
+    const res = await fetch('/api/stats/online');
+    return handleResponse(res);
+  },
+
+  async pingOnlineStatus(userId?: string): Promise<OnlineStats> {
+    const res = await fetch('/api/stats/ping', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId }),
     });
     return handleResponse(res);
   },
