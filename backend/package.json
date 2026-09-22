@@ -5,10 +5,10 @@
   "description": "Backend API and Telegraf Bot for NC TONs Telegram Mini App",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts"
   },
