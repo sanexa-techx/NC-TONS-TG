@@ -80,17 +80,17 @@ export const App: React.FC = () => {
           onSync={sync}
         />
 
-        {/* Sticky Status Header with Telegram Profile Bar & Online Players Beacon */}
-        <header className="sticky top-0 z-20 bg-cyber-bg/90 backdrop-blur-md border-b border-cyber-border/40 py-2 px-3 shadow-md">
-          <div className="w-full max-w-md mx-auto flex items-center justify-between gap-2">
-            {/* Telegram Profile & Avatar Engine Bar */}
+        {/* Sticky Profile Header — spec: bg-neutral-900/80, full-width, profile left, online badge right */}
+        <header className="sticky top-0 z-20 w-full bg-neutral-900/80 backdrop-blur-md border-b border-neutral-800/80 px-4 py-2.5 shadow-sm">
+          <div className="w-full max-w-md mx-auto flex items-center justify-between gap-3">
+            {/* Real Telegram Profile Bar */}
             <UserProfileHeader
               user={user}
               livePowerPercentage={livePowerPercentage}
               liveTonBalance={liveTonBalance}
             />
 
-            {/* Corner Real-time Online Players Badge */}
+            {/* Real-time Online Players Beacon */}
             <OnlinePlayersBadge userId={user?.id} />
           </div>
         </header>
