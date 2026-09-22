@@ -1,100 +1,80 @@
 import { Request, Response } from 'express';
 
-// In-memory presence tracking for connected miners
+// In-memory presence tracking for actual real connected miners
 interface ActiveMiner {
   id: string;
   lastSeen: number;
 }
 
 const activeMiners = new Map<string, ActiveMiner>();
+let peak24h = 1;
+const SESSION_TIMEOUT_MS = 45000; // 45 seconds timeout without a heartbeat
 
-// Base simulation metrics for global ecosystem presence
-const BASE_ACTIVE_PLAYERS = 1280;
-const PEAK_24H_PLAYERS = 3840;
-
-// Organic jitter state for natural real-time fluctuation
-let cachedFluctuation = 0;
-let lastFluctuationUpdate = Date.now();
-
-function getLiveOnlineCount(): { onlineCount: number; peak24h: number; realActive: number } {
+function pruneInactiveMiners(): number {
   const now = Date.now();
-
-  // Prune inactive sessions older than 2 minutes (120,000 ms)
   for (const [id, miner] of activeMiners.entries()) {
-    if (now - miner.lastSeen > 120000) {
+    if (now - miner.lastSeen > SESSION_TIMEOUT_MS) {
       activeMiners.delete(id);
     }
   }
-
-  // Update organic jitter every 4 seconds (-3 to +4 change)
-  if (now - lastFluctuationUpdate > 4000) {
-    const delta = Math.floor(Math.random() * 8) - 3; // -3 to +4
-    cachedFluctuation = Math.max(-120, Math.min(180, cachedFluctuation + delta));
-    lastFluctuationUpdate = now;
+  const realCount = activeMiners.size;
+  if (realCount > peak24h) {
+    peak24h = realCount;
   }
-
-  // Circadian time-of-day curve (UTC hours)
-  const currentHour = new Date().getUTCHours();
-  const timeOfDayModifier = Math.round(Math.sin(((currentHour - 8) * Math.PI) / 12) * 160);
-
-  const realActive = activeMiners.size;
-  const simulatedActive = BASE_ACTIVE_PLAYERS + timeOfDayModifier + cachedFluctuation;
-  const totalOnline = Math.max(12, simulatedActive + realActive);
-
-  const peak = Math.max(PEAK_24H_PLAYERS, totalOnline + 350);
-
-  return {
-    onlineCount: totalOnline,
-    peak24h: peak,
-    realActive,
-  };
+  return realCount;
 }
 
 /**
  * GET /api/stats/online
- * Public endpoint to fetch real-time online players telemetry
+ * Public endpoint returning strictly actual real online users
  */
 export function getOnlineStats(req: Request, res: Response) {
   try {
-    const stats = getLiveOnlineCount();
+    const realOnline = pruneInactiveMiners();
     return res.json({
       success: true,
-      onlineCount: stats.onlineCount,
-      peak24h: stats.peak24h,
-      activeRealUsers: stats.realActive,
+      onlineCount: realOnline,
+      peak24h: Math.max(realOnline, peak24h),
+      activeRealUsers: realOnline,
       timestamp: Date.now(),
       status: 'healthy',
     });
   } catch (err: any) {
-    console.error('Error fetching online stats:', err);
+    console.error('Error fetching real online stats:', err);
     return res.status(500).json({ error: 'Failed to fetch online stats', message: err.message });
   }
 }
 
 /**
  * POST /api/stats/ping
- * Heartbeat ping from clients to register active presence
+ * Heartbeat ping from clients registering actual real presence
  */
 export function pingOnlineStatus(req: Request, res: Response) {
   try {
-    const rawUserId = req.telegramUser?.id || req.body?.userId || req.ip || 'anonymous';
+    const rawUserId = req.telegramUser?.id || req.body?.userId || req.headers['x-dev-telegram-id'] || req.ip || 'user-1';
     const userId = String(rawUserId);
 
-    activeMiners.set(userId, {
-      id: userId,
-      lastSeen: Date.now(),
-    });
+    // If client is signaling disconnect (e.g. on page unload)
+    if (req.body?.action === 'leave') {
+      activeMiners.delete(userId);
+    } else {
+      activeMiners.set(userId, {
+        id: userId,
+        lastSeen: Date.now(),
+      });
+    }
 
-    const stats = getLiveOnlineCount();
+    const realOnline = pruneInactiveMiners();
+
     return res.json({
       success: true,
-      onlineCount: stats.onlineCount,
-      peak24h: stats.peak24h,
-      activeRealUsers: stats.realActive,
+      onlineCount: realOnline,
+      peak24h: Math.max(realOnline, peak24h),
+      activeRealUsers: realOnline,
       timestamp: Date.now(),
     });
   } catch (err: any) {
-    console.error('Error processing presence ping:', err);
+    console.error('Error processing real presence ping:', err);
     return res.status(500).json({ error: 'Presence ping failed', message: err.message });
   }
 }

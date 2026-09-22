@@ -89,7 +89,7 @@ export const OnlinePlayersBadge: React.FC<OnlinePlayersBadgeProps> = ({
               <div className="p-2.5 rounded-xl bg-cyber-bg/80 border border-cyber-border flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-slate-400">
                   <Users size={14} className="text-cyber-green" />
-                  <span className="text-[11px]">Active Miners:</span>
+                  <span className="text-[11px]">Real Active Miners:</span>
                 </div>
                 <div className="text-sm font-bold text-white flex items-center space-x-1">
                   <span className="w-2 h-2 rounded-full bg-cyber-green animate-pulse" />
@@ -100,39 +100,39 @@ export const OnlinePlayersBadge: React.FC<OnlinePlayersBadgeProps> = ({
               <div className="p-2.5 rounded-xl bg-cyber-bg/80 border border-cyber-border flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-slate-400">
                   <Radio size={14} className="text-cyber-cyan" />
-                  <span className="text-[11px]">24h Peak:</span>
+                  <span className="text-[11px]">24h Peak Real Users:</span>
                 </div>
                 <div className="font-bold text-cyber-cyan">
-                  {peak24h.toLocaleString()} miners
+                  {peak24h.toLocaleString()} {peak24h === 1 ? 'miner' : 'miners'}
                 </div>
               </div>
 
               <div className="p-2.5 rounded-xl bg-cyber-bg/80 border border-cyber-border flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-slate-400">
                   <Globe2 size={14} className="text-cyber-gold" />
-                  <span className="text-[11px]">Global Nodes:</span>
+                  <span className="text-[11px]">Connected Cluster:</span>
                 </div>
                 <div className="font-bold text-white text-[11px]">
-                  3 Active Regions
+                  Direct WebSocket / HTTP2
                 </div>
               </div>
 
               <div className="p-2.5 rounded-xl bg-cyber-bg/80 border border-cyber-border flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-slate-400">
                   <Zap size={14} className="text-cyber-gold" />
-                  <span className="text-[11px]">Telemetry Sync:</span>
+                  <span className="text-[11px]">Presence Heartbeat:</span>
                 </div>
                 <div className="text-cyber-green font-bold text-[11px]">
-                  HTTP/2 &bull; 10s Ping
+                  Active &bull; 8s Ping
                 </div>
               </div>
 
               <div className="p-2 rounded-xl bg-cyber-card/50 border border-cyber-border/60 flex items-center justify-between text-[10px] text-slate-400">
                 <div className="flex items-center space-x-1.5">
                   <ShieldCheck size={12} className="text-cyber-cyan" />
-                  <span>Direct Node Peers:</span>
+                  <span>Verified Peers:</span>
                 </div>
-                <span className="font-bold text-cyber-cyan">{activeRealUsers} verified</span>
+                <span className="font-bold text-cyber-green">{activeRealUsers} Active</span>
               </div>
             </div>
 

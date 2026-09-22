@@ -2,15 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api.js';
 
 export function useOnlinePlayers(userId?: string) {
-  const [onlineCount, setOnlineCount] = useState<number>(1380);
-  const [peak24h, setPeak24h] = useState<number>(3840);
+  const [onlineCount, setOnlineCount] = useState<number>(1);
+  const [peak24h, setPeak24h] = useState<number>(1);
   const [activeRealUsers, setActiveRealUsers] = useState<number>(1);
   const [isPulsing, setIsPulsing] = useState<boolean>(false);
-  const prevCountRef = useRef<number>(1380);
+  const prevCountRef = useRef<number>(1);
 
-  const syncStats = useCallback(async () => {
+  const syncRealPresence = useCallback(async () => {
     try {
-      const stats = userId ? await api.pingOnlineStatus(userId) : await api.getOnlineStats();
+      const stats = await api.pingOnlineStatus(userId);
       if (stats && typeof stats.onlineCount === 'number') {
         if (stats.onlineCount !== prevCountRef.current) {
           setIsPulsing(true);
@@ -22,37 +22,44 @@ export function useOnlinePlayers(userId?: string) {
         if (stats.activeRealUsers !== undefined) setActiveRealUsers(stats.activeRealUsers);
       }
     } catch {
-      // Fallback gracefully on temporary network blips
+      // Fallback on network hiccups
     }
   }, [userId]);
 
-  // Initial fetch and regular 10s background sync
+  // Initial sync and regular 8-second presence ping
   useEffect(() => {
-    syncStats();
-    const interval = setInterval(syncStats, 10000);
-    return () => clearInterval(interval);
-  }, [syncStats]);
+    syncRealPresence();
+    const interval = setInterval(syncRealPresence, 8000);
 
-  // Micro-organic fluctuation every 3.5s for real-time heartbeat feeling
-  useEffect(() => {
-    const microTimer = setInterval(() => {
-      // 40% chance of small +-1 or +-2 micro-tick
-      if (Math.random() < 0.45) {
-        const delta = Math.random() > 0.5 ? 1 : -1;
-        setOnlineCount((prev) => {
-          const next = Math.max(10, prev + delta);
-          if (next !== prev) {
-            setIsPulsing(true);
-            setTimeout(() => setIsPulsing(false), 600);
-            prevCountRef.current = next;
-          }
-          return next;
-        });
+    // Sync on tab focus / visibility return
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncRealPresence();
       }
-    }, 3500);
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', syncRealPresence);
 
-    return () => clearInterval(microTimer);
-  }, []);
+    // Signal disconnect on tab close / reload
+    const handleUnload = () => {
+      try {
+        const payload = JSON.stringify({ userId, action: 'leave' });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/stats/ping', new Blob([payload], { type: 'application/json' }));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', syncRealPresence);
+      window.removeEventListener('beforeunload', handleUnload);
+    };
+  }, [syncRealPresence, userId]);
 
   return {
     onlineCount,
