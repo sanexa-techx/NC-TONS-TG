@@ -147,7 +147,15 @@ export const api = {
     const res = await fetch('/api/admin/config', {
       headers: getAuthHeaders(),
     });
-    return handleResponse(res);
+    const data = (await handleResponse(res)) as any;
+    const configs = (data.configs || []).map((c: any) => ({
+      actionType: c.actionType || c.action_type || '',
+      displayName: c.displayName || c.display_name || c.actionType || c.action_type || '',
+      ncReward: Number(c.ncReward !== undefined ? c.ncReward : (c.nc_reward !== undefined ? c.nc_reward : 0)),
+      tonReward: (c.tonReward || c.ton_reward || '0.000000').toString(),
+      updatedAt: c.updatedAt || c.updated_at,
+    }));
+    return { configs };
   },
 
   async updateRewardConfig(data: {

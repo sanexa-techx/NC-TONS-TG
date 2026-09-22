@@ -4,9 +4,23 @@ import { Decimal } from '@prisma/client/runtime/library';
 
 export async function getRewardConfigs(req: Request, res: Response) {
   try {
-    const configs = await prisma.rewardConfig.findMany({
+    const rawConfigs = await prisma.rewardConfig.findMany({
       orderBy: { action_type: 'asc' },
     });
+    const configs = rawConfigs.map((c: any) => ({
+      actionType: c.action_type || c.actionType,
+      displayName: c.display_name || c.displayName || c.action_type || c.actionType,
+      ncReward: Number(c.nc_reward !== undefined ? c.nc_reward : c.ncReward),
+      tonReward: c.ton_reward !== undefined
+        ? (typeof c.ton_reward === 'object' && c.ton_reward.toFixed ? c.ton_reward.toFixed(6) : c.ton_reward.toString())
+        : (c.tonReward?.toString() || '0.000000'),
+      updatedAt: c.updated_at || c.updatedAt,
+      // Provide snake_case for backward compatibility
+      action_type: c.action_type || c.actionType,
+      display_name: c.display_name || c.displayName || c.action_type || c.actionType,
+      nc_reward: Number(c.nc_reward !== undefined ? c.nc_reward : c.ncReward),
+      ton_reward: c.ton_reward !== undefined ? c.ton_reward : c.tonReward,
+    }));
     return res.json({ configs });
   } catch (err) {
     console.error('Error fetching reward configs:', err);
@@ -16,9 +30,12 @@ export async function getRewardConfigs(req: Request, res: Response) {
 
 export async function updateRewardConfig(req: Request, res: Response) {
   try {
-    const { actionType, ncReward, tonReward, displayName } = req.body;
+    const actionType = req.body.actionType || req.body.action_type;
+    const ncReward = req.body.ncReward !== undefined ? req.body.ncReward : req.body.nc_reward;
+    const tonReward = req.body.tonReward !== undefined ? req.body.tonReward : req.body.ton_reward;
+    const displayName = req.body.displayName || req.body.display_name;
 
-    if (!actionType || ncReward === undefined || tonReward === undefined) {
+    if (!actionType || ncReward === undefined || tonReward === undefined || isNaN(Number(ncReward)) || isNaN(Number(tonReward))) {
       return res.status(400).json({ error: 'Missing required fields: actionType, ncReward, tonReward' });
     }
 

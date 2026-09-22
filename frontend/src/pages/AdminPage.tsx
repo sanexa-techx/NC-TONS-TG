@@ -46,16 +46,19 @@ export const AdminPage: React.FC = () => {
   }, [fetchData]);
 
   const handleUpdateReward = async (config: RewardConfig) => {
-    setSavingConfig(config.actionType);
+    const actionType = config.actionType || (config as any).action_type;
+    const displayName = config.displayName || (config as any).display_name || actionType;
+    if (!actionType) return;
+    setSavingConfig(actionType);
     setFeedback(null);
     try {
       await api.updateRewardConfig({
-        actionType: config.actionType,
-        ncReward: Number(config.ncReward),
-        tonReward: Number(config.tonReward),
-        displayName: config.displayName,
+        actionType,
+        ncReward: Number(config.ncReward !== undefined ? config.ncReward : (config as any).nc_reward),
+        tonReward: Number(config.tonReward !== undefined ? config.tonReward : (config as any).ton_reward),
+        displayName,
       });
-      setFeedback({ type: 'success', text: `Saved rates for ${config.displayName}` });
+      setFeedback({ type: 'success', text: `Saved rates for ${displayName}` });
     } catch (err) {
       setFeedback({ type: 'error', text: (err as Error).message || 'Failed to update reward' });
     } finally {
@@ -176,62 +179,68 @@ export const AdminPage: React.FC = () => {
         </h3>
 
         <div className="space-y-3">
-          {configs.map((cfg) => (
-            <div key={cfg.actionType} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border">
-              <div className="text-xs font-bold text-white mb-2">{cfg.displayName}</div>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <div>
-                  <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
-                    <NcIcon className="w-4 h-4" />
-                    <span>NC Reward</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={cfg.ncReward}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      setConfigs((prev) =>
-                        prev.map((c) =>
-                          c.actionType === cfg.actionType ? { ...c, ncReward: val } : c
-                        )
-                      );
-                    }}
-                    className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-gold font-mono font-bold"
-                  />
+          {configs.map((cfg) => {
+            const actionType = cfg.actionType || (cfg as any).action_type || '';
+            const displayName = cfg.displayName || (cfg as any).display_name || actionType;
+            const ncVal = cfg.ncReward !== undefined ? cfg.ncReward : (cfg as any).nc_reward;
+            const tonVal = cfg.tonReward !== undefined ? cfg.tonReward : (cfg as any).ton_reward;
+            return (
+              <div key={actionType} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border">
+                <div className="text-xs font-bold text-white mb-2">{displayName}</div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                      <NcIcon className="w-4 h-4" />
+                      <span>NC Reward</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={ncVal ?? ''}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setConfigs((prev) =>
+                          prev.map((c) =>
+                            (c.actionType || (c as any).action_type) === actionType ? { ...c, ncReward: val, nc_reward: val } : c
+                          )
+                        );
+                      }}
+                      className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-gold font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                      <TonIcon className="w-4 h-4" />
+                      <span>TON Reward</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={tonVal ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setConfigs((prev) =>
+                          prev.map((c) =>
+                            (c.actionType || (c as any).action_type) === actionType ? { ...c, tonReward: val, ton_reward: val } : c
+                          )
+                        );
+                      }}
+                      className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
-                    <TonIcon className="w-4 h-4" />
-                    <span>TON Reward</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={cfg.tonReward}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setConfigs((prev) =>
-                        prev.map((c) =>
-                          c.actionType === cfg.actionType ? { ...c, tonReward: val } : c
-                        )
-                      );
-                    }}
-                    className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
-                  />
-                </div>
+                <button
+                  onClick={() => handleUpdateReward(cfg)}
+                  disabled={savingConfig === actionType}
+                  className="w-full py-1.5 rounded-lg bg-cyber-card hover:bg-cyber-surface border border-cyber-cyan/40 text-cyber-cyan text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
+                >
+                  {savingConfig === actionType ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <span>Update Rates</span>
+                  )}
+                </button>
               </div>
-              <button
-                onClick={() => handleUpdateReward(cfg)}
-                disabled={savingConfig === cfg.actionType}
-                className="w-full py-1.5 rounded-lg bg-cyber-card hover:bg-cyber-surface border border-cyber-cyan/40 text-cyber-cyan text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
-              >
-                {savingConfig === cfg.actionType ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <span>Update Rates</span>
-                )}
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
