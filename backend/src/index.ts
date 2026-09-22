@@ -1,0 +1,94 @@
+import express from 'express';
+import cors from 'cors';
+import { ENV } from './config/env.js';
+import { connectDB } from './db/db.js';
+import { authMiddleware } from './middleware/authMiddleware.js';
+import { adminMiddleware } from './middleware/adminMiddleware.js';
+
+// Controllers
+import { verifyAuth } from './controllers/authController.js';
+import { syncMining, rechargeMining } from './controllers/miningController.js';
+import { startGame, finishGame } from './controllers/gameController.js';
+import { getAvailableMissions, claimMission, createMission } from './controllers/missionController.js';
+import { requestWithdrawal, getWithdrawalHistory } from './controllers/withdrawController.js';
+import {
+  getRewardConfigs,
+  updateRewardConfig,
+  createAdminMission,
+  updateAdminMission,
+  getAdminStats,
+} from './controllers/adminController.js';
+
+// Telegraf Bot
+import { bot } from './bot/telegrafInstance.js';
+import { registerStartHandler } from './bot/handlers/startHandler.js';
+import { registerAdminActionHandlers } from './bot/handlers/adminActionHandler.js';
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Health Check
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'NC TONs Backend',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Authentication
+app.post('/api/auth/verify', authMiddleware, verifyAuth);
+
+// Mining Operations
+app.post('/api/mining/sync', authMiddleware, syncMining);
+app.post('/api/mining/recharge', authMiddleware, rechargeMining);
+
+// Mini-Game
+app.post('/api/game/start', authMiddleware, startGame);
+app.post('/api/game/finish', authMiddleware, finishGame);
+
+// Missions Marketplace
+app.get('/api/missions/available', authMiddleware, getAvailableMissions);
+app.post('/api/missions/claim', authMiddleware, claimMission);
+app.post('/api/missions/create', authMiddleware, createMission);
+
+// Withdrawals
+app.post('/api/withdraw/request', authMiddleware, requestWithdrawal);
+app.get('/api/withdraw/history', authMiddleware, getWithdrawalHistory);
+
+// Admin Routes (Protected by ADMIN_TELEGRAM_IDS)
+app.get('/api/admin/config', authMiddleware, adminMiddleware, getRewardConfigs);
+app.put('/api/admin/config', authMiddleware, adminMiddleware, updateRewardConfig);
+app.post('/api/admin/missions', authMiddleware, adminMiddleware, createAdminMission);
+app.put('/api/admin/missions/:id', authMiddleware, adminMiddleware, updateAdminMission);
+app.get('/api/admin/stats', authMiddleware, adminMiddleware, getAdminStats);
+
+// Initialize DB and Bot
+async function startServer() {
+  await connectDB();
+
+  if (bot) {
+    registerStartHandler(bot);
+    registerAdminActionHandlers(bot);
+
+    bot.launch({ dropPendingUpdates: true })
+      .then(() => {
+        console.log('🤖 Telegram Bot polling started successfully');
+      })
+      .catch((err) => {
+        console.warn('⚠️ Telegram Bot could not start polling:', err.message);
+      });
+
+    // Graceful stop
+    process.once('SIGINT', () => bot?.stop('SIGINT'));
+    process.once('SIGTERM', () => bot?.stop('SIGTERM'));
+  }
+
+  app.listen(ENV.PORT, () => {
+    console.log(`🚀 NC TONs Server listening on port ${ENV.PORT} [${ENV.NODE_ENV}]`);
+  });
+}
+
+startServer();

@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   BigInt         @id /// Telegram User ID
+  first_name           String
+  username             String?
+  ton_balance          Decimal        @default(0.000000) @db.Decimal(12, 6)
+  nc_balance           BigInt         @default(0)
+  power_percentage     Int            @default(100)
+  power_capacity_hours Int            @default(8)
+  ton_hashrate_per_sec Decimal        @default(0.00000100) @db.Decimal(12, 8)
+  last_sync_at         DateTime       @default(now())
+  referrer_id          BigInt?
+  created_at           DateTime       @default(now())
+  claims               MissionClaim[]
+  withdrawals          Withdrawal[]
+
+  @@map("users")
+}
+
+model RewardConfig {
+  action_type  String   @id @db.VarChar(32) /// 'game_play', 'watch_ad', 'task_default'
+  display_name String   @db.VarChar(64)
+  nc_reward    Int
+  ton_reward   Decimal  @db.Decimal(12, 6)
+  updated_at   DateTime @default(now()) @updatedAt
+
+  @@map("reward_configs")
+}
+
+model DynamicMission {
+  id               Int            @id @default(autoincrement())
+  creator_user_id  BigInt
+  title            String         @db.VarChar(120)
+  description      String
+  category         String         @db.VarChar(32) /// 'telegram', 'social', 'daily', 'partner'
+  task_type        String         @db.VarChar(32) /// 'telegram_join', 'visit_url', 'bot_launch'
+  action_url       String
+  telegram_chat_id String?        @db.VarChar(64)
+  nc_reward        Int
+  ton_reward       Decimal        @db.Decimal(12, 6)
+  target_users     Int?
+  completed_count  Int            @default(0)
+  is_active        Boolean        @default(true)
+  priority         Int            @default(0)
+  created_at       DateTime       @default(now())
+  claims           MissionClaim[]
+
+  @@map("dynamic_missions")
+}
+
+model MissionClaim {
+  id         Int            @id @default(autoincrement())
+  mission_id Int
+  user_id    BigInt
+  claimed_at DateTime       @default(now())
+  mission    DynamicMission @relation(fields: [mission_id], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, mission_id])
+  @@map("mission_claims")
+}
+
+model Withdrawal {
+  id                 Int      @id @default(autoincrement())
+  user_id            BigInt
+  ton_address        String   @db.VarChar(128)
+  ton_amount         Decimal  @db.Decimal(10, 4)
+  status             String   @default("PENDING") @db.VarChar(20) /// 'PENDING', 'APPROVED', 'REJECTED'
+  channel_message_id BigInt?
+  reviewed_by        BigInt?
+  created_at         DateTime @default(now())
+  user               User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("withdrawals")
+}
