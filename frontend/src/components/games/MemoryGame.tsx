@@ -3,6 +3,7 @@ import { api } from '../../services/api.js';
 import { useTelegram } from '../../hooks/useTelegram.js';
 import { ArrowLeft, Clock, RotateCcw, Award, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { TonIcon, NcIcon } from '../icons/index.js';
 
 interface MemoryGameProps {
   onBack: () => void;
@@ -16,7 +17,7 @@ interface CardItem {
   isMatched: boolean;
 }
 
-const ICONS = ['💎', '⚡', '🔋', '🖥️', '🏎️', '🪙'];
+const ICONS = ['TON', 'NC', '🔋', '🖥️', '🏎️', '🚀'];
 
 function generateDeck(): CardItem[] {
   const deck: CardItem[] = [];
@@ -264,7 +265,15 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
                   }`}
                 >
                   {showFace ? (
-                    <span className="animate-in zoom-in duration-200">{card.symbol}</span>
+                    <span className="animate-in zoom-in duration-200 flex items-center justify-center">
+                      {card.symbol === 'TON' ? (
+                        <TonIcon className="w-8 h-8 drop-shadow-md" />
+                      ) : card.symbol === 'NC' ? (
+                        <NcIcon className="w-8 h-8 drop-shadow-md" />
+                      ) : (
+                        card.symbol
+                      )}
+                    </span>
                   ) : (
                     <div className="w-3 h-3 rounded-full bg-cyber-cyan/20 border border-cyber-cyan/50" />
                   )}
@@ -285,11 +294,17 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
               <div className="grid grid-cols-2 gap-3 my-3.5">
                 <div className="bg-cyber-bg/70 p-2.5 rounded-xl border border-cyber-border">
                   <div className="text-[10px] uppercase font-mono text-slate-400">NC Bounties</div>
-                  <div className="text-sm font-bold text-cyber-gold font-mono">+{rewardClaim.nc} NC</div>
+                  <div className="text-sm font-bold text-cyber-gold font-mono flex items-center justify-center space-x-1.5 mt-0.5">
+                    <NcIcon className="w-4 h-4" />
+                    <span>+{rewardClaim.nc} NC</span>
+                  </div>
                 </div>
                 <div className="bg-cyber-bg/70 p-2.5 rounded-xl border border-cyber-border">
                   <div className="text-[10px] uppercase font-mono text-slate-400">TON Reward</div>
-                  <div className="text-sm font-bold text-cyber-cyan font-mono">+{rewardClaim.ton} TON</div>
+                  <div className="text-sm font-bold text-cyber-cyan font-mono flex items-center justify-center space-x-1.5 mt-0.5">
+                    <TonIcon className="w-4 h-4" />
+                    <span>+{rewardClaim.ton} TON</span>
+                  </div>
                 </div>
               </div>
 

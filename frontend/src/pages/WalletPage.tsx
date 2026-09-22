@@ -3,6 +3,7 @@ import { TonConnectButton, useTonAddress } from '@tonconnect/ui-react';
 import { WithdrawalRecord } from '../types/index.js';
 import { api } from '../services/api.js';
 import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { TonIcon } from '../components/icons/index.js';
 
 interface WalletPageProps {
   tonBalance: string;
@@ -97,8 +98,10 @@ export const WalletPage: React.FC<WalletPageProps> = ({
       {/* Available Balance Card */}
       <div className="w-full glass-panel-glow p-4 rounded-2xl border border-cyber-cyan/30 mb-4 relative overflow-hidden">
         <div className="text-xs text-slate-400 uppercase font-mono mb-1">Withdrawable Balance</div>
-        <div className="text-3xl font-black font-mono text-cyber-cyan tracking-tight">
-          {tonBalance} <span className="text-base text-cyber-cyan/70">TON</span>
+        <div className="text-3xl font-black font-mono text-cyber-cyan tracking-tight flex items-center space-x-2">
+          <TonIcon className="w-8 h-8 drop-shadow-md" />
+          <span>{tonBalance}</span>
+          <span className="text-base text-cyber-cyan/70">TON</span>
         </div>
         <div className="text-[11px] text-slate-400 mt-2 flex items-center space-x-1">
           <Clock size={12} className="text-cyber-cyan" />
@@ -170,8 +173,9 @@ export const WalletPage: React.FC<WalletPageProps> = ({
                 required
                 className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-cyber-cyan pr-12"
               />
-              <span className="absolute right-3 top-2.5 text-xs font-mono text-slate-400">
-                TON
+              <span className="absolute right-3 top-2.5 text-xs font-mono text-slate-400 flex items-center space-x-1">
+                <TonIcon className="w-3.5 h-3.5" />
+                <span>TON</span>
               </span>
             </div>
           </div>
@@ -214,6 +218,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
               >
                 <div>
                   <div className="font-mono font-bold text-white flex items-center space-x-1.5">
+                    <TonIcon className="w-3.5 h-3.5" />
                     <span>{record.tonAmount} TON</span>
                     <span className="text-[10px] text-slate-500 font-normal">
                       #{record.id}

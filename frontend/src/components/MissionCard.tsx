@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mission } from '../types/index.js';
-import { Send, Globe, Bot, CheckCircle2, ArrowUpRight, Loader2, Coins } from 'lucide-react';
+import { Send, Globe, Bot, CheckCircle2, ArrowUpRight, Loader2 } from 'lucide-react';
+import { TonIcon, NcIcon } from './icons/index.js';
 import { useTelegram } from '../hooks/useTelegram.js';
 
 interface MissionCardProps {
@@ -70,12 +71,13 @@ export const MissionCard: React.FC<MissionCardProps> = ({ mission, onClaim }) =>
         {/* Dual Reward Badges */}
         <div className="flex items-center space-x-1.5">
           <div className="px-2 py-0.5 rounded-full bg-cyber-gold/15 border border-cyber-gold/30 text-[11px] font-mono font-bold text-cyber-gold flex items-center space-x-1">
-            <Coins size={10} />
+            <NcIcon className="w-4 h-4" />
             <span>+{mission.ncReward} NC</span>
           </div>
           {parseFloat(mission.tonReward) > 0 && (
-            <div className="px-2 py-0.5 rounded-full bg-cyber-cyan/15 border border-cyber-cyan/30 text-[11px] font-mono font-bold text-cyber-cyan">
-              +{mission.tonReward} TON
+            <div className="px-2 py-0.5 rounded-full bg-cyber-cyan/15 border border-cyber-cyan/30 text-[11px] font-mono font-bold text-cyber-cyan flex items-center space-x-1">
+              <TonIcon className="w-4 h-4" />
+              <span>+{mission.tonReward} TON</span>
             </div>
           )}
         </div>

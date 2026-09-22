@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActiveGameType } from '../../types/index.js';
-import { Brain, Grid2X2, Car, Sparkles, Trophy, Zap, ArrowRight, ShieldAlert, LucideIcon } from 'lucide-react';
+import { Brain, Grid2X2, Car, Sparkles, Trophy, ArrowRight, ShieldAlert, LucideIcon } from 'lucide-react';
+import { TonIcon, NcIcon } from '../icons/index.js';
 
 interface GameHubProps {
   onSelectGame: (gameType: ActiveGameType) => void;
@@ -127,13 +128,14 @@ export const GameHub: React.FC<GameHubProps> = ({ onSelectGame }) => {
                 </div>
 
                 {/* Reward Pill */}
-                <div className="flex flex-col items-end">
-                  <div className="flex items-center space-x-1 text-xs font-bold font-mono text-cyber-gold">
-                    <Zap size={12} className="fill-cyber-gold" />
+                <div className="flex flex-col items-end space-y-1">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold font-mono text-cyber-gold">
+                    <NcIcon className="w-3.5 h-3.5" />
                     <span>+{game.ncReward} NC</span>
                   </div>
-                  <div className="text-[10px] font-mono text-cyber-cyan font-bold">
-                    +{game.tonReward} TON
+                  <div className="flex items-center space-x-1.5 text-[10px] font-mono text-cyber-cyan font-bold">
+                    <TonIcon className="w-3.5 h-3.5" />
+                    <span>+{game.tonReward} TON</span>
                   </div>
                 </div>
               </div>

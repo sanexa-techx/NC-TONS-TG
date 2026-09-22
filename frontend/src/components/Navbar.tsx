@@ -10,7 +10,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, isAdmin }) => {
   const navItems = [
     { id: 'mining', label: 'Mining', icon: Pickaxe },
-    { id: 'game', label: 'Drop Game', icon: Gamepad2 },
+    { id: 'game', label: 'Arcade', icon: Gamepad2 },
     { id: 'missions', label: 'Missions', icon: Target },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: ShieldAlert }] : []),

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, BatteryCharging, Tv, Zap, CheckCircle2 } from 'lucide-react';
+import { X, BatteryCharging, Tv, CheckCircle2 } from 'lucide-react';
+import { NcIcon, TonIcon } from './icons/index.js';
 
 interface RechargeModalProps {
   isOpen: boolean;
@@ -134,16 +135,23 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({
             >
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 rounded-xl bg-cyber-gold/20 flex items-center justify-center text-cyber-gold">
-                  <Zap size={20} />
+                  <NcIcon className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="font-bold text-sm text-white">Spend 500 NC Coins</div>
-                  <div className="text-[11px] text-slate-400">
-                    Your balance: {currentNc.toLocaleString()} NC
+                  <div className="font-bold text-sm text-white flex items-center space-x-1.5">
+                    <NcIcon className="w-4 h-4" />
+                    <span>Spend 500 NC Coins</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 flex items-center space-x-1 mt-0.5">
+                    <span>Balance: {currentNc.toLocaleString()}</span>
+                    <NcIcon className="w-3 h-3 inline" />
                   </div>
                 </div>
               </div>
-              <span className="text-xs font-bold text-cyber-gold font-mono">-500 NC</span>
+              <div className="flex items-center space-x-1 text-xs font-bold text-cyber-gold font-mono">
+                <NcIcon className="w-3.5 h-3.5" />
+                <span>-500</span>
+              </div>
             </button>
 
             {/* Option 2: Rewarded Video */}
@@ -158,7 +166,15 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({
                 </div>
                 <div>
                   <div className="font-bold text-sm text-white">Watch Video Ad (Adsgram)</div>
-                  <div className="text-[11px] text-slate-400">Free full recharge • ~4 seconds</div>
+                  <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 mt-0.5">
+                    <span>Free full recharge</span>
+                    <span>•</span>
+                    <span className="flex items-center space-x-1 text-cyber-cyan">
+                      <TonIcon className="w-3 h-3" />
+                      <NcIcon className="w-3 h-3" />
+                      <span>Boost</span>
+                    </span>
+                  </div>
                 </div>
               </div>
               <span className="text-xs font-bold text-cyber-green font-mono">FREE</span>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Coins } from 'lucide-react';
+import { TonIcon, NcIcon } from './icons/index.js';
 
 interface DualCurrencyBarProps {
   tonBalance: string;
@@ -18,9 +18,7 @@ export const DualCurrencyBar: React.FC<DualCurrencyBarProps> = ({
       <div className="glass-panel p-3 rounded-2xl relative overflow-hidden group border border-cyber-border hover:border-cyber-cyan/50 transition-all">
         <div className="absolute top-0 right-0 w-16 h-16 bg-cyber-cyan/10 rounded-full blur-xl pointer-events-none" />
         <div className="flex items-center space-x-2 text-xs text-slate-400 mb-1">
-          <div className="w-5 h-5 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-cyber-cyan">
-            💎
-          </div>
+          <TonIcon className="w-5 h-5 shadow-sm" />
           <span className="font-medium tracking-wide uppercase">TON Coin</span>
           {isMiningActive && (
             <span className="flex h-2 w-2 relative ml-auto">
@@ -29,8 +27,8 @@ export const DualCurrencyBar: React.FC<DualCurrencyBarProps> = ({
             </span>
           )}
         </div>
-        <div className="text-lg font-bold font-mono text-cyber-cyan tracking-tight truncate">
-          {tonBalance}
+        <div className="text-lg font-bold font-mono text-cyber-cyan tracking-tight truncate flex items-center space-x-1">
+          <span>{tonBalance}</span>
           <span className="text-xs text-cyber-cyan/70 ml-1">TON</span>
         </div>
       </div>
@@ -39,13 +37,11 @@ export const DualCurrencyBar: React.FC<DualCurrencyBarProps> = ({
       <div className="glass-panel p-3 rounded-2xl relative overflow-hidden group border border-cyber-border hover:border-cyber-gold/50 transition-all">
         <div className="absolute top-0 right-0 w-16 h-16 bg-cyber-gold/10 rounded-full blur-xl pointer-events-none" />
         <div className="flex items-center space-x-2 text-xs text-slate-400 mb-1">
-          <div className="w-5 h-5 rounded-full bg-cyber-gold/20 flex items-center justify-center text-cyber-gold">
-            <Coins size={12} className="text-cyber-gold" />
-          </div>
+          <NcIcon className="w-5 h-5 shadow-sm" />
           <span className="font-medium tracking-wide uppercase">NC Fuel</span>
         </div>
-        <div className="text-lg font-bold font-mono text-cyber-gold tracking-tight truncate">
-          {Number(ncBalance).toLocaleString()}
+        <div className="text-lg font-bold font-mono text-cyber-gold tracking-tight truncate flex items-center space-x-1">
+          <span>{Number(ncBalance).toLocaleString()}</span>
           <span className="text-xs text-cyber-gold/70 ml-1">NC</span>
         </div>
       </div>

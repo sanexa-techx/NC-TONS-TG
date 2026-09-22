@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Sparkles, Send, Globe, Bot, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { TonIcon, NcIcon } from './icons/index.js';
 import { api } from '../services/api.js';
 
 interface CreateMissionModalProps {
@@ -206,8 +207,9 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
 
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-[10px] font-mono text-slate-300 uppercase mb-1">
-                  NC / User
+                <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-300 uppercase mb-1">
+                  <NcIcon className="w-3.5 h-3.5" />
+                  <span>NC / User</span>
                 </label>
                 <input
                   type="number"
@@ -219,8 +221,9 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-mono text-slate-300 uppercase mb-1">
-                  TON / User
+                <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-300 uppercase mb-1">
+                  <TonIcon className="w-3.5 h-3.5" />
+                  <span>TON / User</span>
                 </label>
                 <input
                   type="text"
@@ -270,7 +273,10 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                       : 'bg-cyber-surface border-cyber-border text-slate-400'
                   }`}
                 >
-                  💎 TON Connect
+                  <span className="flex items-center justify-center space-x-1.5">
+                    <TonIcon className="w-4 h-4" />
+                    <span>TON Connect</span>
+                  </span>
                 </button>
               </div>
             </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { RewardConfig, Mission } from '../types/index.js';
 import { api } from '../services/api.js';
 import { Shield, Sliders, PlusCircle, CheckCircle2, AlertCircle, Loader2, Power } from 'lucide-react';
+import { TonIcon, NcIcon } from '../components/icons/index.js';
 
 export const AdminPage: React.FC = () => {
   const [configs, setConfigs] = useState<RewardConfig[]>([]);
@@ -180,8 +181,9 @@ export const AdminPage: React.FC = () => {
               <div className="text-xs font-bold text-white mb-2">{cfg.displayName}</div>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
-                  <label className="block text-[10px] font-mono text-slate-400 uppercase mb-0.5">
-                    NC Reward
+                  <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                    <NcIcon className="w-4 h-4" />
+                    <span>NC Reward</span>
                   </label>
                   <input
                     type="number"
@@ -198,8 +200,9 @@ export const AdminPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-mono text-slate-400 uppercase mb-0.5">
-                    TON Reward
+                  <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                    <TonIcon className="w-4 h-4" />
+                    <span>TON Reward</span>
                   </label>
                   <input
                     type="text"
@@ -274,7 +277,10 @@ export const AdminPage: React.FC = () => {
 
           <div className="grid grid-cols-4 gap-2">
             <div>
-              <label className="text-[10px] font-mono text-slate-400">NC Bounty</label>
+              <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400">
+                <NcIcon className="w-3.5 h-3.5" />
+                <span>NC Bounty</span>
+              </label>
               <input
                 type="number"
                 value={newNc}
@@ -283,7 +289,10 @@ export const AdminPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-[10px] font-mono text-slate-400">TON Bounty</label>
+              <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400">
+                <TonIcon className="w-3.5 h-3.5" />
+                <span>TON Bounty</span>
+              </label>
               <input
                 type="text"
                 value={newTon}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../services/api.js';
 import { useTelegram } from '../../hooks/useTelegram.js';
-import { ArrowLeft, Clock, Zap, RotateCcw, Award, CheckCircle2, AlertCircle, Loader2, ArrowBigLeft, ArrowBigRight } from 'lucide-react';
+import { ArrowLeft, Clock, RotateCcw, Award, CheckCircle2, AlertCircle, Loader2, ArrowBigLeft, ArrowBigRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { TonIcon, NcIcon } from '../icons/index.js';
 
 interface CarRaceGameProps {
   onBack: () => void;
@@ -378,8 +379,8 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
             </span>
           </div>
 
-          <div className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-cyber-card border border-cyber-border font-mono text-xs">
-            <Zap size={13} className="text-cyber-gold" />
+          <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-cyber-card border border-cyber-border font-mono text-xs">
+            <NcIcon className="w-3.5 h-3.5" />
             <span className="text-cyber-gold font-bold">{score}</span>
           </div>
         </div>
@@ -464,11 +465,17 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
                 <div className="grid grid-cols-2 gap-3 my-3.5">
                   <div className="bg-cyber-bg/70 p-2.5 rounded-xl border border-cyber-border">
                     <div className="text-[10px] uppercase font-mono text-slate-400">NC Bounties</div>
-                    <div className="text-sm font-bold text-cyber-gold font-mono">+{rewardClaim.nc} NC</div>
+                    <div className="text-sm font-bold text-cyber-gold font-mono flex items-center justify-center space-x-1.5 mt-0.5">
+                      <NcIcon className="w-4 h-4" />
+                      <span>+{rewardClaim.nc} NC</span>
+                    </div>
                   </div>
                   <div className="bg-cyber-bg/70 p-2.5 rounded-xl border border-cyber-border">
                     <div className="text-[10px] uppercase font-mono text-slate-400">TON Reward</div>
-                    <div className="text-sm font-bold text-cyber-cyan font-mono">+{rewardClaim.ton} TON</div>
+                    <div className="text-sm font-bold text-cyber-cyan font-mono flex items-center justify-center space-x-1.5 mt-0.5">
+                      <TonIcon className="w-4 h-4" />
+                      <span>+{rewardClaim.ton} TON</span>
+                    </div>
                   </div>
                 </div>
 

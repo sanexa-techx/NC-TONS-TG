@@ -8,7 +8,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().default('postgresql://postgres:postgres@localhost:5432/nctons?schema=public'),
   BOT_TOKEN: z.string().default(''),
-  ADMIN_TELEGRAM_IDS: z.string().default(''),
+  ADMIN_TELEGRAM_IDS: z.string().default('123456789'),
   ADMIN_CHANNEL_ID: z.string().default(''),
   WEBAPP_URL: z.string().default('http://localhost:5173'),
   ALLOW_DEV_AUTH: z.string().default('true').transform((v) => v === 'true'),
