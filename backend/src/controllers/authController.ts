@@ -40,6 +40,8 @@ export async function verifyAuth(req: Request, res: Response) {
         id: user.id.toString(),
         firstName: user.first_name,
         username: user.username,
+        photoUrl: user.photo_url ? `/api/user/avatar/${user.id.toString()}` : null,
+        minerLevel: user.miner_level || 1,
         isAdmin: isAdmin(userId),
       },
       mining: miningState,

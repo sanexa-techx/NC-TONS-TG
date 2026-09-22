@@ -23,6 +23,9 @@ model User {
   unclaimed_referral_ton Decimal          @default(0.000000) @db.Decimal(14, 6)
   total_referral_nc      BigInt           @default(0)
   total_referral_ton     Decimal          @default(0.000000) @db.Decimal(14, 6)
+  photo_url              String?          @db.Text
+  photo_synced_at        DateTime?
+  miner_level            Int              @default(1)
   created_at             DateTime         @default(now())
   claims                 MissionClaim[]
   withdrawals            Withdrawal[]

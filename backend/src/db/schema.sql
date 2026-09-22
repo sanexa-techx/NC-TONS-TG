@@ -149,4 +149,8 @@ CREATE TABLE IF NOT EXISTS referrals (
 
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 
-
+-- Profile & Avatar System Schema
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS photo_synced_at TIMESTAMP DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS miner_level INT DEFAULT 1;

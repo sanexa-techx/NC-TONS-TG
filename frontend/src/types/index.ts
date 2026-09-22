@@ -3,6 +3,14 @@ export interface UserProfile {
   firstName: string;
   username?: string | null;
   isAdmin: boolean;
+  photoUrl?: string | null;
+  minerLevel?: number;
+  tonBalance?: string;
+  ncBalance?: string;
+  powerPercentage?: number;
+  powerCapacityHours?: number;
+  referralCount?: number;
+  createdAt?: string;
 }
 
 export interface MiningState {

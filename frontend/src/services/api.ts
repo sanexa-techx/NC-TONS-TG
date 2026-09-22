@@ -64,6 +64,15 @@ export const api = {
     return handleResponse(res);
   },
 
+  // User Profile
+  async getUserProfile(userId?: string): Promise<UserProfile> {
+    const url = userId ? `/api/user/profile/${userId}` : '/api/user/profile';
+    const res = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   // Mining
   async syncMining(): Promise<MiningState> {
     const res = await fetch('/api/mining/sync', {

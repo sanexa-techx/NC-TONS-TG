@@ -12,6 +12,7 @@ import FriendsView from './components/FriendsView.js';
 import { WalletPage } from './pages/WalletPage.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { OnlinePlayersBadge } from './components/OnlinePlayersBadge.js';
+import { UserProfileHeader } from './components/UserProfileHeader.js';
 import { Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -79,15 +80,15 @@ export const App: React.FC = () => {
           onSync={sync}
         />
 
-        {/* Sticky Corner Status Header with Real-time Online Players Badge */}
-        <header className="sticky top-0 z-20 bg-cyber-bg/85 backdrop-blur-md border-b border-cyber-border/40 py-1.5 px-4 shadow-sm">
-          <div className="w-full max-w-md mx-auto flex items-center justify-between">
-            <div className="flex items-center space-x-1.5">
-              <span className="font-black text-xs tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyber-cyan via-white to-cyber-blue font-mono">
-                NC TONs
-              </span>
-              <span className="text-[10px] text-slate-500 font-mono font-semibold">MINING RIG</span>
-            </div>
+        {/* Sticky Status Header with Telegram Profile Bar & Online Players Beacon */}
+        <header className="sticky top-0 z-20 bg-cyber-bg/90 backdrop-blur-md border-b border-cyber-border/40 py-2 px-3 shadow-md">
+          <div className="w-full max-w-md mx-auto flex items-center justify-between gap-2">
+            {/* Telegram Profile & Avatar Engine Bar */}
+            <UserProfileHeader
+              user={user}
+              livePowerPercentage={livePowerPercentage}
+              liveTonBalance={liveTonBalance}
+            />
 
             {/* Corner Real-time Online Players Badge */}
             <OnlinePlayersBadge userId={user?.id} />

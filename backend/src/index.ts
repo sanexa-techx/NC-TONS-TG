@@ -27,6 +27,7 @@ import {
 } from './controllers/promoController.js';
 import { getOnlineStats, pingOnlineStatus } from './controllers/statsController.js';
 import { getFriendStats, claimFriendRewards, simulateReferral } from './controllers/friendsController.js';
+import { getUserProfile, getAvatarProxy } from './controllers/profileController.js';
 
 // Telegraf Bot
 import { bot } from './bot/telegrafInstance.js';
@@ -47,8 +48,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Authentication
+// Authentication & Profile
 app.post('/api/auth/verify', authMiddleware, verifyAuth);
+app.get('/api/user/profile/:userId', authMiddleware, getUserProfile);
+app.get('/api/user/profile', authMiddleware, getUserProfile);
+app.get('/api/user/avatar/:userId', getAvatarProxy);
 
 // Mining Operations
 app.post('/api/mining/sync', authMiddleware, syncMining);

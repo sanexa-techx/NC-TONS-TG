@@ -188,6 +188,9 @@ memoryStore.users.set('9990001', {
   unclaimed_referral_ton: new Decimal('0.000000'),
   total_referral_nc: 0n,
   total_referral_ton: new Decimal('0.000000'),
+  photo_url: null,
+  photo_synced_at: null,
+  miner_level: 1,
   created_at: new Date(),
 });
 
@@ -207,6 +210,9 @@ memoryStore.users.set('123456789', {
   unclaimed_referral_ton: new Decimal('0.000000'),
   total_referral_nc: 0n,
   total_referral_ton: new Decimal('0.000000'),
+  photo_url: null,
+  photo_synced_at: null,
+  miner_level: 1,
   created_at: new Date(),
 });
 
@@ -231,6 +237,9 @@ const mockPrisma = {
         unclaimed_referral_ton: data.unclaimed_referral_ton instanceof Decimal ? data.unclaimed_referral_ton : new Decimal(data.unclaimed_referral_ton || '0.000000'),
         total_referral_nc: BigInt(data.total_referral_nc || 0),
         total_referral_ton: data.total_referral_ton instanceof Decimal ? data.total_referral_ton : new Decimal(data.total_referral_ton || '0.000000'),
+        photo_url: data.photo_url || null,
+        photo_synced_at: data.photo_synced_at || null,
+        miner_level: data.miner_level || 1,
         created_at: new Date(),
       };
       memoryStore.users.set(data.id.toString(), newUser);
@@ -290,6 +299,9 @@ const mockPrisma = {
       if (data.referred_by !== undefined) existing.referred_by = data.referred_by ? BigInt(data.referred_by) : null;
       if (data.power_percentage !== undefined) existing.power_percentage = data.power_percentage;
       if (data.last_sync_at !== undefined) existing.last_sync_at = data.last_sync_at;
+      if (data.photo_url !== undefined) existing.photo_url = data.photo_url;
+      if (data.photo_synced_at !== undefined) existing.photo_synced_at = data.photo_synced_at;
+      if (data.miner_level !== undefined) existing.miner_level = data.miner_level;
 
       memoryStore.users.set(where.id.toString(), existing);
       return { ...existing };
