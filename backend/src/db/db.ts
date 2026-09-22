@@ -125,6 +125,40 @@ const memoryStore = {
   gameSessions: new Map<string, any>(),
   withdrawalIdSeq: 101,
   missionIdSeq: 4,
+  promoCodes: [
+    {
+      id: 1,
+      code: 'WELCOME500',
+      nc_reward: 500,
+      ton_reward: new Decimal('0.000050'),
+      max_claims: 1000 as number | null,
+      claimed_count: 0,
+      is_active: true,
+      created_at: new Date(),
+    },
+    {
+      id: 2,
+      code: 'NCTONS2026',
+      nc_reward: 1000,
+      ton_reward: new Decimal('0.000100'),
+      max_claims: 500 as number | null,
+      claimed_count: 0,
+      is_active: true,
+      created_at: new Date(),
+    },
+  ] as Array<{
+    id: number;
+    code: string;
+    nc_reward: number;
+    ton_reward: Decimal;
+    max_claims: number | null;
+    claimed_count: number;
+    is_active: boolean;
+    created_at: Date;
+  }>,
+  promoClaims: [] as Array<{ id: number; promo_code_id: number; user_id: bigint; claimed_at: Date }>,
+  promoCodeIdSeq: 3,
+  promoClaimIdSeq: 1,
 };
 
 // Seed default dev user
@@ -365,6 +399,138 @@ const mockPrisma = {
     },
   },
 
+  promoCode: {
+    async findUnique({ where }: any) {
+      if (where.id !== undefined) {
+        const found = memoryStore.promoCodes.find((p) => p.id === Number(where.id));
+        return found ? { ...found } : null;
+      }
+      if (where.code !== undefined) {
+        const found = memoryStore.promoCodes.find((p) => p.code.toUpperCase() === String(where.code).toUpperCase());
+        return found ? { ...found } : null;
+      }
+      return null;
+    },
+    async findFirst({ where }: any) {
+      if (where?.code) {
+        const found = memoryStore.promoCodes.find((p) => p.code.toUpperCase() === String(where.code).toUpperCase());
+        return found ? { ...found } : null;
+      }
+      return memoryStore.promoCodes[0] ? { ...memoryStore.promoCodes[0] } : null;
+    },
+    async findMany({ orderBy }: any = {}) {
+      const list = [...memoryStore.promoCodes];
+      list.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+      return list.map((p) => ({ ...p }));
+    },
+    async create({ data }: any) {
+      const codeUpper = String(data.code).trim().toUpperCase();
+      const existing = memoryStore.promoCodes.find((p) => p.code === codeUpper);
+      if (existing) {
+        const err: any = new Error('Promo code already exists');
+        err.code = 'P2002';
+        throw err;
+      }
+      const newPromo = {
+        id: memoryStore.promoCodeIdSeq++,
+        code: codeUpper,
+        nc_reward: Number(data.nc_reward ?? 500),
+        ton_reward: data.ton_reward instanceof Decimal ? data.ton_reward : new Decimal(data.ton_reward ?? '0.000050'),
+        max_claims: data.max_claims !== undefined && data.max_claims !== null ? Number(data.max_claims) : null,
+        claimed_count: 0,
+        is_active: data.is_active !== undefined ? Boolean(data.is_active) : true,
+        created_at: new Date(),
+      };
+      memoryStore.promoCodes.unshift(newPromo);
+      return { ...newPromo };
+    },
+    async update({ where, data }: any) {
+      const found = memoryStore.promoCodes.find((p) => p.id === Number(where.id));
+      if (!found) throw new Error('Promo code not found');
+      if (data.claimed_count?.increment) {
+        found.claimed_count += data.claimed_count.increment;
+      } else if (data.claimed_count !== undefined) {
+        found.claimed_count = Number(data.claimed_count);
+      }
+      if (data.is_active !== undefined) {
+        found.is_active = Boolean(data.is_active);
+      }
+      if (data.nc_reward !== undefined) found.nc_reward = Number(data.nc_reward);
+      if (data.ton_reward !== undefined) {
+        found.ton_reward = data.ton_reward instanceof Decimal ? data.ton_reward : new Decimal(data.ton_reward);
+      }
+      if (data.max_claims !== undefined) found.max_claims = data.max_claims === null ? null : Number(data.max_claims);
+      return { ...found };
+    },
+    async delete({ where }: any) {
+      const idx = memoryStore.promoCodes.findIndex((p) => p.id === Number(where.id));
+      if (idx === -1) throw new Error('Promo code not found');
+      const removed = memoryStore.promoCodes.splice(idx, 1)[0];
+      // Cascade delete claims
+      memoryStore.promoClaims = memoryStore.promoClaims.filter((c) => c.promo_code_id !== removed.id);
+      return { ...removed };
+    },
+  },
+
+  userPromoClaim: {
+    async findUnique({ where }: any) {
+      if (where.unique_user_promo) {
+        const { user_id, promo_code_id } = where.unique_user_promo;
+        const found = memoryStore.promoClaims.find(
+          (c) => BigInt(c.user_id) === BigInt(user_id) && c.promo_code_id === Number(promo_code_id)
+        );
+        return found ? { ...found } : null;
+      }
+      if (where.id) {
+        const found = memoryStore.promoClaims.find((c) => c.id === Number(where.id));
+        return found ? { ...found } : null;
+      }
+      return null;
+    },
+    async findFirst({ where }: any) {
+      const found = memoryStore.promoClaims.find(
+        (c) => BigInt(c.user_id) === BigInt(where.user_id) && c.promo_code_id === Number(where.promo_code_id)
+      );
+      return found ? { ...found } : null;
+    },
+    async findMany({ where }: any = {}) {
+      let list = [...memoryStore.promoClaims];
+      if (where?.user_id) {
+        list = list.filter((c) => BigInt(c.user_id) === BigInt(where.user_id));
+      }
+      if (where?.promo_code_id) {
+        list = list.filter((c) => c.promo_code_id === Number(where.promo_code_id));
+      }
+      return list.map((c) => ({ ...c }));
+    },
+    async create({ data }: any) {
+      const userId = BigInt(data.user_id);
+      const promoCodeId = Number(data.promo_code_id);
+      const existing = memoryStore.promoClaims.find(
+        (c) => BigInt(c.user_id) === userId && c.promo_code_id === promoCodeId
+      );
+      if (existing) {
+        const err: any = new Error('Unique constraint failed on the constraint: unique_user_promo');
+        err.code = 'P2002';
+        throw err;
+      }
+      const newClaim = {
+        id: memoryStore.promoClaimIdSeq++,
+        user_id: userId,
+        promo_code_id: promoCodeId,
+        claimed_at: new Date(),
+      };
+      memoryStore.promoClaims.push(newClaim);
+      return { ...newClaim };
+    },
+    async deleteMany({ where }: any) {
+      if (where?.promo_code_id) {
+        memoryStore.promoClaims = memoryStore.promoClaims.filter((c) => c.promo_code_id !== Number(where.promo_code_id));
+      }
+      return { count: 1 };
+    },
+  },
+
   async $transaction(arg: any) {
     if (typeof arg === 'function') {
       return arg(mockPrisma);
@@ -387,6 +553,10 @@ export const prisma = new Proxy(realPrisma, {
     return target[prop];
   },
 }) as PrismaClient;
+
+export function getIsPostgresConnected() {
+  return isPostgresConnected;
+}
 
 export async function connectDB() {
   try {

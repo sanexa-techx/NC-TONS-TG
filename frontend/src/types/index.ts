@@ -73,3 +73,26 @@ export interface GameFinishResponse {
   newNcBalance?: string;
   newTonBalance?: string;
 }
+
+export interface PromoCode {
+  id: number;
+  code: string;
+  nc_reward: number;
+  ton_reward: string;
+  max_claims: number | null;
+  claimed_count: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface PromoRedeemResponse {
+  success: boolean;
+  reward: {
+    nc: number;
+    ton: string;
+  };
+  newBalances: {
+    nc_balance: string;
+    ton_balance: string;
+  };
+}

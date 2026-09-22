@@ -18,6 +18,13 @@ import {
   updateAdminMission,
   getAdminStats,
 } from './controllers/adminController.js';
+import {
+  redeemPromo,
+  getAdminPromos,
+  createAdminPromo,
+  toggleAdminPromo,
+  deleteAdminPromo,
+} from './controllers/promoController.js';
 
 // Telegraf Bot
 import { bot } from './bot/telegrafInstance.js';
@@ -58,12 +65,21 @@ app.post('/api/missions/create', authMiddleware, createMission);
 app.post('/api/withdraw/request', authMiddleware, requestWithdrawal);
 app.get('/api/withdraw/history', authMiddleware, getWithdrawalHistory);
 
+// Promo Codes
+app.post('/api/promos/redeem', authMiddleware, redeemPromo);
+
 // Admin Routes (Protected by ADMIN_TELEGRAM_IDS)
 app.get('/api/admin/config', authMiddleware, adminMiddleware, getRewardConfigs);
 app.put('/api/admin/config', authMiddleware, adminMiddleware, updateRewardConfig);
 app.post('/api/admin/missions', authMiddleware, adminMiddleware, createAdminMission);
 app.put('/api/admin/missions/:id', authMiddleware, adminMiddleware, updateAdminMission);
 app.get('/api/admin/stats', authMiddleware, adminMiddleware, getAdminStats);
+
+// Admin Promo Management
+app.get('/api/admin/promos', authMiddleware, adminMiddleware, getAdminPromos);
+app.post('/api/admin/promos', authMiddleware, adminMiddleware, createAdminPromo);
+app.put('/api/admin/promos/:id/toggle', authMiddleware, adminMiddleware, toggleAdminPromo);
+app.delete('/api/admin/promos/:id', authMiddleware, adminMiddleware, deleteAdminPromo);
 
 // Initialize DB and Bot
 async function startServer() {

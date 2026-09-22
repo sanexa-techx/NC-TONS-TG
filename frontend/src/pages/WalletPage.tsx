@@ -4,15 +4,18 @@ import { WithdrawalRecord } from '../types/index.js';
 import { api } from '../services/api.js';
 import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { TonIcon } from '../components/icons/index.js';
+import { PromoRedeemCard } from '../components/PromoRedeemCard.js';
 
 interface WalletPageProps {
   tonBalance: string;
   onWithdrawalRequested: () => void;
+  onPromoRedeemed?: () => void;
 }
 
 export const WalletPage: React.FC<WalletPageProps> = ({
   tonBalance,
   onWithdrawalRequested,
+  onPromoRedeemed,
 }) => {
   const connectedAddress = useTonAddress();
   const [tonAddress, setTonAddress] = useState<string>('');
@@ -196,6 +199,18 @@ export const WalletPage: React.FC<WalletPageProps> = ({
           </button>
         </form>
       </div>
+
+      {/* Dynamic Promo Code Redeem Card */}
+      <PromoRedeemCard
+        onRedeemSuccess={() => {
+          if (onPromoRedeemed) {
+            onPromoRedeemed();
+          } else {
+            onWithdrawalRequested();
+          }
+        }}
+        className="mb-6"
+      />
 
       {/* Payout History */}
       <div className="w-full">

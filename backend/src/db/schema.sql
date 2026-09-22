@@ -98,3 +98,31 @@ VALUES
     (0, 'Follow NC TONs on X (Twitter)', 'Follow our official announcement feed on X.', 'social', 'visit_url', 'https://x.com/nctons', NULL, 300, 0.000200, 5000, true, 5),
     (0, 'Explore TON Ecosystem Bot', 'Launch the partner TON ecosystem bot and start your web3 adventure.', 'partner', 'bot_launch', 'https://t.me/ton_ecosystem_bot', NULL, 400, 0.000300, 2000, true, 2)
 ON CONFLICT DO NOTHING;
+
+-- Promo Codes Tables
+CREATE TABLE IF NOT EXISTS promo_codes (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(32) UNIQUE NOT NULL,
+    nc_reward INT NOT NULL DEFAULT 500,
+    ton_reward NUMERIC(14, 6) DEFAULT 0.000050,
+    max_claims INT DEFAULT 100,
+    claimed_count INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_promo_claims (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    promo_code_id INT REFERENCES promo_codes(id) ON DELETE CASCADE,
+    claimed_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT unique_user_promo UNIQUE (user_id, promo_code_id)
+);
+
+-- Seed Initial Promo Codes
+INSERT INTO promo_codes (code, nc_reward, ton_reward, max_claims, claimed_count, is_active)
+VALUES
+    ('WELCOME500', 500, 0.000050, 1000, 0, true),
+    ('NCTONS2026', 1000, 0.000100, 500, 0, true)
+ON CONFLICT (code) DO NOTHING;
+

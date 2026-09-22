@@ -22,6 +22,7 @@ model User {
   claims               MissionClaim[]
   withdrawals          Withdrawal[]
   game_sessions        GameSession[]
+  promo_claims         UserPromoClaim[]
 
   @@map("users")
 }
@@ -94,4 +95,30 @@ model GameSession {
   user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("game_sessions")
+}
+
+model PromoCode {
+  id            Int              @id @default(autoincrement())
+  code          String           @unique @db.VarChar(32)
+  nc_reward     Int              @default(500)
+  ton_reward    Decimal          @default(0.000050) @db.Decimal(14, 6)
+  max_claims    Int?             @default(100)
+  claimed_count Int              @default(0)
+  is_active     Boolean          @default(true)
+  created_at    DateTime         @default(now())
+  claims        UserPromoClaim[]
+
+  @@map("promo_codes")
+}
+
+model UserPromoClaim {
+  id            Int       @id @default(autoincrement())
+  user_id       BigInt
+  promo_code_id Int
+  claimed_at    DateTime  @default(now())
+  promo_code    PromoCode @relation(fields: [promo_code_id], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, promo_code_id], name: "unique_user_promo")
+  @@map("user_promo_claims")
 }

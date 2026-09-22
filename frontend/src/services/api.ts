@@ -1,4 +1,4 @@
-import { MiningState, Mission, RewardConfig, UserProfile, WithdrawalRecord, GameFinishResponse } from '../types/index.js';
+import { MiningState, Mission, RewardConfig, UserProfile, WithdrawalRecord, GameFinishResponse, PromoCode, PromoRedeemResponse } from '../types/index.js';
 
 let devUserId = localStorage.getItem('nctons_dev_user_id') || '9990001';
 let devUsername = localStorage.getItem('nctons_dev_username') || 'CyberMiner';
@@ -192,6 +192,54 @@ export const api = {
 
   async getAdminStats(): Promise<{ totalUsers: number; activeMissionsCount: number; pendingWithdrawalsCount: number }> {
     const res = await fetch('/api/admin/stats', {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  // Promo Codes
+  async redeemPromo(code: string, userId?: string | number): Promise<PromoRedeemResponse> {
+    const res = await fetch('/api/promos/redeem', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ code, userId }),
+    });
+    return handleResponse(res);
+  },
+
+  // Admin Promo Management
+  async getAdminPromos(): Promise<{ promos: PromoCode[] }> {
+    const res = await fetch('/api/admin/promos', {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async createAdminPromo(data: {
+    code: string;
+    ncReward: number;
+    tonReward: number;
+    maxClaims: number | null;
+  }): Promise<{ success: boolean; promo: PromoCode }> {
+    const res = await fetch('/api/admin/promos', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  async toggleAdminPromo(id: number): Promise<{ success: boolean; is_active: boolean }> {
+    const res = await fetch(`/api/admin/promos/${id}/toggle`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async deleteAdminPromo(id: number): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`/api/admin/promos/${id}`, {
+      method: 'DELETE',
       headers: getAuthHeaders(),
     });
     return handleResponse(res);

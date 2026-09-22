@@ -98,6 +98,7 @@ export const App: React.FC = () => {
             <WalletPage
               tonBalance={liveTonBalance}
               onWithdrawalRequested={sync}
+              onPromoRedeemed={sync}
             />
           )}
 
