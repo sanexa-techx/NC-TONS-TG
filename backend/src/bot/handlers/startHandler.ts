@@ -40,7 +40,7 @@ export function registerStartHandler(bot: Telegraf) {
         // Starter welcome gift for the new user
         const starterNc = isPremium ? 2000 : 1000;
 
-        user = await prisma.user.create({
+        user = await (prisma.user as any).create({
           data: {
             id: userId,
             first_name: firstName,
@@ -62,7 +62,7 @@ export function registerStartHandler(bot: Telegraf) {
             });
 
             if (referrerExists) {
-              await prisma.referral.create({
+              await (prisma as any).referral.create({
                 data: {
                   referrer_id: referrerId,
                   referee_id: userId,
@@ -72,7 +72,7 @@ export function registerStartHandler(bot: Telegraf) {
                 },
               });
 
-              await prisma.user.update({
+              await (prisma.user as any).update({
                 where: { id: referrerId },
                 data: {
                   referral_count: { increment: 1 },

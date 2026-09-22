@@ -667,6 +667,12 @@ const mockPrisma = {
   },
 };
 
+export type AppPrismaClient = PrismaClient & {
+  referral: any;
+  user: any;
+  [key: string]: any;
+};
+
 export const prisma = new Proxy(realPrisma, {
   get(target: any, prop: string) {
     if (isPostgresConnected) {
@@ -677,7 +683,8 @@ export const prisma = new Proxy(realPrisma, {
     }
     return target[prop];
   },
-}) as PrismaClient;
+}) as AppPrismaClient;
+
 
 export function getIsPostgresConnected() {
   return isPostgresConnected;

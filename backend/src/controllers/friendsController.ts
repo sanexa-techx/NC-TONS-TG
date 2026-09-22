@@ -16,7 +16,7 @@ export async function getFriendStats(req: Request, res: Response) {
     const userId = BigInt(String(rawUserId).replace(/[^0-9]/g, ''));
 
     // Fetch user referral counters
-    const user = await prisma.user.findUnique({
+    const user: any = await (prisma.user as any).findUnique({
       where: { id: userId },
       select: {
         referral_count: true,
@@ -167,7 +167,7 @@ export async function simulateReferral(req: Request, res: Response) {
     }
 
     // Create referee user
-    await prisma.user.create({
+    await (prisma.user as any).create({
       data: {
         id: refereeId,
         first_name: customName,
@@ -182,7 +182,7 @@ export async function simulateReferral(req: Request, res: Response) {
     });
 
     // Create referral log
-    const ref = await prisma.referral.create({
+    const ref = await (prisma as any).referral.create({
       data: {
         referrer_id: referrerId,
         referee_id: refereeId,
@@ -193,7 +193,7 @@ export async function simulateReferral(req: Request, res: Response) {
     });
 
     // Update referrer's claimable stash
-    const updatedReferrer = await prisma.user.update({
+    const updatedReferrer: any = await (prisma.user as any).update({
       where: { id: referrerId },
       data: {
         referral_count: { increment: 1 },
