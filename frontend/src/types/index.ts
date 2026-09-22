@@ -103,3 +103,39 @@ export interface OnlineStats {
   activeRealUsers?: number;
   timestamp?: number;
 }
+
+export interface ReferralStats {
+  referral_count: number;
+  unclaimed_referral_nc: string;
+  unclaimed_referral_ton: string;
+  total_referral_nc: string;
+  total_referral_ton: string;
+}
+
+export interface ReferralFriend {
+  bonus_nc: number;
+  bonus_ton: string;
+  is_premium: boolean;
+  created_at: string;
+  first_name: string;
+  username: string | null;
+}
+
+export interface FriendStatsResponse {
+  stats: ReferralStats;
+  friends: ReferralFriend[];
+  botUsername: string;
+}
+
+export interface FriendClaimResponse {
+  success: boolean;
+  claimed: {
+    nc: number;
+    ton: number;
+  };
+  newBalances: {
+    nc_balance: string;
+    ton_balance: string;
+  };
+}
+

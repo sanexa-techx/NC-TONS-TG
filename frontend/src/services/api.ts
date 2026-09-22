@@ -1,4 +1,16 @@
-import { MiningState, Mission, RewardConfig, UserProfile, WithdrawalRecord, GameFinishResponse, PromoCode, PromoRedeemResponse, OnlineStats } from '../types/index.js';
+import {
+  MiningState,
+  Mission,
+  RewardConfig,
+  UserProfile,
+  WithdrawalRecord,
+  GameFinishResponse,
+  PromoCode,
+  PromoRedeemResponse,
+  OnlineStats,
+  FriendStatsResponse,
+  FriendClaimResponse,
+} from '../types/index.js';
 
 let devUserId = localStorage.getItem('nctons_dev_user_id') || '9990001';
 let devUsername = localStorage.getItem('nctons_dev_username') || 'CyberMiner';
@@ -259,4 +271,37 @@ export const api = {
     });
     return handleResponse(res);
   },
+
+  // Referral System & Friends Hub
+  async getFriendStats(userId?: string | number): Promise<FriendStatsResponse> {
+    const query = userId ? `?userId=${userId}` : '';
+    const res = await fetch(`/api/friends/stats${query}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async claimFriendRewards(userId?: string | number): Promise<FriendClaimResponse> {
+    const res = await fetch('/api/friends/claim', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId }),
+    });
+    return handleResponse(res);
+  },
+
+  async simulateReferral(data: {
+    referrerId?: string | number;
+    isPremium?: boolean;
+    firstName?: string;
+    username?: string;
+  }): Promise<any> {
+    const res = await fetch('/api/friends/simulate-referral', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
 };
+

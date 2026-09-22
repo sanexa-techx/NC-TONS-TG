@@ -126,3 +126,27 @@ VALUES
     ('NCTONS2026', 1000, 0.000100, 500, 0, true)
 ON CONFLICT (code) DO NOTHING;
 
+-- Referral System & Friends Hub Schema
+-- 1. Extend Users Table
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS referred_by BIGINT REFERENCES users(id),
+ADD COLUMN IF NOT EXISTS referral_count INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS unclaimed_referral_nc BIGINT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS unclaimed_referral_ton NUMERIC(14, 6) DEFAULT 0.000000,
+ADD COLUMN IF NOT EXISTS total_referral_nc BIGINT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS total_referral_ton NUMERIC(14, 6) DEFAULT 0.000000;
+
+-- 2. Referrals History Table
+CREATE TABLE IF NOT EXISTS referrals (
+    id SERIAL PRIMARY KEY,
+    referrer_id BIGINT NOT NULL REFERENCES users(id),
+    referee_id BIGINT NOT NULL UNIQUE REFERENCES users(id), -- A user can only be referred once
+    is_premium BOOLEAN DEFAULT FALSE,                      -- Referee has Telegram Premium
+    bonus_nc INT NOT NULL,
+    bonus_ton NUMERIC(14, 6) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+
+

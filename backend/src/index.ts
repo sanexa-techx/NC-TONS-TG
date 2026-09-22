@@ -26,6 +26,7 @@ import {
   deleteAdminPromo,
 } from './controllers/promoController.js';
 import { getOnlineStats, pingOnlineStatus } from './controllers/statsController.js';
+import { getFriendStats, claimFriendRewards, simulateReferral } from './controllers/friendsController.js';
 
 // Telegraf Bot
 import { bot } from './bot/telegrafInstance.js';
@@ -68,6 +69,11 @@ app.get('/api/withdraw/history', authMiddleware, getWithdrawalHistory);
 
 // Promo Codes
 app.post('/api/promos/redeem', authMiddleware, redeemPromo);
+
+// Referral System & Friends Hub
+app.get('/api/friends/stats', authMiddleware, getFriendStats);
+app.post('/api/friends/claim', authMiddleware, claimFriendRewards);
+app.post('/api/friends/simulate-referral', authMiddleware, simulateReferral);
 
 // Real-time Online Telemetry
 app.get('/api/stats/online', getOnlineStats);

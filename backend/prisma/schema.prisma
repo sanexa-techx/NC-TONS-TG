@@ -17,12 +17,19 @@ model User {
   power_capacity_hours Int            @default(8)
   ton_hashrate_per_sec Decimal        @default(0.00000100) @db.Decimal(12, 8)
   last_sync_at         DateTime       @default(now())
-  referrer_id          BigInt?
-  created_at           DateTime       @default(now())
-  claims               MissionClaim[]
-  withdrawals          Withdrawal[]
-  game_sessions        GameSession[]
-  promo_claims         UserPromoClaim[]
+  referred_by            BigInt?
+  referral_count         Int              @default(0)
+  unclaimed_referral_nc  BigInt           @default(0)
+  unclaimed_referral_ton Decimal          @default(0.000000) @db.Decimal(14, 6)
+  total_referral_nc      BigInt           @default(0)
+  total_referral_ton     Decimal          @default(0.000000) @db.Decimal(14, 6)
+  created_at             DateTime         @default(now())
+  claims                 MissionClaim[]
+  withdrawals            Withdrawal[]
+  game_sessions          GameSession[]
+  promo_claims           UserPromoClaim[]
+  referrals_made         Referral[]       @relation("Referrer")
+  referred_in            Referral?        @relation("Referee")
 
   @@map("users")
 }
@@ -122,3 +129,19 @@ model UserPromoClaim {
   @@unique([user_id, promo_code_id], name: "unique_user_promo")
   @@map("user_promo_claims")
 }
+
+model Referral {
+  id          Int      @id @default(autoincrement())
+  referrer_id BigInt
+  referee_id  BigInt   @unique
+  is_premium  Boolean  @default(false)
+  bonus_nc    Int
+  bonus_ton   Decimal  @db.Decimal(14, 6)
+  created_at  DateTime @default(now())
+  referrer    User     @relation("Referrer", fields: [referrer_id], references: [id], onDelete: Cascade)
+  referee     User     @relation("Referee", fields: [referee_id], references: [id], onDelete: Cascade)
+
+  @@index([referrer_id])
+  @@map("referrals")
+}
+

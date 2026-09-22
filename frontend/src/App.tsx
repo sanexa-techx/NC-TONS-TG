@@ -3,18 +3,19 @@ import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import { UserProfile } from './types/index.js';
 import { api } from './services/api.js';
 import { useMining } from './hooks/useMining.js';
-import { Navbar } from './components/Navbar.js';
+import { Navbar, NavTab } from './components/Navbar.js';
 import { DevTelegramBar } from './components/DevTelegramBar.js';
 import { MiningDashboard } from './pages/MiningDashboard.js';
 import { GamePage } from './pages/GamePage.js';
 import { MissionsPage } from './pages/MissionsPage.js';
+import FriendsView from './components/FriendsView.js';
 import { WalletPage } from './pages/WalletPage.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { OnlinePlayersBadge } from './components/OnlinePlayersBadge.js';
 import { Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'mining' | 'game' | 'missions' | 'wallet' | 'admin'>('mining');
+  const [activeTab, setActiveTab] = useState<NavTab>('mining');
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
@@ -109,6 +110,13 @@ export const App: React.FC = () => {
           {activeTab === 'game' && <GamePage onGameFinished={handleGameFinished} />}
 
           {activeTab === 'missions' && <MissionsPage onRewardClaimed={handleRewardClaimed} />}
+
+          {activeTab === 'friends' && (
+            <FriendsView
+              userId={user?.id || '9990001'}
+              onBalanceUpdated={() => sync()}
+            />
+          )}
 
           {activeTab === 'wallet' && (
             <WalletPage

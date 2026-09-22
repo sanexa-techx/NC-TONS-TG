@@ -159,6 +159,16 @@ const memoryStore = {
   promoClaims: [] as Array<{ id: number; promo_code_id: number; user_id: bigint; claimed_at: Date }>,
   promoCodeIdSeq: 3,
   promoClaimIdSeq: 1,
+  referrals: [] as Array<{
+    id: number;
+    referrer_id: bigint;
+    referee_id: bigint;
+    is_premium: boolean;
+    bonus_nc: number;
+    bonus_ton: Decimal;
+    created_at: Date;
+  }>,
+  referralIdSeq: 1,
 };
 
 // Seed default dev user
@@ -172,7 +182,12 @@ memoryStore.users.set('9990001', {
   power_capacity_hours: 8,
   ton_hashrate_per_sec: new Decimal('0.00000100'),
   last_sync_at: new Date(Date.now() - 3600 * 1000), // 1 hour ago
-  referrer_id: null,
+  referred_by: null,
+  referral_count: 0,
+  unclaimed_referral_nc: 0n,
+  unclaimed_referral_ton: new Decimal('0.000000'),
+  total_referral_nc: 0n,
+  total_referral_ton: new Decimal('0.000000'),
   created_at: new Date(),
 });
 
@@ -186,7 +201,12 @@ memoryStore.users.set('123456789', {
   power_capacity_hours: 8,
   ton_hashrate_per_sec: new Decimal('0.00000250'),
   last_sync_at: new Date(),
-  referrer_id: null,
+  referred_by: null,
+  referral_count: 0,
+  unclaimed_referral_nc: 0n,
+  unclaimed_referral_ton: new Decimal('0.000000'),
+  total_referral_nc: 0n,
+  total_referral_ton: new Decimal('0.000000'),
   created_at: new Date(),
 });
 
@@ -200,10 +220,17 @@ const mockPrisma = {
     async create({ data }: any) {
       const newUser = {
         ...data,
+        id: BigInt(data.id),
         ton_balance: data.ton_balance instanceof Decimal ? data.ton_balance : new Decimal(data.ton_balance || 0),
         nc_balance: BigInt(data.nc_balance || 0),
         ton_hashrate_per_sec: data.ton_hashrate_per_sec instanceof Decimal ? data.ton_hashrate_per_sec : new Decimal(data.ton_hashrate_per_sec || '0.00000100'),
         last_sync_at: data.last_sync_at || new Date(),
+        referred_by: data.referred_by !== undefined ? (data.referred_by ? BigInt(data.referred_by) : null) : null,
+        referral_count: data.referral_count || 0,
+        unclaimed_referral_nc: BigInt(data.unclaimed_referral_nc || 0),
+        unclaimed_referral_ton: data.unclaimed_referral_ton instanceof Decimal ? data.unclaimed_referral_ton : new Decimal(data.unclaimed_referral_ton || '0.000000'),
+        total_referral_nc: BigInt(data.total_referral_nc || 0),
+        total_referral_ton: data.total_referral_ton instanceof Decimal ? data.total_referral_ton : new Decimal(data.total_referral_ton || '0.000000'),
         created_at: new Date(),
       };
       memoryStore.users.set(data.id.toString(), newUser);
@@ -218,7 +245,7 @@ const mockPrisma = {
       } else if (data.ton_balance?.decrement) {
         existing.ton_balance = existing.ton_balance.minus(data.ton_balance.decrement);
       } else if (data.ton_balance !== undefined) {
-        existing.ton_balance = data.ton_balance;
+        existing.ton_balance = data.ton_balance instanceof Decimal ? data.ton_balance : new Decimal(data.ton_balance);
       }
 
       if (data.nc_balance?.increment) {
@@ -229,6 +256,38 @@ const mockPrisma = {
         existing.nc_balance = BigInt(data.nc_balance);
       }
 
+      // Referral stats updates
+      if (data.referral_count?.increment) {
+        existing.referral_count = (existing.referral_count || 0) + Number(data.referral_count.increment);
+      } else if (data.referral_count !== undefined) {
+        existing.referral_count = Number(data.referral_count);
+      }
+
+      if (data.unclaimed_referral_nc?.increment) {
+        existing.unclaimed_referral_nc = (existing.unclaimed_referral_nc || 0n) + BigInt(data.unclaimed_referral_nc.increment);
+      } else if (data.unclaimed_referral_nc !== undefined) {
+        existing.unclaimed_referral_nc = BigInt(data.unclaimed_referral_nc);
+      }
+
+      if (data.unclaimed_referral_ton?.increment) {
+        existing.unclaimed_referral_ton = (existing.unclaimed_referral_ton || new Decimal(0)).plus(data.unclaimed_referral_ton.increment);
+      } else if (data.unclaimed_referral_ton !== undefined) {
+        existing.unclaimed_referral_ton = data.unclaimed_referral_ton instanceof Decimal ? data.unclaimed_referral_ton : new Decimal(data.unclaimed_referral_ton);
+      }
+
+      if (data.total_referral_nc?.increment) {
+        existing.total_referral_nc = (existing.total_referral_nc || 0n) + BigInt(data.total_referral_nc.increment);
+      } else if (data.total_referral_nc !== undefined) {
+        existing.total_referral_nc = BigInt(data.total_referral_nc);
+      }
+
+      if (data.total_referral_ton?.increment) {
+        existing.total_referral_ton = (existing.total_referral_ton || new Decimal(0)).plus(data.total_referral_ton.increment);
+      } else if (data.total_referral_ton !== undefined) {
+        existing.total_referral_ton = data.total_referral_ton instanceof Decimal ? data.total_referral_ton : new Decimal(data.total_referral_ton);
+      }
+
+      if (data.referred_by !== undefined) existing.referred_by = data.referred_by ? BigInt(data.referred_by) : null;
       if (data.power_percentage !== undefined) existing.power_percentage = data.power_percentage;
       if (data.last_sync_at !== undefined) existing.last_sync_at = data.last_sync_at;
 
@@ -528,6 +587,72 @@ const mockPrisma = {
         memoryStore.promoClaims = memoryStore.promoClaims.filter((c) => c.promo_code_id !== Number(where.promo_code_id));
       }
       return { count: 1 };
+    },
+  },
+
+  referral: {
+    async findMany({ where, orderBy, take, include }: any = {}) {
+      let list = [...memoryStore.referrals];
+      if (where?.referrer_id !== undefined) {
+        list = list.filter((r) => r.referrer_id === BigInt(where.referrer_id));
+      }
+      if (where?.referee_id !== undefined) {
+        list = list.filter((r) => r.referee_id === BigInt(where.referee_id));
+      }
+      if (orderBy?.created_at === 'desc') {
+        list.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+      }
+      if (take && take > 0) {
+        list = list.slice(0, take);
+      }
+      return list.map((r) => {
+        const item: any = { ...r };
+        if (include?.referee) {
+          const refereeUser = memoryStore.users.get(r.referee_id.toString());
+          item.referee = refereeUser ? { ...refereeUser } : null;
+        }
+        if (include?.referrer) {
+          const referrerUser = memoryStore.users.get(r.referrer_id.toString());
+          item.referrer = referrerUser ? { ...referrerUser } : null;
+        }
+        return item;
+      });
+    },
+    async findUnique({ where }: any) {
+      if (where?.referee_id !== undefined) {
+        const r = memoryStore.referrals.find((item) => item.referee_id === BigInt(where.referee_id));
+        return r ? { ...r } : null;
+      }
+      if (where?.id !== undefined) {
+        const r = memoryStore.referrals.find((item) => item.id === Number(where.id));
+        return r ? { ...r } : null;
+      }
+      return null;
+    },
+    async create({ data }: any) {
+      const existing = memoryStore.referrals.find((item) => item.referee_id === BigInt(data.referee_id));
+      if (existing) {
+        const err: any = new Error('Unique constraint failed on referee_id');
+        err.code = 'P2002';
+        throw err;
+      }
+      const newRef = {
+        id: memoryStore.referralIdSeq++,
+        referrer_id: BigInt(data.referrer_id),
+        referee_id: BigInt(data.referee_id),
+        is_premium: Boolean(data.is_premium),
+        bonus_nc: Number(data.bonus_nc),
+        bonus_ton: data.bonus_ton instanceof Decimal ? data.bonus_ton : new Decimal(data.bonus_ton),
+        created_at: new Date(),
+      };
+      memoryStore.referrals.push(newRef);
+      return { ...newRef };
+    },
+    async count({ where }: any = {}) {
+      if (where?.referrer_id) {
+        return memoryStore.referrals.filter((r) => r.referrer_id === BigInt(where.referrer_id)).length;
+      }
+      return memoryStore.referrals.length;
     },
   },
 

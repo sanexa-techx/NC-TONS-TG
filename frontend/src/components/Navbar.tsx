@@ -1,9 +1,11 @@
 import React from 'react';
-import { Pickaxe, Gamepad2, Target, Wallet, ShieldAlert } from 'lucide-react';
+import { Pickaxe, Gamepad2, Target, Users, Wallet, ShieldAlert } from 'lucide-react';
+
+export type NavTab = 'mining' | 'game' | 'missions' | 'friends' | 'wallet' | 'admin';
 
 interface NavbarProps {
-  activeTab: 'mining' | 'game' | 'missions' | 'wallet' | 'admin';
-  setActiveTab: (tab: 'mining' | 'game' | 'missions' | 'wallet' | 'admin') => void;
+  activeTab: NavTab;
+  setActiveTab: (tab: NavTab) => void;
   isAdmin: boolean;
 }
 
@@ -11,7 +13,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, isAdmin
   const navItems = [
     { id: 'mining', label: 'Mining', icon: Pickaxe },
     { id: 'game', label: 'Arcade', icon: Gamepad2 },
-    { id: 'missions', label: 'Missions', icon: Target },
+    { id: 'missions', label: 'Tasks', icon: Target },
+    { id: 'friends', label: 'Friends', icon: Users },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: ShieldAlert }] : []),
   ] as const;

@@ -12,36 +12,92 @@ export function registerStartHandler(bot: Telegraf) {
       const userId = BigInt(from.id);
       const firstName = from.first_name || 'Miner';
       const username = from.username || null;
+      const isPremium = Boolean((from as any).is_premium);
 
-      // Extract referral ID from deep link (e.g. /start ref_1234567)
-      const startPayload = ctx.payload;
+      // Extract referral ID from deep link (e.g. /start ref_123456789)
+      const rawText = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+      const textPayload = rawText.split(' ')[1];
+      const startPayload = ctx.payload || textPayload;
+
       let referrerId: bigint | null = null;
       if (startPayload && startPayload.startsWith('ref_')) {
-        const refStr = startPayload.replace('ref_', '');
+        const refStr = startPayload.replace('ref_', '').trim();
         if (/^\d+$/.test(refStr) && refStr !== from.id.toString()) {
           referrerId = BigInt(refStr);
         }
       }
 
-      // Find or create user
+      // Check if user already exists
       let user = await prisma.user.findUnique({
         where: { id: userId },
       });
 
       if (!user) {
+        // 2. Determine referral bonus rates (Higher for TG Premium)
+        const bonusNc = isPremium ? 2500 : 1000;
+        const bonusTon = isPremium ? 0.000200 : 0.000080;
+
+        // Starter welcome gift for the new user
+        const starterNc = isPremium ? 2000 : 1000;
+
         user = await prisma.user.create({
           data: {
             id: userId,
             first_name: firstName,
             username: username,
-            referrer_id: referrerId,
+            referred_by: referrerId,
             ton_balance: 0,
-            nc_balance: 100, // Welcome bonus NC coins
+            nc_balance: BigInt(starterNc),
             power_percentage: 100,
             power_capacity_hours: 8,
             ton_hashrate_per_sec: 0.00000100,
           },
         });
+
+        // 3. If valid referrer, credit their pending stash & log referral entry
+        if (referrerId) {
+          try {
+            const referrerExists = await prisma.user.findUnique({
+              where: { id: referrerId },
+            });
+
+            if (referrerExists) {
+              await prisma.referral.create({
+                data: {
+                  referrer_id: referrerId,
+                  referee_id: userId,
+                  is_premium: isPremium,
+                  bonus_nc: bonusNc,
+                  bonus_ton: bonusTon,
+                },
+              });
+
+              await prisma.user.update({
+                where: { id: referrerId },
+                data: {
+                  referral_count: { increment: 1 },
+                  unclaimed_referral_nc: { increment: BigInt(bonusNc) },
+                  unclaimed_referral_ton: { increment: bonusTon },
+                  total_referral_nc: { increment: BigInt(bonusNc) },
+                  total_referral_ton: { increment: bonusTon },
+                },
+              });
+
+              // Notify referrer via bot DM
+              await bot.telegram
+                .sendMessage(
+                  referrerId.toString(),
+                  `👥 <b>New Friend Joined!</b>\n\n` +
+                    `Your friend <b>${firstName}</b> just joined NC TONs.\n` +
+                    `🎁 Bonus pending: <b>+${bonusNc.toLocaleString()} NC</b> and <b>+${bonusTon.toFixed(6)} TON</b>!`,
+                  { parse_mode: 'HTML' }
+                )
+                .catch(() => {}); // Prevent crash if user blocked bot
+            }
+          } catch (refErr) {
+            console.warn('Could not record referral bonus:', refErr);
+          }
+        }
       }
 
       const welcomeText =
