@@ -6,13 +6,32 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
+  // Remove legacy game reward configurations
+  await prisma.rewardConfig.deleteMany({
+    where: {
+      action_type: { in: ['game_drop', 'game_spin', 'game_grid', 'game_play'] },
+    },
+  });
+
   // Seed default reward configurations
   const defaultRewards = [
     {
-      action_type: 'game_play',
-      display_name: 'Drop Catcher Mini-Game',
-      nc_reward: 150,
-      ton_reward: new Decimal('0.000050'),
+      action_type: 'game_memory',
+      display_name: 'Memory Matrix Puzzle',
+      nc_reward: 45,
+      ton_reward: new Decimal('0.000015'),
+    },
+    {
+      action_type: 'game_2048',
+      display_name: '2048 Tile Merge',
+      nc_reward: 60,
+      ton_reward: new Decimal('0.000020'),
+    },
+    {
+      action_type: 'game_carrace',
+      display_name: 'Cyber Car Race',
+      nc_reward: 50,
+      ton_reward: new Decimal('0.000025'),
     },
     {
       action_type: 'watch_ad',
@@ -31,7 +50,11 @@ async function main() {
   for (const reward of defaultRewards) {
     await prisma.rewardConfig.upsert({
       where: { action_type: reward.action_type },
-      update: {},
+      update: {
+        display_name: reward.display_name,
+        nc_reward: reward.nc_reward,
+        ton_reward: reward.ton_reward,
+      },
       create: reward,
     });
   }

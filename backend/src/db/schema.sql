@@ -64,13 +64,32 @@ CREATE TABLE IF NOT EXISTS withdrawals (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
+-- 6. Game Sessions Table
+CREATE TABLE IF NOT EXISTS game_sessions (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    game_type VARCHAR(32) NOT NULL, -- 'game_memory', 'game_2048', 'game_carrace'
+    status VARCHAR(20) DEFAULT 'ACTIVE' NOT NULL, -- 'ACTIVE', 'COMPLETED', 'EXPIRED'
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    finished_at TIMESTAMP WITH TIME ZONE,
+    score INT
+);
+
 -- Seed Initial Reward Configurations
+DELETE FROM reward_configs 
+WHERE action_type IN ('game_drop', 'game_spin', 'game_grid', 'game_play');
+
 INSERT INTO reward_configs (action_type, display_name, nc_reward, ton_reward, updated_at)
 VALUES
-    ('game_play', 'Drop Catcher Mini-Game', 150, 0.000050, CURRENT_TIMESTAMP),
+    ('game_memory', 'Memory Matrix Puzzle', 45, 0.000015, CURRENT_TIMESTAMP),
+    ('game_2048', '2048 Tile Merge', 60, 0.000020, CURRENT_TIMESTAMP),
+    ('game_carrace', 'Cyber Car Race', 50, 0.000025, CURRENT_TIMESTAMP),
     ('watch_ad', 'Adsgram Rewarded Video', 250, 0.000100, CURRENT_TIMESTAMP),
     ('task_default', 'Standard Community Mission', 300, 0.000200, CURRENT_TIMESTAMP)
-ON CONFLICT (action_type) DO NOTHING;
+ON CONFLICT (action_type) DO UPDATE 
+SET display_name = EXCLUDED.display_name,
+    nc_reward = EXCLUDED.nc_reward,
+    ton_reward = EXCLUDED.ton_reward;
 
 -- Seed Initial Missions
 INSERT INTO dynamic_missions (creator_user_id, title, description, category, task_type, action_url, telegram_chat_id, nc_reward, ton_reward, target_users, is_active, priority)

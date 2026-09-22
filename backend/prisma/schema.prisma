@@ -21,6 +21,7 @@ model User {
   created_at           DateTime       @default(now())
   claims               MissionClaim[]
   withdrawals          Withdrawal[]
+  game_sessions        GameSession[]
 
   @@map("users")
 }
@@ -80,4 +81,17 @@ model Withdrawal {
   user               User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("withdrawals")
+}
+
+model GameSession {
+  id          String    @id
+  user_id     BigInt
+  game_type   String    @db.VarChar(32) /// 'game_memory', 'game_2048', 'game_carrace'
+  status      String    @default("ACTIVE") @db.VarChar(20) /// 'ACTIVE', 'COMPLETED', 'EXPIRED'
+  started_at  DateTime  @default(now())
+  finished_at DateTime?
+  score       Int?
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("game_sessions")
 }

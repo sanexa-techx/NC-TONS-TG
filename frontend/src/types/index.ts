@@ -50,3 +50,26 @@ export interface RewardConfig {
   tonReward: string;
   updatedAt?: string;
 }
+
+export type ActiveGameType = 'game_memory' | 'game_2048' | 'game_carrace';
+
+export interface GameStartResponse {
+  sessionId: string;
+  durationSec?: number;
+}
+
+export interface GameFinishResponse {
+  success: boolean;
+  reward: {
+    nc: number;
+    ton: string;
+  };
+  newBalances: {
+    nc: string;
+    ton: string;
+  };
+  ncAwarded?: number;
+  tonAwarded?: string;
+  newNcBalance?: string;
+  newTonBalance?: string;
+}

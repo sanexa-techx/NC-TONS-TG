@@ -17,12 +17,32 @@ const memoryStore = {
   users: new Map<string, any>(),
   rewardConfigs: new Map<string, any>([
     [
-      'game_play',
+      'game_memory',
       {
-        action_type: 'game_play',
-        display_name: 'Drop Catcher Mini-Game',
-        nc_reward: 150,
-        ton_reward: new Decimal('0.000050'),
+        action_type: 'game_memory',
+        display_name: 'Memory Matrix Puzzle',
+        nc_reward: 45,
+        ton_reward: new Decimal('0.000015'),
+        updated_at: new Date(),
+      },
+    ],
+    [
+      'game_2048',
+      {
+        action_type: 'game_2048',
+        display_name: '2048 Tile Merge',
+        nc_reward: 60,
+        ton_reward: new Decimal('0.000020'),
+        updated_at: new Date(),
+      },
+    ],
+    [
+      'game_carrace',
+      {
+        action_type: 'game_carrace',
+        display_name: 'Cyber Car Race',
+        nc_reward: 50,
+        ton_reward: new Decimal('0.000025'),
         updated_at: new Date(),
       },
     ],
@@ -102,6 +122,7 @@ const memoryStore = {
   ],
   claims: [] as Array<{ id: number; mission_id: number; user_id: bigint; claimed_at: Date }>,
   withdrawals: [] as any[],
+  gameSessions: new Map<string, any>(),
   withdrawalIdSeq: 101,
   missionIdSeq: 4,
 };
@@ -311,6 +332,36 @@ const mockPrisma = {
         return memoryStore.withdrawals.filter((w) => w.status === where.status).length;
       }
       return memoryStore.withdrawals.length;
+    },
+  },
+
+  gameSession: {
+    async create({ data }: any) {
+      const session = {
+        ...data,
+        status: data.status || 'ACTIVE',
+        started_at: data.started_at || new Date(),
+        finished_at: data.finished_at || null,
+        score: data.score ?? null,
+      };
+      memoryStore.gameSessions.set(data.id, session);
+      return { ...session };
+    },
+    async findUnique({ where }: any) {
+      const session = memoryStore.gameSessions.get(where.id);
+      return session ? { ...session } : null;
+    },
+    async update({ where, data }: any) {
+      const existing = memoryStore.gameSessions.get(where.id);
+      if (!existing) throw new Error('Game session not found');
+      Object.assign(existing, data);
+      memoryStore.gameSessions.set(where.id, existing);
+      return { ...existing };
+    },
+    async delete({ where }: any) {
+      const existing = memoryStore.gameSessions.get(where.id);
+      memoryStore.gameSessions.delete(where.id);
+      return existing;
     },
   },
 

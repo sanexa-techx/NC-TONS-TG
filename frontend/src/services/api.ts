@@ -1,4 +1,4 @@
-import { MiningState, Mission, RewardConfig, UserProfile, WithdrawalRecord } from '../types/index.js';
+import { MiningState, Mission, RewardConfig, UserProfile, WithdrawalRecord, GameFinishResponse } from '../types/index.js';
 
 let devUserId = localStorage.getItem('nctons_dev_user_id') || '9990001';
 let devUsername = localStorage.getItem('nctons_dev_username') || 'CyberMiner';
@@ -70,11 +70,14 @@ export const api = {
     return handleResponse(res);
   },
 
-  // Drop Game
-  async startGame(): Promise<{ sessionId: string; durationSec: number }> {
+  // Arcade Mini-Games
+  async startGame(
+    gameType: 'game_memory' | 'game_2048' | 'game_carrace'
+  ): Promise<{ sessionId: string }> {
     const res = await fetch('/api/game/start', {
       method: 'POST',
       headers: getAuthHeaders(),
+      body: JSON.stringify({ gameType }),
     });
     return handleResponse(res);
   },
@@ -82,7 +85,7 @@ export const api = {
   async finishGame(
     sessionId: string,
     score: number
-  ): Promise<{ success: boolean; ncAwarded: number; tonAwarded: string; newNcBalance: string; newTonBalance: string }> {
+  ): Promise<GameFinishResponse> {
     const res = await fetch('/api/game/finish', {
       method: 'POST',
       headers: getAuthHeaders(),

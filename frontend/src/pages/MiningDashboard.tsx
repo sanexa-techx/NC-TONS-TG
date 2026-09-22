@@ -100,7 +100,7 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
 
       {/* Quick Action Cards */}
       <div className="w-full space-y-2.5">
-        {/* Drop Game Banner */}
+        {/* Arcade Hub Banner */}
         <button
           onClick={() => onNavigate('game')}
           className="w-full p-3.5 rounded-2xl glass-panel border border-cyber-border hover:border-cyber-cyan/50 transition-all flex items-center justify-between group active:scale-98"
@@ -111,10 +111,10 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
             </div>
             <div className="text-left">
               <div className="text-xs font-bold text-white group-hover:text-cyber-cyan transition-colors">
-                Drop Catcher Mini-Game
+                Arcade Hub (3 Mini-Games)
               </div>
               <div className="text-[11px] text-slate-400">
-                Catch gold & gems for dual NC & TON bounties
+                Memory Matrix, 2048 & Cyber Car Race for instant bounties
               </div>
             </div>
           </div>
