@@ -103,6 +103,22 @@ async function main() {
       priority: 2,
       is_active: true,
     },
+    {
+      creator_user_id: 0n,
+      title: 'Subscribe to NC TONs YouTube',
+      description: 'Subscribe to our official YouTube channel and upload screenshot proof of your subscription.',
+      category: 'social',
+      task_type: 'screenshot_social',
+      action_url: 'https://youtube.com/@nctons',
+      telegram_chat_id: null,
+      nc_reward: 600,
+      ton_reward: new Decimal('0.000400'),
+      target_users: 5000,
+      priority: 8,
+      is_active: true,
+      requires_proof: true,
+      proof_instructions: 'Take a screenshot showing the Subscribed button on our YouTube channel and upload it below:',
+    },
   ];
 
   for (const mission of initialMissions) {
@@ -114,6 +130,29 @@ async function main() {
         data: mission,
       });
     }
+  }
+
+  // Seed 7-Day Daily Streak Rewards Ladder
+  const dailyRewards = [
+    { day_number: 1, nc_reward: 250, ton_reward: new Decimal('0.000010'), battery_bonus_pct: 0 },
+    { day_number: 2, nc_reward: 500, ton_reward: new Decimal('0.000020'), battery_bonus_pct: 20 },
+    { day_number: 3, nc_reward: 800, ton_reward: new Decimal('0.000035'), battery_bonus_pct: 0 },
+    { day_number: 4, nc_reward: 1200, ton_reward: new Decimal('0.000050'), battery_bonus_pct: 0 },
+    { day_number: 5, nc_reward: 1800, ton_reward: new Decimal('0.000075'), battery_bonus_pct: 50 },
+    { day_number: 6, nc_reward: 2600, ton_reward: new Decimal('0.000100'), battery_bonus_pct: 0 },
+    { day_number: 7, nc_reward: 4500, ton_reward: new Decimal('0.000250'), battery_bonus_pct: 100 },
+  ];
+
+  for (const reward of dailyRewards) {
+    await prisma.dailyStreakReward.upsert({
+      where: { day_number: reward.day_number },
+      update: {
+        nc_reward: reward.nc_reward,
+        ton_reward: reward.ton_reward,
+        battery_bonus_pct: reward.battery_bonus_pct,
+      },
+      create: reward,
+    });
   }
 
   console.log('✅ Seeding completed.');

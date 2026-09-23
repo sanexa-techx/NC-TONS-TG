@@ -14,6 +14,21 @@ export class MissionService {
 
     const claimedMissionIds = new Set(claims.map((c) => c.mission_id));
 
+    // Fetch user proof submissions
+    const proofStatusMap = new Map<number, string>();
+    try {
+      if ((prisma as any).taskProofSubmission) {
+        const proofs = await (prisma as any).taskProofSubmission.findMany({
+          where: { user_id: userId },
+        });
+        for (const p of proofs) {
+          proofStatusMap.set(p.mission_id, p.status);
+        }
+      }
+    } catch (e) {
+      // In case table or model is not yet accessible
+    }
+
     const missions = await prisma.dynamicMission.findMany({
       where: {
         is_active: true,
@@ -21,7 +36,7 @@ export class MissionService {
       orderBy: [{ priority: 'desc' }, { created_at: 'desc' }],
     });
 
-    return missions.map((m) => ({
+    return missions.map((m: any) => ({
       id: m.id,
       title: m.title,
       description: m.description,
@@ -35,6 +50,9 @@ export class MissionService {
       completedCount: m.completed_count,
       isCompleted: claimedMissionIds.has(m.id),
       isSoldOut: m.target_users !== null && m.completed_count >= m.target_users,
+      requiresProof: Boolean(m.requires_proof || m.task_type === 'screenshot_social'),
+      proofInstructions: m.proof_instructions || 'Upload a screenshot showing you followed/subscribed',
+      proofStatus: proofStatusMap.get(m.id) || null,
     }));
   }
 
@@ -143,7 +161,10 @@ export class MissionService {
     tonReward: number | string;
     targetUsers?: number | null;
     priority?: number;
+    requiresProof?: boolean;
+    proofInstructions?: string | null;
   }) {
+    const isScreenshot = data.taskType === 'screenshot_social' || Boolean(data.requiresProof);
     return prisma.dynamicMission.create({
       data: {
         creator_user_id: data.creatorUserId,
@@ -158,6 +179,8 @@ export class MissionService {
         target_users: data.targetUsers || null,
         priority: data.priority ?? 0,
         is_active: true,
+        requires_proof: isScreenshot,
+        proof_instructions: data.proofInstructions || (isScreenshot ? 'Upload a screenshot showing you followed/subscribed' : null),
       },
     });
   }

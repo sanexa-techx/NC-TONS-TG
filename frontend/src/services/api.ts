@@ -10,6 +10,9 @@ import {
   OnlineStats,
   FriendStatsResponse,
   FriendClaimResponse,
+  DailyStreakStatusResponse,
+  DailyStreakClaimResponse,
+  DailyAdStatusResponse,
 } from '../types/index.js';
 
 let devUserId = localStorage.getItem('nctons_dev_user_id') || '9990001';
@@ -312,5 +315,45 @@ export const api = {
     });
     return handleResponse(res);
   },
+
+  // Daily Streak & Reward System
+  async getDailyStatus(userId?: string | number): Promise<DailyStreakStatusResponse> {
+    const queryParam = userId ? `?userId=${userId}` : '';
+    const res = await fetch(`/api/daily/status${queryParam}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async claimDailyReward(userId?: string | number): Promise<DailyStreakClaimResponse> {
+    const res = await fetch('/api/daily/claim', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId }),
+    });
+    return handleResponse(res);
+  },
+
+  // Dual Ad Networks (Adsgram & Monetag)
+  async getAdStatus(userId?: string | number): Promise<DailyAdStatusResponse> {
+    const queryParam = userId ? `?userId=${userId}` : '';
+    const res = await fetch(`/api/ads/status${queryParam}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async claimAdReward(
+    provider: 'adsgram' | 'monetag',
+    userId?: string | number
+  ): Promise<{ success: boolean; reward: { nc: number; ton: number }; newBalances: any }> {
+    const res = await fetch('/api/ads/claim', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ provider, userId }),
+    });
+    return handleResponse(res);
+  },
 };
+
 

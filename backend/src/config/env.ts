@@ -1,6 +1,13 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { z } from 'zod';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config();
 
 const envSchema = z.object({
@@ -12,6 +19,9 @@ const envSchema = z.object({
   ADMIN_CHANNEL_ID: z.string().default(''),
   WEBAPP_URL: z.string().default('http://localhost:5173'),
   ALLOW_DEV_AUTH: z.string().default('true').transform((v) => v === 'true'),
+  NOTION_API_KEY: z.string().default(''),
+  NOTION_WITHDRAWALS_DATABASE_ID: z.string().default(''),
+  NOTION_TASKS_DATABASE_ID: z.string().default(''),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

@@ -17,6 +17,8 @@ export const AdminPage: React.FC = () => {
   // New mission form state
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [newTaskType, setNewTaskType] = useState<'telegram_join' | 'screenshot_social' | 'visit_url' | 'bot_launch'>('telegram_join');
+  const [newProofInstructions, setNewProofInstructions] = useState('Upload a screenshot showing you followed/subscribed');
   const [newUrl, setNewUrl] = useState('');
   const [newChatId, setNewChatId] = useState('');
   const [newNc, setNewNc] = useState('500');
@@ -85,17 +87,20 @@ export const AdminPage: React.FC = () => {
     setCreatingMission(true);
     setFeedback(null);
     try {
+      const isScreenshot = newTaskType === 'screenshot_social';
       await api.createAdminMission({
         title: newTitle,
         description: newDesc,
         actionUrl: newUrl,
-        telegramChatId: newChatId || null,
-        category: 'telegram',
-        taskType: 'telegram_join',
+        telegramChatId: newTaskType === 'telegram_join' ? (newChatId || null) : null,
+        category: isScreenshot ? 'social' : (newTaskType === 'telegram_join' ? 'telegram' : 'partner'),
+        taskType: newTaskType,
         ncReward: Number(newNc),
         tonReward: Number(newTon),
         targetUsers: Number(newTarget),
         priority: Number(newPriority),
+        requiresProof: isScreenshot,
+        proofInstructions: isScreenshot ? newProofInstructions : null,
       });
       setFeedback({ type: 'success', text: 'Admin priority mission published!' });
       setNewTitle('');
@@ -301,6 +306,22 @@ export const AdminPage: React.FC = () => {
             </h3>
 
             <form onSubmit={handleCreateAdminMission} className="space-y-2.5">
+              <div>
+                <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">
+                  Task Verification Type
+                </label>
+                <select
+                  value={newTaskType}
+                  onChange={(e) => setNewTaskType(e.target.value as any)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 text-white text-xs"
+                >
+                  <option value="telegram_join">Telegram Channel (Auto-Verify via Bot)</option>
+                  <option value="screenshot_social">Social Follow / YouTube Subscribe (Screenshot Proof)</option>
+                  <option value="visit_url">Simple Link Visit</option>
+                  <option value="bot_launch">Partner Bot Launch</option>
+                </select>
+              </div>
+
               <input
                 type="text"
                 placeholder="Mission Title"
@@ -319,19 +340,37 @@ export const AdminPage: React.FC = () => {
               />
               <input
                 type="url"
-                placeholder="Action URL (e.g. https://t.me/channel)"
+                placeholder="Action URL (e.g. https://youtube.com/@channel or https://t.me/channel)"
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
                 required
                 className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
               />
-              <input
-                type="text"
-                placeholder="Telegram Chat ID (e.g. @channel)"
-                value={newChatId}
-                onChange={(e) => setNewChatId(e.target.value)}
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
-              />
+
+              {newTaskType === 'screenshot_social' && (
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">
+                    Proof Instructions
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Proof instructions (e.g. Upload screenshot showing subscribed)"
+                    value={newProofInstructions}
+                    onChange={(e) => setNewProofInstructions(e.target.value)}
+                    className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              )}
+
+              {newTaskType === 'telegram_join' && (
+                <input
+                  type="text"
+                  placeholder="Telegram Chat ID (e.g. @channel)"
+                  value={newChatId}
+                  onChange={(e) => setNewChatId(e.target.value)}
+                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
+                />
+              )}
 
               <div className="grid grid-cols-4 gap-2">
                 <div>

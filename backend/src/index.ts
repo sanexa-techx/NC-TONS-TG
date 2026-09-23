@@ -28,6 +28,9 @@ import {
 import { getOnlineStats, pingOnlineStatus } from './controllers/statsController.js';
 import { getFriendStats, claimFriendRewards, simulateReferral } from './controllers/friendsController.js';
 import { getUserProfile, getAvatarProxy } from './controllers/profileController.js';
+import dailyRouter from './routes/daily.js';
+import proofTasksRouter, { registerTaskProofBotHandlers } from './routes/proofTasks.js';
+import adsRouter from './routes/ads.js';
 
 // Telegraf Bot
 import { bot } from './bot/telegrafInstance.js';
@@ -79,6 +82,19 @@ app.get('/api/friends/stats', authMiddleware, getFriendStats);
 app.post('/api/friends/claim', authMiddleware, claimFriendRewards);
 app.post('/api/friends/simulate-referral', authMiddleware, simulateReferral);
 
+// Daily Streak & Rewards
+app.use('/api/daily', dailyRouter);
+
+// Social Task Screenshot Verification
+app.use('/api/proof', proofTasksRouter);
+
+// Dual Ad Networks (Adsgram & Monetag)
+app.use('/api/ads', adsRouter);
+
+// Notion Workspace Integration
+import notionRouter from './routes/notion.js';
+app.use('/api/notion', notionRouter);
+
 // Real-time Online Telemetry
 app.get('/api/stats/online', getOnlineStats);
 app.post('/api/stats/ping', pingOnlineStatus);
@@ -103,6 +119,7 @@ async function startServer() {
   if (bot) {
     registerStartHandler(bot);
     registerAdminActionHandlers(bot);
+    registerTaskProofBotHandlers(bot);
 
     bot.launch({ dropPendingUpdates: true })
       .then(() => {

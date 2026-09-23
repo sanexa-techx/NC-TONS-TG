@@ -13,12 +13,17 @@ import { WalletPage } from './pages/WalletPage.js';
 import { AdminPage } from './pages/AdminPage.js';
 import { OnlinePlayersBadge } from './components/OnlinePlayersBadge.js';
 import { UserProfileHeader } from './components/UserProfileHeader.js';
+import DailyStreakModal from './components/DailyStreakModal.js';
+import { DailyStreakStatusResponse } from './types/index.js';
+import { useAdManager } from './hooks/useAdManager.js';
 import { Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('mining');
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [dailyStatus, setDailyStatus] = useState<DailyStreakStatusResponse | null>(null);
+  const [dailyModalOpen, setDailyModalOpen] = useState<boolean>(false);
 
   const {
     mining,
@@ -29,12 +34,32 @@ export const App: React.FC = () => {
     setMiningState,
   } = useMining();
 
+  const { triggerInterstitial } = useAdManager(user?.id || '9990001');
+
+  const handleTabChange = (newTab: NavTab) => {
+    if (newTab !== activeTab) {
+      triggerInterstitial('nav');
+      setActiveTab(newTab);
+    }
+  };
+
   const initAuth = useCallback(async () => {
     setAuthLoading(true);
     try {
       const res = await api.verifyAuth();
       setUser(res.user);
       setMiningState(res.mining);
+
+      // Fetch daily streak status and auto-popup if ready
+      try {
+        const streakData = await api.getDailyStatus(res.user.id);
+        setDailyStatus(streakData);
+        if (streakData.canClaim) {
+          setDailyModalOpen(true);
+        }
+      } catch (streakErr) {
+        console.warn('Daily status fetch fallback:', streakErr);
+      }
     } catch (err) {
       console.warn('Auth verify fallback:', (err as Error).message);
     } finally {
@@ -53,6 +78,15 @@ export const App: React.FC = () => {
 
   const handleRewardClaimed = (_ncAwarded: number, _tonAwarded: string) => {
     sync();
+  };
+
+  const handleDailyClaimSuccess = (_newBalances: any, _reward: any) => {
+    sync();
+    if (user?.id) {
+      api.getDailyStatus(user.id).then((status) => {
+        setDailyStatus(status);
+      }).catch(console.warn);
+    }
   };
 
   const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
@@ -103,14 +137,27 @@ export const App: React.FC = () => {
               mining={mining}
               liveTonBalance={liveTonBalance}
               livePowerPercentage={livePowerPercentage}
+              dailyStreak={dailyStatus?.currentStreak || 0}
+              canClaimDaily={Boolean(dailyStatus?.canClaim)}
+              onOpenDailyModal={() => setDailyModalOpen(true)}
               onRecharge={recharge}
-              onNavigate={setActiveTab}
+              onNavigate={handleTabChange}
             />
           )}
 
-          {activeTab === 'game' && <GamePage onGameFinished={handleGameFinished} />}
+          {activeTab === 'game' && (
+            <GamePage
+              onGameFinished={handleGameFinished}
+              userId={user?.id || '9990001'}
+            />
+          )}
 
-          {activeTab === 'missions' && <MissionsPage onRewardClaimed={handleRewardClaimed} />}
+          {activeTab === 'missions' && (
+            <MissionsPage
+              onRewardClaimed={handleRewardClaimed}
+              userId={user?.id || '9990001'}
+            />
+          )}
 
           {activeTab === 'friends' && (
             <FriendsView
@@ -124,6 +171,7 @@ export const App: React.FC = () => {
               tonBalance={liveTonBalance}
               onWithdrawalRequested={sync}
               onPromoRedeemed={sync}
+              userId={user?.id || '9990001'}
             />
           )}
 
@@ -133,9 +181,19 @@ export const App: React.FC = () => {
         {/* Bottom Navigation */}
         <Navbar
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={handleTabChange}
           isAdmin={Boolean(user?.isAdmin)}
         />
+
+        {/* 7-Day Roadmap Modal */}
+        {dailyModalOpen && dailyStatus && (
+          <DailyStreakModal
+            userId={user?.id || '9990001'}
+            statusData={dailyStatus}
+            onClose={() => setDailyModalOpen(false)}
+            onClaimSuccess={handleDailyClaimSuccess}
+          />
+        )}
       </div>
     </TonConnectUIProvider>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Send, Globe, Bot, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Sparkles, Send, Globe, Bot, CheckCircle2, AlertCircle, Loader2, Camera } from 'lucide-react';
 import { TonIcon, NcIcon } from './icons/index.js';
 import { api } from '../services/api.js';
 
@@ -17,7 +17,8 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('telegram');
-  const [taskType, setTaskType] = useState<'telegram_join' | 'visit_url' | 'bot_launch'>('telegram_join');
+  const [taskType, setTaskType] = useState<'telegram_join' | 'visit_url' | 'bot_launch' | 'screenshot_social'>('telegram_join');
+  const [proofInstructions, setProofInstructions] = useState('Upload a screenshot showing you followed/subscribed');
   const [actionUrl, setActionUrl] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
   const [ncReward, setNcReward] = useState('500');
@@ -40,16 +41,20 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
         throw new Error('Please fill in all required fields');
       }
 
+      const isScreenshot = taskType === 'screenshot_social';
+
       await api.createMission({
         title,
         description,
-        category,
+        category: isScreenshot ? 'social' : category,
         taskType,
         actionUrl,
         telegramChatId: taskType === 'telegram_join' ? telegramChatId : null,
         ncReward: Number(ncReward),
         tonReward: Number(tonReward),
         targetUsers: Number(targetUsers),
+        requiresProof: isScreenshot,
+        proofInstructions: isScreenshot ? proofInstructions : null,
       });
 
       setSuccess(true);
@@ -126,21 +131,37 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setTaskType('telegram_join');
                   setCategory('telegram');
                 }}
-                className={`py-2 px-2 rounded-xl text-xs font-semibold flex flex-col items-center border transition-all ${
+                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
                   taskType === 'telegram_join'
                     ? 'bg-cyber-cyan/15 border-cyber-cyan text-cyber-cyan'
                     : 'bg-cyber-surface border-cyber-border text-slate-400'
                 }`}
               >
-                <Send size={16} className="mb-1" />
+                <Send size={15} />
                 <span>TG Channel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTaskType('screenshot_social');
+                  setCategory('social');
+                }}
+                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                  taskType === 'screenshot_social'
+                    ? 'bg-yellow-500/15 border-yellow-500 text-yellow-400'
+                    : 'bg-cyber-surface border-cyber-border text-slate-400'
+                }`}
+              >
+                <Camera size={15} />
+                <span>Screenshot Proof</span>
               </button>
 
               <button
@@ -149,13 +170,13 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   setTaskType('visit_url');
                   setCategory('social');
                 }}
-                className={`py-2 px-2 rounded-xl text-xs font-semibold flex flex-col items-center border transition-all ${
+                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
                   taskType === 'visit_url'
                     ? 'bg-cyber-cyan/15 border-cyber-cyan text-cyber-cyan'
                     : 'bg-cyber-surface border-cyber-border text-slate-400'
                 }`}
               >
-                <Globe size={16} className="mb-1" />
+                <Globe size={15} />
                 <span>Visit Link</span>
               </button>
 
@@ -165,13 +186,13 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   setTaskType('bot_launch');
                   setCategory('partner');
                 }}
-                className={`py-2 px-2 rounded-xl text-xs font-semibold flex flex-col items-center border transition-all ${
+                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
                   taskType === 'bot_launch'
                     ? 'bg-cyber-cyan/15 border-cyber-cyan text-cyber-cyan'
                     : 'bg-cyber-surface border-cyber-border text-slate-400'
                 }`}
               >
-                <Bot size={16} className="mb-1" />
+                <Bot size={15} />
                 <span>Start Bot</span>
               </button>
             </div>
@@ -184,11 +205,26 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                 type="url"
                 value={actionUrl}
                 onChange={(e) => setActionUrl(e.target.value)}
-                placeholder="https://t.me/your_channel or website"
+                placeholder={taskType === 'screenshot_social' ? 'https://youtube.com/@channel or instagram' : 'https://t.me/your_channel or website'}
                 required
                 className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
               />
             </div>
+
+            {taskType === 'screenshot_social' && (
+              <div>
+                <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+                  Screenshot Proof Instructions
+                </label>
+                <input
+                  type="text"
+                  value={proofInstructions}
+                  onChange={(e) => setProofInstructions(e.target.value)}
+                  placeholder="Upload a screenshot showing you followed/subscribed"
+                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yellow-400"
+                />
+              </div>
+            )}
 
             {taskType === 'telegram_join' && (
               <div>

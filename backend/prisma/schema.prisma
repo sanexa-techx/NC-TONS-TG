@@ -26,13 +26,18 @@ model User {
   photo_url              String?          @db.Text
   photo_synced_at        DateTime?
   miner_level            Int              @default(1)
+  daily_streak           Int              @default(0)
+  last_daily_claim_date  DateTime?        @db.Date
+  total_daily_claims     Int              @default(0)
   created_at             DateTime         @default(now())
   claims                 MissionClaim[]
   withdrawals            Withdrawal[]
   game_sessions          GameSession[]
   promo_claims           UserPromoClaim[]
-  referrals_made         Referral[]       @relation("Referrer")
-  referred_in            Referral?        @relation("Referee")
+  referrals_made         Referral[]             @relation("Referrer")
+  referred_in            Referral?              @relation("Referee")
+  proof_submissions      TaskProofSubmission[]
+  daily_ads              UserDailyAd[]
 
   @@map("users")
 }
@@ -60,10 +65,13 @@ model DynamicMission {
   ton_reward       Decimal        @db.Decimal(12, 6)
   target_users     Int?
   completed_count  Int            @default(0)
-  is_active        Boolean        @default(true)
-  priority         Int            @default(0)
-  created_at       DateTime       @default(now())
-  claims           MissionClaim[]
+  is_active          Boolean                @default(true)
+  priority           Int                    @default(0)
+  requires_proof     Boolean                @default(false)
+  proof_instructions String?                @default("Upload a screenshot showing you followed/subscribed") @db.Text
+  created_at         DateTime               @default(now())
+  claims             MissionClaim[]
+  proof_submissions  TaskProofSubmission[]
 
   @@map("dynamic_missions")
 }
@@ -147,4 +155,45 @@ model Referral {
   @@index([referrer_id])
   @@map("referrals")
 }
+
+model DailyStreakReward {
+  day_number        Int      @id
+  nc_reward         Int
+  ton_reward        Decimal  @db.Decimal(14, 6)
+  battery_bonus_pct Int      @default(0)
+  updated_at        DateTime @default(now()) @updatedAt
+
+  @@map("daily_streak_rewards")
+}
+
+model TaskProofSubmission {
+  id                 Int            @id @default(autoincrement())
+  user_id            BigInt
+  mission_id         Int
+  telegram_file_id   String?        @db.Text
+  channel_message_id BigInt?
+  status             String         @default("PENDING_REVIEW") @db.VarChar(20)
+  reviewed_by        BigInt?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @default(now()) @updatedAt
+  mission            DynamicMission @relation(fields: [mission_id], references: [id], onDelete: Cascade)
+  user               User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, mission_id], name: "unique_pending_user_task")
+  @@map("task_proof_submissions")
+}
+
+model UserDailyAd {
+  user_id       BigInt
+  ad_date       DateTime @default(now()) @db.Date
+  adsgram_count Int      @default(0)
+  monetag_count Int      @default(0)
+  last_ad_at    DateTime @default(now())
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, ad_date])
+  @@index([user_id, ad_date], name: "idx_user_daily_ads")
+  @@map("user_daily_ads")
+}
+
 

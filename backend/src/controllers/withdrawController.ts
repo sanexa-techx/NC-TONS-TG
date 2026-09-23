@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import { prisma } from '../db/db.js';
+import { prisma, pool } from '../db/db.js';
 import { Decimal } from '@prisma/client/runtime/library';
 import { sendWithdrawalApprovalCard } from '../bot/notifications.js';
+import { syncWithdrawalToNotion } from '../services/notionService.js';
 
 export async function requestWithdrawal(req: Request, res: Response) {
   try {
@@ -15,6 +16,29 @@ export async function requestWithdrawal(req: Request, res: Response) {
     const amountNum = parseFloat(tonAmount);
     if (isNaN(amountNum) || amountNum < 0.01) {
       return res.status(400).json({ error: 'Minimum withdrawal amount is 0.01 TON' });
+    }
+
+    // Check daily ad view requirements (Gatekeeper: min 8 Adsgram & 4 Monetag)
+    const adCheck = await pool.query(
+      `SELECT adsgram_count, monetag_count 
+       FROM user_daily_ads 
+       WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
+      [userId]
+    );
+
+    const counts = adCheck.rows[0] || { adsgram_count: 0, monetag_count: 0 };
+    const adsgramCount = Number(counts.adsgram_count || 0);
+    const monetagCount = Number(counts.monetag_count || 0);
+
+    if (adsgramCount < 8 || monetagCount < 4) {
+      return res.status(403).json({
+        error: "Daily withdrawal requirements not met!",
+        details: {
+          adsgramProgress: `${adsgramCount}/8`,
+          monetagProgress: `${monetagCount}/4`,
+          message: "You must watch at least 8 Adsgram ads and 4 Monetag ads today to unlock withdrawals.",
+        },
+      });
     }
 
     const amountDecimal = new Decimal(amountNum.toFixed(4));
@@ -69,6 +93,16 @@ export async function requestWithdrawal(req: Request, res: Response) {
         data: { channel_message_id: channelMessageId },
       });
     }
+
+    // Optional asynchronous sync to Notion Withdrawals database
+    syncWithdrawalToNotion({
+      id: withdrawal.id,
+      userId: user.id,
+      tonAddress: withdrawal.ton_address,
+      tonAmount: withdrawal.ton_amount.toFixed(4),
+      status: withdrawal.status,
+      createdAt: withdrawal.created_at,
+    }).catch((err) => console.warn('[Notion] Sync withdrawal notice:', err.message));
 
     // Get fresh user balance
     const updatedUser = await prisma.user.findUnique({

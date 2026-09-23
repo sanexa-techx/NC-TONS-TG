@@ -1,21 +1,24 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { TonConnectButton, useTonAddress } from '@tonconnect/ui-react';
-import { WithdrawalRecord } from '../types/index.js';
+import { WithdrawalRecord, DailyAdStatusResponse } from '../types/index.js';
 import { api } from '../services/api.js';
-import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, ShieldCheck, Lock } from 'lucide-react';
 import { TonIcon } from '../components/icons/index.js';
 import { PromoRedeemCard } from '../components/PromoRedeemCard.js';
+import { useAdManager } from '../hooks/useAdManager.js';
 
 interface WalletPageProps {
   tonBalance: string;
   onWithdrawalRequested: () => void;
   onPromoRedeemed?: () => void;
+  userId?: number | string;
 }
 
 export const WalletPage: React.FC<WalletPageProps> = ({
   tonBalance,
   onWithdrawalRequested,
   onPromoRedeemed,
+  userId,
 }) => {
   const connectedAddress = useTonAddress();
   const [tonAddress, setTonAddress] = useState<string>('');
@@ -24,6 +27,9 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
+
+  const { triggerInterstitial } = useAdManager(userId || '9990001');
 
   // Auto-fill connected TON address if available
   useEffect(() => {
@@ -31,6 +37,15 @@ export const WalletPage: React.FC<WalletPageProps> = ({
       setTonAddress(connectedAddress);
     }
   }, [connectedAddress]);
+
+  const fetchAdStatus = useCallback(async () => {
+    try {
+      const data = await api.getAdStatus(userId);
+      setAdStatus(data);
+    } catch (e) {
+      console.warn('Could not fetch ad status for wallet gate:', e);
+    }
+  }, [userId]);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -45,10 +60,12 @@ export const WalletPage: React.FC<WalletPageProps> = ({
 
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+    fetchAdStatus();
+  }, [fetchHistory, fetchAdStatus]);
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
+    triggerInterstitial('withdraw');
     setStatusMessage(null);
     setSubmitting(true);
 
@@ -60,12 +77,14 @@ export const WalletPage: React.FC<WalletPageProps> = ({
       });
       setTonAmount('');
       fetchHistory();
+      fetchAdStatus();
       onWithdrawalRequested();
     } catch (err) {
       setStatusMessage({
         type: 'error',
         text: (err as Error).message || 'Withdrawal failed',
       });
+      fetchAdStatus();
     } finally {
       setSubmitting(false);
     }
@@ -129,6 +148,39 @@ export const WalletPage: React.FC<WalletPageProps> = ({
           >
             {statusMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
             <span>{statusMessage.text}</span>
+          </div>
+        )}
+
+        {/* Daily Ad Withdrawal Gatekeeper HUD */}
+        {adStatus && (
+          <div
+            className={`p-3 rounded-xl border flex items-center justify-between text-xs mb-3.5 transition-all ${
+              adStatus.canWithdraw
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                : 'bg-amber-950/30 border-amber-500/40 text-amber-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2.5">
+              {adStatus.canWithdraw ? (
+                <ShieldCheck size={18} className="text-emerald-400 shrink-0" />
+              ) : (
+                <Lock size={18} className="text-amber-400 shrink-0" />
+              )}
+              <div>
+                <div className="font-bold text-[11px] flex items-center gap-1.5">
+                  <span>Daily Withdrawal Gate</span>
+                  <span className="font-mono text-[9px] px-1 py-0.2 rounded bg-black/40 border border-current">
+                    {adStatus.canWithdraw ? 'UNLOCKED' : 'LOCKED'}
+                  </span>
+                </div>
+                <div className="text-[10px] opacity-80 mt-0.5">
+                  Adsgram: {adStatus.adsgram.watched}/8 • Monetag: {adStatus.monetag.watched}/4
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono font-bold">
+              {adStatus.canWithdraw ? '✅ Verified' : '🔒 Views Req.'}
+            </span>
           </div>
         )}
 

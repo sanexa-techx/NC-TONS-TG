@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import pg from 'pg';
+import { ENV } from '../config/env.js';
 
 // Enable JSON serialization of BigInt for Express responses
 (BigInt.prototype as any).toJSON = function () {
@@ -9,6 +11,18 @@ import { Decimal } from '@prisma/client/runtime/library';
 const realPrisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 });
+
+let realPool: pg.Pool | null = null;
+try {
+  realPool = new pg.Pool({
+    connectionString: ENV.DATABASE_URL,
+  });
+  realPool.on('error', (err: any) => {
+    console.warn('Postgres pool error:', err.message);
+  });
+} catch (e) {
+  realPool = null;
+}
 
 let isPostgresConnected = false;
 
@@ -66,6 +80,26 @@ const memoryStore = {
         updated_at: new Date(),
       },
     ],
+    [
+      'ad_adsgram',
+      {
+        action_type: 'ad_adsgram',
+        display_name: 'Adsgram Rewarded Video',
+        nc_reward: 200,
+        ton_reward: new Decimal('0.000300'),
+        updated_at: new Date(),
+      },
+    ],
+    [
+      'ad_monetag',
+      {
+        action_type: 'ad_monetag',
+        display_name: 'Monetag Rewarded Ad',
+        nc_reward: 200,
+        ton_reward: new Decimal('0.000200'),
+        updated_at: new Date(),
+      },
+    ],
   ]),
   missions: [
     {
@@ -119,7 +153,38 @@ const memoryStore = {
       priority: 2,
       created_at: new Date(),
     },
+    {
+      id: 4,
+      creator_user_id: 0n,
+      title: 'Subscribe to NC TONs YouTube',
+      description: 'Subscribe to our official YouTube channel and upload screenshot proof of your subscription.',
+      category: 'social',
+      task_type: 'screenshot_social',
+      action_url: 'https://youtube.com/@nctons',
+      telegram_chat_id: null,
+      nc_reward: 600,
+      ton_reward: new Decimal('0.000400'),
+      target_users: 5000,
+      completed_count: 94,
+      is_active: true,
+      priority: 8,
+      requires_proof: true,
+      proof_instructions: 'Take a screenshot showing the Subscribed button on our YouTube channel and upload it below:',
+      created_at: new Date(),
+    },
   ],
+  taskProofSubmissions: [] as Array<{
+    id: number;
+    user_id: bigint;
+    mission_id: number;
+    telegram_file_id: string | null;
+    channel_message_id: bigint | null;
+    status: string; // 'PENDING_REVIEW', 'APPROVED', 'REJECTED'
+    reviewed_by: bigint | null;
+    created_at: Date;
+    updated_at: Date;
+  }>,
+  taskProofSubmissionIdSeq: 1,
   claims: [] as Array<{ id: number; mission_id: number; user_id: bigint; claimed_at: Date }>,
   withdrawals: [] as any[],
   gameSessions: new Map<string, any>(),
@@ -169,6 +234,27 @@ const memoryStore = {
     created_at: Date;
   }>,
   referralIdSeq: 1,
+  dailyStreakRewards: [
+    { day_number: 1, nc_reward: 250, ton_reward: '0.000010', battery_bonus_pct: 0 },
+    { day_number: 2, nc_reward: 500, ton_reward: '0.000020', battery_bonus_pct: 20 },
+    { day_number: 3, nc_reward: 800, ton_reward: '0.000035', battery_bonus_pct: 0 },
+    { day_number: 4, nc_reward: 1200, ton_reward: '0.000050', battery_bonus_pct: 0 },
+    { day_number: 5, nc_reward: 1800, ton_reward: '0.000075', battery_bonus_pct: 50 },
+    { day_number: 6, nc_reward: 2600, ton_reward: '0.000100', battery_bonus_pct: 0 },
+    { day_number: 7, nc_reward: 4500, ton_reward: '0.000250', battery_bonus_pct: 100 },
+  ] as Array<{
+    day_number: number;
+    nc_reward: number;
+    ton_reward: string;
+    battery_bonus_pct: number;
+  }>,
+  dailyAds: new Map<string, {
+    user_id: bigint;
+    ad_date: string;
+    adsgram_count: number;
+    monetag_count: number;
+    last_ad_at: Date;
+  }>(),
 };
 
 // Seed default dev user
@@ -191,6 +277,9 @@ memoryStore.users.set('9990001', {
   photo_url: null,
   photo_synced_at: null,
   miner_level: 1,
+  daily_streak: 0,
+  last_daily_claim_date: null,
+  total_daily_claims: 0,
   created_at: new Date(),
 });
 
@@ -213,6 +302,9 @@ memoryStore.users.set('123456789', {
   photo_url: null,
   photo_synced_at: null,
   miner_level: 1,
+  daily_streak: 0,
+  last_daily_claim_date: null,
+  total_daily_claims: 0,
   created_at: new Date(),
 });
 
@@ -240,6 +332,9 @@ const mockPrisma = {
         photo_url: data.photo_url || null,
         photo_synced_at: data.photo_synced_at || null,
         miner_level: data.miner_level || 1,
+        daily_streak: data.daily_streak || 0,
+        last_daily_claim_date: data.last_daily_claim_date || null,
+        total_daily_claims: data.total_daily_claims || 0,
         created_at: new Date(),
       };
       memoryStore.users.set(data.id.toString(), newUser);
@@ -248,6 +343,10 @@ const mockPrisma = {
     async update({ where, data }: any) {
       const existing = memoryStore.users.get(where.id.toString());
       if (!existing) throw new Error('User not found');
+
+      if (data.daily_streak !== undefined) existing.daily_streak = data.daily_streak;
+      if (data.last_daily_claim_date !== undefined) existing.last_daily_claim_date = data.last_daily_claim_date;
+      if (data.total_daily_claims !== undefined) existing.total_daily_claims = data.total_daily_claims;
 
       if (data.ton_balance?.increment) {
         existing.ton_balance = existing.ton_balance.plus(data.ton_balance.increment);
@@ -668,6 +767,89 @@ const mockPrisma = {
     },
   },
 
+  dailyStreakReward: {
+    async findMany({ orderBy }: any = {}) {
+      const list = [...memoryStore.dailyStreakRewards];
+      if (orderBy?.day_number === 'asc') {
+        list.sort((a, b) => a.day_number - b.day_number);
+      }
+      return list;
+    },
+    async findUnique({ where }: any) {
+      return memoryStore.dailyStreakRewards.find((r) => r.day_number === where.day_number) || null;
+    },
+    async upsert({ where, update, create }: any) {
+      const idx = memoryStore.dailyStreakRewards.findIndex((r) => r.day_number === where.day_number);
+      if (idx >= 0) {
+        memoryStore.dailyStreakRewards[idx] = { ...memoryStore.dailyStreakRewards[idx], ...update };
+        return memoryStore.dailyStreakRewards[idx];
+      } else {
+        const item = { ...create, day_number: where.day_number };
+        memoryStore.dailyStreakRewards.push(item);
+        return item;
+      }
+    },
+  },
+
+  taskProofSubmission: {
+    async findMany({ where }: any = {}) {
+      let list = [...memoryStore.taskProofSubmissions];
+      if (where?.user_id !== undefined) list = list.filter((s) => s.user_id === BigInt(where.user_id));
+      if (where?.mission_id !== undefined) list = list.filter((s) => s.mission_id === Number(where.mission_id));
+      if (where?.status !== undefined) list = list.filter((s) => s.status === where.status);
+      return list;
+    },
+    async findUnique({ where }: any) {
+      if (where?.id) {
+        return memoryStore.taskProofSubmissions.find((s) => s.id === Number(where.id)) || null;
+      }
+      if (where?.unique_pending_user_task || (where?.user_id && where?.mission_id)) {
+        const uId = BigInt(where.unique_pending_user_task?.user_id || where.user_id);
+        const mId = Number(where.unique_pending_user_task?.mission_id || where.mission_id);
+        return memoryStore.taskProofSubmissions.find((s) => s.user_id === uId && s.mission_id === mId) || null;
+      }
+      return null;
+    },
+    async create({ data }: any) {
+      const newSub = {
+        id: memoryStore.taskProofSubmissionIdSeq++,
+        user_id: BigInt(data.user_id),
+        mission_id: Number(data.mission_id),
+        telegram_file_id: data.telegram_file_id || null,
+        channel_message_id: data.channel_message_id ? BigInt(data.channel_message_id) : null,
+        status: data.status || 'PENDING_REVIEW',
+        reviewed_by: data.reviewed_by ? BigInt(data.reviewed_by) : null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      memoryStore.taskProofSubmissions.push(newSub);
+      return { ...newSub };
+    },
+    async update({ where, data }: any) {
+      const idx = memoryStore.taskProofSubmissions.findIndex((s) => s.id === Number(where.id));
+      if (idx === -1) throw new Error('Task proof submission not found');
+      const item = memoryStore.taskProofSubmissions[idx];
+      if (data.status) item.status = data.status;
+      if (data.reviewed_by) item.reviewed_by = BigInt(data.reviewed_by);
+      if (data.channel_message_id) item.channel_message_id = BigInt(data.channel_message_id);
+      item.updated_at = new Date();
+      return { ...item };
+    },
+  },
+
+  userDailyAd: {
+    async findUnique({ where }: any) {
+      const uId = where.user_id_ad_date?.user_id?.toString() || where.user_id?.toString();
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const key = `${uId}:${todayStr}`;
+      const found = memoryStore.dailyAds.get(key);
+      return found ? { ...found } : null;
+    },
+    async findMany({ where }: any = {}) {
+      return Array.from(memoryStore.dailyAds.values());
+    },
+  },
+
   async $transaction(arg: any) {
     if (typeof arg === 'function') {
       return arg(mockPrisma);
@@ -682,6 +864,7 @@ const mockPrisma = {
 export type AppPrismaClient = PrismaClient & {
   referral: any;
   user: any;
+  dailyStreakReward: any;
   [key: string]: any;
 };
 
@@ -697,6 +880,317 @@ export const prisma = new Proxy(realPrisma, {
   },
 }) as AppPrismaClient;
 
+function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCount: number } {
+  const normalized = sql.trim().replace(/\s+/g, ' ');
+
+  // 1. SELECT users (with optional FOR UPDATE)
+  if (normalized.includes('FROM users WHERE id = $1')) {
+    const rawId = params[0]?.toString() || '';
+    const user = memoryStore.users.get(rawId);
+    if (!user) {
+      return { rows: [], rowCount: 0 };
+    }
+    const today = new Date();
+    const yesterday = new Date(Date.now() - 86400000);
+    return {
+      rows: [
+        {
+          daily_streak: user.daily_streak || 0,
+          last_daily_claim_date: user.last_daily_claim_date || null,
+          power_percentage: user.power_percentage ?? 100,
+          today_utc: today,
+          yesterday_utc: yesterday,
+        },
+      ],
+      rowCount: 1,
+    };
+  }
+
+  // 2. SELECT * FROM daily_streak_rewards ORDER BY day_number ASC
+  if (normalized.includes('FROM daily_streak_rewards') && normalized.includes('ORDER BY')) {
+    const rows = [...memoryStore.dailyStreakRewards].sort((a, b) => a.day_number - b.day_number);
+    return { rows, rowCount: rows.length };
+  }
+
+  // 3. SELECT * FROM daily_streak_rewards WHERE day_number = $1
+  if (normalized.includes('FROM daily_streak_rewards WHERE day_number = $1')) {
+    const day = Number(params[0]);
+    const reward = memoryStore.dailyStreakRewards.find((r) => r.day_number === day);
+    return { rows: reward ? [reward] : [], rowCount: reward ? 1 : 0 };
+  }
+
+  // 4. UPDATE users SET nc_balance = ... RETURNING ...
+  if (normalized.startsWith('UPDATE users') && normalized.includes('RETURNING')) {
+    const ncBonus = BigInt(params[0] || 0);
+    const tonBonus = params[1];
+    const batteryBonus = Number(params[2] || 0);
+    const newStreak = Number(params[3] || 1);
+    const targetUserId = params[4]?.toString() || '';
+
+    const user = memoryStore.users.get(targetUserId);
+    if (!user) {
+      return { rows: [], rowCount: 0 };
+    }
+
+    user.nc_balance = (user.nc_balance || 0n) + ncBonus;
+    const addedTon = tonBonus instanceof Decimal ? tonBonus : new Decimal(tonBonus || 0);
+    user.ton_balance = (user.ton_balance instanceof Decimal ? user.ton_balance : new Decimal(user.ton_balance || 0)).plus(addedTon);
+    user.power_percentage = Math.min(100, (user.power_percentage ?? 100) + batteryBonus);
+    user.daily_streak = newStreak;
+    user.last_daily_claim_date = new Date();
+    user.total_daily_claims = (user.total_daily_claims || 0) + 1;
+    user.last_sync_at = new Date();
+
+    return {
+      rows: [
+        {
+          nc_balance: user.nc_balance.toString(),
+          ton_balance: user.ton_balance.toString(),
+          power_percentage: user.power_percentage,
+          daily_streak: user.daily_streak,
+        },
+      ],
+      rowCount: 1,
+    };
+  }
+
+  // 5. Existing claim check for mission_claims or user_mission_claims
+  if (normalized.includes('FROM user_mission_claims WHERE user_id = $1 AND mission_id = $2') ||
+      normalized.includes('FROM mission_claims WHERE user_id = $1 AND mission_id = $2')) {
+    const uId = BigInt(params[0]);
+    const mId = Number(params[1]);
+    const claim = memoryStore.claims.find((c) => c.user_id === uId && c.mission_id === mId);
+    return { rows: claim ? [{ id: claim.id }] : [], rowCount: claim ? 1 : 0 };
+  }
+
+  // 6. Check existing task_proof_submissions
+  if (normalized.includes('FROM task_proof_submissions WHERE user_id = $1 AND mission_id = $2')) {
+    const uId = BigInt(params[0]);
+    const mId = Number(params[1]);
+    const sub = memoryStore.taskProofSubmissions.find((s) => s.user_id === uId && s.mission_id === mId);
+    return { rows: sub ? [{ id: sub.id, status: sub.status }] : [], rowCount: sub ? 1 : 0 };
+  }
+
+  // 7. Fetch mission by id
+  if (normalized.includes('FROM dynamic_missions WHERE id = $1')) {
+    const mId = Number(params[0]);
+    const m = memoryStore.missions.find((x) => x.id === mId);
+    return { rows: m ? [{ ...m }] : [], rowCount: m ? 1 : 0 };
+  }
+
+  // 8. Insert or update task_proof_submissions
+  if (normalized.startsWith('INSERT INTO task_proof_submissions')) {
+    const uId = BigInt(params[0]);
+    const mId = Number(params[1]);
+    let sub = memoryStore.taskProofSubmissions.find((s) => s.user_id === uId && s.mission_id === mId);
+    if (sub) {
+      sub.status = 'PENDING_REVIEW';
+      sub.updated_at = new Date();
+    } else {
+      sub = {
+        id: memoryStore.taskProofSubmissionIdSeq++,
+        user_id: uId,
+        mission_id: mId,
+        telegram_file_id: null,
+        channel_message_id: null,
+        status: 'PENDING_REVIEW',
+        reviewed_by: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      memoryStore.taskProofSubmissions.push(sub);
+    }
+    return { rows: [{ id: sub.id }], rowCount: 1 };
+  }
+
+  // 9. Update channel_message_id on task_proof_submissions
+  if (normalized.includes('UPDATE task_proof_submissions SET channel_message_id = $1 WHERE id = $2')) {
+    const msgId = BigInt(params[0]);
+    const subId = Number(params[1]);
+    const sub = memoryStore.taskProofSubmissions.find((s) => s.id === subId);
+    if (sub) sub.channel_message_id = msgId;
+    return { rows: [], rowCount: 1 };
+  }
+
+  // 10. Fetch submission with joined mission for bot handlers
+  if (normalized.includes('FROM task_proof_submissions s') && normalized.includes('JOIN dynamic_missions m')) {
+    const subId = Number(params[0]);
+    const sub = memoryStore.taskProofSubmissions.find((s) => s.id === subId);
+    const m = sub ? memoryStore.missions.find((x) => x.id === sub.mission_id) : null;
+    if (sub && m) {
+      return {
+        rows: [
+          {
+            ...sub,
+            title: m.title,
+            nc_reward: m.nc_reward,
+            ton_reward: m.ton_reward,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  // 11. Update task_proof_submissions status (APPROVED / REJECTED)
+  if (normalized.startsWith('UPDATE task_proof_submissions SET status =')) {
+    // Pattern: status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2
+    const statusMatch = normalized.match(/status\s*=\s*'([^']+)'/i);
+    const newStatus = statusMatch ? statusMatch[1] : 'APPROVED';
+    const reviewerId = params[0] ? BigInt(params[0]) : null;
+    const subId = Number(params[1]);
+    const sub = memoryStore.taskProofSubmissions.find((s) => s.id === subId);
+    if (sub) {
+      sub.status = newStatus;
+      sub.reviewed_by = reviewerId;
+      sub.updated_at = new Date();
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  // 12. Record user_mission_claims or mission_claims
+  if (normalized.startsWith('INSERT INTO user_mission_claims') || normalized.startsWith('INSERT INTO mission_claims')) {
+    const uId = BigInt(params[0]);
+    const mId = Number(params[1]);
+    const existing = memoryStore.claims.find((c) => c.user_id === uId && c.mission_id === mId);
+    if (!existing) {
+      memoryStore.claims.push({
+        id: memoryStore.claims.length + 1,
+        user_id: uId,
+        mission_id: mId,
+        claimed_at: new Date(),
+      });
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  // 13. Update users nc_balance & ton_balance (for task approval)
+  if (normalized.startsWith('UPDATE users SET nc_balance = nc_balance + $1, ton_balance = ton_balance + $2 WHERE id = $3')) {
+    const ncBonus = BigInt(params[0] || 0);
+    const tonBonus = params[1];
+    const targetUserId = params[2]?.toString() || '';
+    const user = memoryStore.users.get(targetUserId);
+    if (user) {
+      user.nc_balance = (user.nc_balance || 0n) + ncBonus;
+      const addedTon = tonBonus instanceof Decimal ? tonBonus : new Decimal(tonBonus || 0);
+      user.ton_balance = (user.ton_balance instanceof Decimal ? user.ton_balance : new Decimal(user.ton_balance || 0)).plus(addedTon);
+    }
+    return { rows: user ? [{ nc_balance: user.nc_balance.toString(), ton_balance: user.ton_balance.toFixed(6) }] : [], rowCount: 1 };
+  }
+
+  // 13b. Update users ton_balance only
+  if (normalized.startsWith('UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2')) {
+    const tonBonus = params[0];
+    const targetUserId = params[1]?.toString() || '';
+    const user = memoryStore.users.get(targetUserId);
+    if (user) {
+      const addedTon = tonBonus instanceof Decimal ? tonBonus : new Decimal(tonBonus || 0);
+      user.ton_balance = (user.ton_balance instanceof Decimal ? user.ton_balance : new Decimal(user.ton_balance || 0)).plus(addedTon);
+    }
+    return { rows: user ? [{ ton_balance: user.ton_balance.toFixed(6) }] : [], rowCount: 1 };
+  }
+
+  // 14. SELECT adsgram_count, monetag_count FROM user_daily_ads
+  if (normalized.includes('FROM user_daily_ads WHERE user_id = $1 AND ad_date = CURRENT_DATE')) {
+    const rawId = params[0]?.toString() || '';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const key = `${rawId}:${todayStr}`;
+    const record = memoryStore.dailyAds.get(key);
+    if (!record) {
+      return { rows: [], rowCount: 0 };
+    }
+    return {
+      rows: [
+        {
+          adsgram_count: record.adsgram_count,
+          monetag_count: record.monetag_count,
+          last_ad_at: record.last_ad_at,
+        },
+      ],
+      rowCount: 1,
+    };
+  }
+
+  // 15. INSERT INTO user_daily_ads ... ON CONFLICT (user_id, ad_date) DO NOTHING
+  if (normalized.startsWith('INSERT INTO user_daily_ads')) {
+    const rawId = params[0]?.toString() || '';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const key = `${rawId}:${todayStr}`;
+    if (!memoryStore.dailyAds.has(key)) {
+      memoryStore.dailyAds.set(key, {
+        user_id: BigInt(rawId),
+        ad_date: todayStr,
+        adsgram_count: 0,
+        monetag_count: 0,
+        last_ad_at: new Date(Date.now() - 30000), // Default older than 20s cooldown
+      });
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  // 16. UPDATE user_daily_ads SET adsgram_count / monetag_count
+  if (normalized.startsWith('UPDATE user_daily_ads SET')) {
+    let rawId = '';
+    if (normalized.includes('adsgram_count = $1, monetag_count = $2')) {
+      rawId = params[2]?.toString() || '';
+    } else {
+      rawId = params[0]?.toString() || '';
+    }
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const key = `${rawId}:${todayStr}`;
+    let record = memoryStore.dailyAds.get(key);
+    if (!record) {
+      record = {
+        user_id: BigInt(rawId),
+        ad_date: todayStr,
+        adsgram_count: 0,
+        monetag_count: 0,
+        last_ad_at: new Date(),
+      };
+      memoryStore.dailyAds.set(key, record);
+    }
+    if (normalized.includes('adsgram_count = $1, monetag_count = $2')) {
+      record.adsgram_count = Number(params[0] ?? 8);
+      record.monetag_count = Number(params[1] ?? 4);
+    }
+    if (normalized.includes('adsgram_count = adsgram_count + 1')) {
+      record.adsgram_count += 1;
+    }
+    if (normalized.includes('monetag_count = monetag_count + 1')) {
+      record.monetag_count += 1;
+    }
+    record.last_ad_at = new Date();
+    return { rows: [], rowCount: 1 };
+  }
+
+  // 17. Transaction control (BEGIN, COMMIT, ROLLBACK)
+  if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized.toUpperCase())) {
+    return { rows: [], rowCount: 0 };
+  }
+
+  return { rows: [], rowCount: 0 };
+}
+
+const mockPoolClient = {
+  query: async (sql: string, params?: any[]) => executeMockQuery(sql, params),
+  release: () => {},
+};
+
+export const pool = {
+  query: async (sql: string, params?: any[]) => {
+    if (isPostgresConnected && realPool) {
+      return realPool.query(sql, params);
+    }
+    return executeMockQuery(sql, params);
+  },
+  connect: async () => {
+    if (isPostgresConnected && realPool) {
+      return realPool.connect();
+    }
+    return mockPoolClient;
+  },
+};
 
 export function getIsPostgresConnected() {
   return isPostgresConnected;
@@ -715,3 +1209,4 @@ export async function connectDB() {
     return false;
   }
 }
+

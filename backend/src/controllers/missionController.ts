@@ -45,24 +45,30 @@ export async function createMission(req: Request, res: Response) {
       ncReward,
       tonReward,
       targetUsers,
+      requiresProof,
+      proofInstructions,
     } = req.body;
 
     if (!title || !description || !actionUrl || !ncReward) {
       return res.status(400).json({ error: 'Missing required mission fields' });
     }
 
+    const isScreenshot = taskType === 'screenshot_social' || Boolean(requiresProof);
+
     const newMission = await MissionService.createMission({
       creatorUserId: userId,
       title,
       description,
-      category: category || 'partner',
-      taskType: taskType || 'visit_url',
+      category: category || (isScreenshot ? 'social' : 'partner'),
+      taskType: taskType || (isScreenshot ? 'screenshot_social' : 'visit_url'),
       actionUrl,
       telegramChatId: telegramChatId || null,
       ncReward: Number(ncReward),
       tonReward: tonReward ? Number(tonReward) : 0,
       targetUsers: targetUsers ? Number(targetUsers) : null,
       priority: 1,
+      requiresProof: isScreenshot,
+      proofInstructions: proofInstructions || (isScreenshot ? 'Upload a screenshot showing you followed/subscribed' : null),
     });
 
     return res.json({

@@ -172,3 +172,80 @@ NC TONS TG/
 ├── package.json
 └── README.md
 ```
+
+---
+
+## 11. DAILY STREAK & CHECK-IN SYSTEM
+- **Database Architecture**:
+  - `users`: add `daily_streak` (INT default 0), `last_daily_claim_date` (DATE default NULL), `total_daily_claims` (INT default 0).
+  - `daily_streak_rewards`: `day_number` (1 to 7 PK), `nc_reward` (INT), `ton_reward` (NUMERIC 14,6), `battery_bonus_pct` (INT default 0).
+- **Backend Endpoints (`/api/daily`)**:
+  - `GET /api/daily/status`: Evaluates `last_daily_claim_date` against `CURRENT_DATE` at UTC. Returns `canClaim` (boolean), `currentStreak`, and `nextStreak` (resets to 1 if user missed at least 1 calendar day).
+  - `POST /api/daily/claim`: Atomic transaction verifying that the user has not claimed on `CURRENT_DATE`. Increments streak, sets `last_daily_claim_date = CURRENT_DATE`, credits dual balances (`nc_balance` and `ton_balance`), and adds any milestone battery boost (`power_percentage = LEAST(100, power_percentage + bonus)`).
+- **Frontend Components**:
+  - `DailyStreakModal.tsx`: Visual 7-day roadmap with checkmarks, lock states, `<NcIcon/>`, `<TonIcon/>`, and Day 7 Jackpot highlighting.
+  - Automatically pops up on initial app load when `canClaim === true`.
+  - `DailyCheckInBanner.tsx`: Mining view quick-access launcher badge with live status.
+
+---
+
+## 12. SCREENSHOT VERIFICATION FOR SOCIAL TASKS (YouTube, Instagram, Facebook, X)
+- **Database Architecture**:
+  - `dynamic_missions`: add `requires_proof` (BOOLEAN default FALSE), `proof_instructions` (TEXT).
+  - `task_proof_submissions`: `id` (SERIAL PK), `user_id` (BIGINT), `mission_id` (INT FK), `channel_message_id` (BIGINT), `status` (VARCHAR 'PENDING_REVIEW', 'APPROVED', 'REJECTED'), `created_at`, `updated_at`, `UNIQUE(user_id, mission_id)`.
+- **Backend & Direct-to-Telegram Image Streaming**:
+  - `POST /api/proof/submit`: Uses `multer` memory storage (max 5MB, JPEG/PNG/WEBP). Validates task eligibility, records pending submission, and streams image buffer directly to `ADMIN_CHANNEL_ID` via `bot.telegram.sendPhoto` with caption metadata and inline buttons `[Approve Task ✅]` and `[Reject Proof ❌]` (no external image hosting service required).
+  - Bot action callbacks (`task_appr:<id>` and `task_rej:<id>`):
+    - When approved: Atomically records claim in `user_mission_claims`, credits `nc_balance` and `ton_balance`, updates the channel post to show reviewed state, and sends direct Telegram notification to the user.
+    - When rejected: Updates channel post, marks status `REJECTED`, and notifies user to retry with a valid screenshot.
+- **Frontend Components**:
+  - `ScreenshotProofModal.tsx`: Dual-step modal providing direct action link (Instagram, YouTube, X, Facebook), file picker with live image thumbnail preview, and upload progress handler.
+  - Integrate modal trigger into `MissionCard.tsx` whenever `requires_proof === true` or `task_type === 'screenshot_social'`.
+
+---
+
+## 13. DUAL AD NETWORKS (Adsgram & Monetag) & WITHDRAWAL GATEKEEPER
+- **Database Architecture**:
+  - `user_daily_ads`: `user_id` (BIGINT), `ad_date` (DATE default CURRENT_DATE), `adsgram_count` (INT default 0), `monetag_count` (INT default 0), `last_ad_at` (TIMESTAMP), `PRIMARY KEY(user_id, ad_date)`.
+  - `reward_configs`: seed `ad_adsgram` (200 NC, 0.000300 TON) and `ad_monetag` (200 NC, 0.000200 TON).
+- **Ad Provider Limits & Rewards**:
+  - **Adsgram**: Max 25 ads/day. Each view awards +200 NC and +0.000300 TON.
+  - **Monetag**: Max 15 ads/day. Each view awards +200 NC and +0.000200 TON.
+- **Mandatory Daily Withdrawal Gatekeeper**:
+  - In `POST /api/withdraw/request`, verify that the user's `user_daily_ads` record for `CURRENT_DATE` has:
+    - `adsgram_count >= 8`
+    - `monetag_count >= 4`
+  - If conditions are not met, reject the withdrawal request with a 403 error detailing remaining views required.
+- **Interstitial Trigger Locations**:
+  - Trigger an interstitial ad on:
+    1. Navigation tab changes (`handleTabChange`).
+    2. Start actions ("Start Mining" and game launches in Arcade).
+    3. Tapping the "Withdraw" button in Wallet view.
+  - Cooldown: Enforce a client-side minimum 45-second interval between interstitial ads to protect user experience.
+- **Frontend Components**:
+  - Embed official Adsgram and Monetag in-app SDKs in `index.html`.
+  - Implement `useAdManager.ts` coordinating both rewarded and interstitial ad calls.
+  - `AdMissionsSection.tsx`: Task cards on the Missions page displaying live view counts (e.g. `12/25` Adsgram, `5/15` Monetag) and an active "Withdrawal Status" unlock badge.
+
+---
+
+## 14. NEON POSTGRESQL & NOTION WORKSPACE INTEGRATION
+- **Neon Cloud PostgreSQL**:
+  - Hosted on AWS (`aws-us-east-1`) via Neon Serverless Postgres.
+  - Provisioned Project: `nctons-db` (`sweet-resonance-09215870`).
+  - Active Pooled URI configured in `backend/.env` under `DATABASE_URL`.
+  - All 13 tables, relations, and seed catalogs provisioned:
+    `users`, `withdrawals`, `dynamic_missions`, `mission_claims`, `user_mission_claims`, `task_proof_submissions`, `promo_codes`, `user_promo_claims`, `referrals`, `daily_streak_rewards`, `user_daily_streaks`, `user_daily_ads`, `reward_configs`.
+- **Notion Workspace Integration Service**:
+  - Installed `@notionhq/client` for secure Notion API access.
+  - `backend/src/services/notionService.ts`:
+    - `getNotionStatus()`: Queries Notion API to verify token authentication, bot identity, and database permissions.
+    - `syncWithdrawalToNotion()`: Automatically logs new payout requests to the configured Notion Withdrawals database.
+    - `syncTaskSubmissionToNotion()`: Synchronizes user screenshot proofs to the configured Notion Tasks database for admin review.
+  - `backend/src/routes/notion.ts`:
+    - `GET /api/notion/status`: Diagnostic health check for the Notion workspace integration.
+    - `POST /api/notion/test-sync`: Dispatches test records to Notion to verify database schemas and integration tokens.
+    - `POST /api/notion/configure`: Allows setting or updating `NOTION_API_KEY`, `NOTION_WITHDRAWALS_DATABASE_ID`, and `NOTION_TASKS_DATABASE_ID`.
+
+
+

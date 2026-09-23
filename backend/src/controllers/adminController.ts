@@ -86,19 +86,23 @@ export async function createAdminMission(req: Request, res: Response) {
       tonReward,
       targetUsers,
       priority,
+      requiresProof,
+      proofInstructions,
     } = req.body;
 
     if (!title || !description || !actionUrl) {
       return res.status(400).json({ error: 'Missing required mission fields' });
     }
 
+    const isScreenshot = taskType === 'screenshot_social' || Boolean(requiresProof);
+
     const mission = await prisma.dynamicMission.create({
       data: {
         creator_user_id: adminId,
         title,
         description,
-        category: category || 'telegram',
-        task_type: taskType || 'telegram_join',
+        category: category || (isScreenshot ? 'social' : 'telegram'),
+        task_type: taskType || (isScreenshot ? 'screenshot_social' : 'telegram_join'),
         action_url: actionUrl,
         telegram_chat_id: telegramChatId || null,
         nc_reward: Number(ncReward || 500),
@@ -106,6 +110,8 @@ export async function createAdminMission(req: Request, res: Response) {
         target_users: targetUsers ? Number(targetUsers) : null,
         priority: priority !== undefined ? Number(priority) : 10,
         is_active: true,
+        requires_proof: isScreenshot,
+        proof_instructions: proofInstructions || (isScreenshot ? 'Upload a screenshot showing you followed/subscribed' : null),
       },
     });
 

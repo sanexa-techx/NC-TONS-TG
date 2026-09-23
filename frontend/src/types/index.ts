@@ -32,7 +32,7 @@ export interface Mission {
   title: string;
   description: string;
   category: string;
-  taskType: 'telegram_join' | 'visit_url' | 'bot_launch';
+  taskType: 'telegram_join' | 'visit_url' | 'bot_launch' | 'screenshot_social' | string;
   actionUrl: string;
   telegramChatId?: string | null;
   ncReward: number;
@@ -41,6 +41,9 @@ export interface Mission {
   completedCount: number;
   isCompleted: boolean;
   isSoldOut: boolean;
+  requiresProof?: boolean;
+  proofInstructions?: string;
+  proofStatus?: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | null;
 }
 
 export interface WithdrawalRecord {
@@ -146,4 +149,49 @@ export interface FriendClaimResponse {
     ton_balance: string;
   };
 }
+
+export interface DailyStreakRewardItem {
+  day_number: number;
+  nc_reward: number;
+  ton_reward: string;
+  battery_bonus_pct: number;
+}
+
+export interface DailyStreakStatusResponse {
+  currentStreak: number;
+  canClaim: boolean;
+  nextStreak: number;
+  ladder: DailyStreakRewardItem[];
+}
+
+export interface DailyStreakClaimResponse {
+  success: boolean;
+  streak: number;
+  reward: {
+    nc: number;
+    ton: number;
+    batteryBoost: number;
+  };
+  updatedBalances: {
+    nc_balance: string;
+    ton_balance: string;
+    power_percentage: number;
+    daily_streak: number;
+  };
+}
+
+export interface AdNetworkStats {
+  watched: number;
+  max: number;
+  requiredForWithdraw: number;
+  isWithdrawUnlocked: boolean;
+}
+
+export interface DailyAdStatusResponse {
+  adsgram: AdNetworkStats;
+  monetag: AdNetworkStats;
+  canWithdraw: boolean;
+}
+
+
 

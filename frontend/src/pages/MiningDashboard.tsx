@@ -3,13 +3,18 @@ import { UserProfile, MiningState } from '../types/index.js';
 import { DualCurrencyBar } from '../components/DualCurrencyBar.js';
 import { CircularBatteryGauge } from '../components/CircularBatteryGauge.js';
 import { RechargeModal } from '../components/RechargeModal.js';
+import DailyCheckInBanner from '../components/DailyCheckInBanner.js';
 import { Gamepad2, Target, ArrowRight, ShieldCheck } from 'lucide-react';
+import { useAdManager } from '../hooks/useAdManager.js';
 
 interface MiningDashboardProps {
   user: UserProfile | null;
   mining: MiningState | null;
   liveTonBalance: string;
   livePowerPercentage: number;
+  dailyStreak?: number;
+  canClaimDaily?: boolean;
+  onOpenDailyModal?: () => void;
   onRecharge: (method: 'nc' | 'ad') => Promise<any>;
   onNavigate: (tab: 'mining' | 'game' | 'missions' | 'wallet' | 'admin') => void;
 }
@@ -19,10 +24,14 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
   mining,
   liveTonBalance,
   livePowerPercentage,
+  dailyStreak = 0,
+  canClaimDaily = false,
+  onOpenDailyModal,
   onRecharge,
   onNavigate,
 }) => {
   const [rechargeOpen, setRechargeOpen] = useState(false);
+  const { triggerInterstitial } = useAdManager(user?.id || '9990001');
 
   const hashrate = mining ? mining.tonHashratePerSec : '0.00000100';
   const capacityHours = mining ? mining.powerCapacityHours : 8;
@@ -68,12 +77,26 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
         isMiningActive={livePowerPercentage > 0}
       />
 
+      {/* Daily Streak Check-In Launcher Banner */}
+      {onOpenDailyModal && (
+        <div className="w-full mb-3 flex justify-center">
+          <DailyCheckInBanner
+            streak={dailyStreak}
+            canClaim={canClaimDaily}
+            onClick={onOpenDailyModal}
+          />
+        </div>
+      )}
+
       {/* Circular Battery & Mining Gauge */}
       <CircularBatteryGauge
         powerPercentage={livePowerPercentage}
         powerCapacityHours={capacityHours}
         hashratePerSec={hashrate}
-        onRechargeClick={() => setRechargeOpen(true)}
+        onRechargeClick={() => {
+          triggerInterstitial('start');
+          setRechargeOpen(true);
+        }}
       />
 
       {/* Mining Rig Stats Panel */}

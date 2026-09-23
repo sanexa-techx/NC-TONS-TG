@@ -3,13 +3,15 @@ import { Mission } from '../types/index.js';
 import { api } from '../services/api.js';
 import { MissionCard } from '../components/MissionCard.js';
 import { CreateMissionModal } from '../components/CreateMissionModal.js';
+import { AdMissionsSection } from '../components/AdMissionsSection.js';
 import { Target, PlusCircle, RefreshCw, Loader2 } from 'lucide-react';
 
 interface MissionsPageProps {
   onRewardClaimed: (ncAwarded: number, tonAwarded: string) => void;
+  userId?: number | string;
 }
 
-export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed }) => {
+export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, userId }) => {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
@@ -78,6 +80,17 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed }) =
         </button>
       </div>
 
+      {/* Rewarded Ad Networks & Withdrawal Gatekeeper HUD */}
+      <div className="w-full mb-3">
+        <AdMissionsSection
+          userId={userId || '9990001'}
+          onRewardClaimed={() => {
+            fetchMissions();
+            onRewardClaimed(200, '0.000300');
+          }}
+        />
+      </div>
+
       {/* Category Tabs */}
       <div className="w-full flex space-x-1.5 p-1 rounded-xl bg-cyber-surface border border-cyber-border mb-4">
         {categories.map((c) => (
@@ -119,7 +132,13 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed }) =
           </div>
         ) : (
           filteredMissions.map((mission) => (
-            <MissionCard key={mission.id} mission={mission} onClaim={handleClaim} />
+            <MissionCard
+              key={mission.id}
+              mission={mission}
+              onClaim={handleClaim}
+              userId={userId}
+              onProofSubmitted={fetchMissions}
+            />
           ))
         )}
       </div>

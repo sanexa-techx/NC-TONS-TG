@@ -154,3 +154,92 @@ ALTER TABLE users
 ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS photo_synced_at TIMESTAMP DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS miner_level INT DEFAULT 1;
+
+-- Daily Streak & Reward System (NC TONs)
+-- 1. Extend Users Table
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS daily_streak INT DEFAULT 0,
+ADD COLUMN IF NOT EXISTS last_daily_claim_date DATE DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS total_daily_claims INT DEFAULT 0;
+
+-- 2. Configurable 7-Day Rewards Table
+CREATE TABLE IF NOT EXISTS daily_streak_rewards (
+    day_number INT PRIMARY KEY, -- 1 through 7
+    nc_reward INT NOT NULL,
+    ton_reward NUMERIC(14, 6) NOT NULL,
+    battery_bonus_pct INT DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Seed Initial 7-Day Ladder
+INSERT INTO daily_streak_rewards (day_number, nc_reward, ton_reward, battery_bonus_pct)
+VALUES 
+  (1, 250, 0.000010, 0),
+  (2, 500, 0.000020, 20),
+  (3, 800, 0.000035, 0),
+  (4, 1200, 0.000050, 0),
+  (5, 1800, 0.000075, 50),
+  (6, 2600, 0.000100, 0),
+  (7, 4500, 0.000250, 100)
+ON CONFLICT (day_number) DO NOTHING;
+
+-- Social Task Screenshot Verification System (NC TONs)
+-- 1. Support screenshot task types in dynamic_missions
+ALTER TABLE dynamic_missions 
+ADD COLUMN IF NOT EXISTS requires_proof BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS proof_instructions TEXT DEFAULT 'Upload a screenshot showing you followed/subscribed';
+
+-- 2. Task Proof Submissions Registry
+CREATE TABLE IF NOT EXISTS task_proof_submissions (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mission_id INT NOT NULL REFERENCES dynamic_missions(id) ON DELETE CASCADE,
+    telegram_file_id TEXT,               -- Telegram image reference
+    channel_message_id BIGINT,          -- Message ID in Admin Channel
+    status VARCHAR(20) DEFAULT 'PENDING_REVIEW', -- 'PENDING_REVIEW', 'APPROVED', 'REJECTED'
+    reviewed_by BIGINT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT unique_pending_user_task UNIQUE(user_id, mission_id)
+);
+
+-- 3. Compatibility view & rule for user_mission_claims
+CREATE OR REPLACE VIEW user_mission_claims AS 
+SELECT id, user_id, mission_id, claimed_at FROM mission_claims;
+
+CREATE OR REPLACE RULE user_mission_claims_ins AS ON INSERT TO user_mission_claims 
+DO INSTEAD 
+INSERT INTO mission_claims (user_id, mission_id, claimed_at) 
+VALUES (NEW.user_id, NEW.mission_id, COALESCE(NEW.claimed_at, NOW()))
+RETURNING id, user_id, mission_id, claimed_at;
+
+-- Seed Sample Screenshot Social Mission
+INSERT INTO dynamic_missions (creator_user_id, title, description, category, task_type, action_url, telegram_chat_id, nc_reward, ton_reward, target_users, is_active, priority, requires_proof, proof_instructions)
+VALUES
+  (0, 'Subscribe to NC TONs YouTube', 'Subscribe to our official YouTube channel and upload screenshot proof of your subscription.', 'social', 'screenshot_social', 'https://youtube.com/@nctons', NULL, 600, 0.000400, 5000, true, 8, true, 'Take a screenshot showing the Subscribed button on our YouTube channel and upload it below:')
+ON CONFLICT DO NOTHING;
+
+-- Dual Ad Networks (Adsgram & Monetag) & Withdrawal Gatekeeper (NC TONs)
+-- 1. Daily Ad Views Tracking Table (Resets daily based on UTC date)
+CREATE TABLE IF NOT EXISTS user_daily_ads (
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ad_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    adsgram_count INT DEFAULT 0,
+    monetag_count INT DEFAULT 0,
+    last_ad_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (user_id, ad_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_daily_ads ON user_daily_ads(user_id, ad_date);
+
+-- 2. Update Reward Configurations Table
+INSERT INTO reward_configs (action_type, display_name, nc_reward, ton_reward)
+VALUES 
+  ('ad_adsgram', 'Adsgram Rewarded Video', 200, 0.000300),
+  ('ad_monetag', 'Monetag Rewarded Ad', 200, 0.000200)
+ON CONFLICT (action_type) DO UPDATE 
+SET nc_reward = EXCLUDED.nc_reward,
+    ton_reward = EXCLUDED.ton_reward,
+    display_name = EXCLUDED.display_name;
+
+

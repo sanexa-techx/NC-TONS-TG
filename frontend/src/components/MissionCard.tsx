@@ -1,21 +1,35 @@
 import React, { useState } from 'react';
 import { Mission } from '../types/index.js';
-import { Send, Globe, Bot, CheckCircle2, ArrowUpRight, Loader2 } from 'lucide-react';
+import { Send, Globe, Bot, CheckCircle2, ArrowUpRight, Loader2, Camera, Clock } from 'lucide-react';
 import { TonIcon, NcIcon } from './icons/index.js';
 import { useTelegram } from '../hooks/useTelegram.js';
+import ScreenshotProofModal from './ScreenshotProofModal.js';
 
 interface MissionCardProps {
   mission: Mission;
+  userId?: number | string;
   onClaim: (missionId: number) => Promise<any>;
+  onProofSubmitted?: () => void;
 }
 
-export const MissionCard: React.FC<MissionCardProps> = ({ mission, onClaim }) => {
+export const MissionCard: React.FC<MissionCardProps> = ({
+  mission,
+  userId,
+  onClaim,
+  onProofSubmitted,
+}) => {
   const { openLink, haptic } = useTelegram();
   const [visited, setVisited] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [proofModalOpen, setProofModalOpen] = useState(false);
+
+  const isScreenshotTask = Boolean(mission.requiresProof || mission.taskType === 'screenshot_social');
 
   const getTaskIcon = () => {
+    if (isScreenshotTask) {
+      return <Camera size={18} className="text-yellow-400" />;
+    }
     switch (mission.taskType) {
       case 'telegram_join':
         return <Send size={18} className="text-cyber-cyan" />;
@@ -117,6 +131,47 @@ export const MissionCard: React.FC<MissionCardProps> = ({ mission, onClaim }) =>
         <div className="w-full py-2 px-3 rounded-xl bg-cyber-surface text-slate-500 text-xs font-semibold text-center">
           Reward Budget Exhausted
         </div>
+      ) : isScreenshotTask ? (
+        mission.proofStatus === 'PENDING_REVIEW' ? (
+          <div className="w-full py-2 px-3 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-bold flex items-center justify-center space-x-1.5">
+            <Clock size={16} className="animate-spin" />
+            <span>⏳ Screenshot In Review</span>
+          </div>
+        ) : mission.proofStatus === 'REJECTED' ? (
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleActionClick}
+              className="flex-1 py-2 px-3 rounded-xl bg-cyber-surface hover:bg-cyber-card border border-cyber-border text-xs font-semibold text-slate-200 flex items-center justify-center space-x-1 transition-all active:scale-95"
+            >
+              <span>Open Link</span>
+              <ArrowUpRight size={14} className="text-cyber-cyan" />
+            </button>
+            <button
+              onClick={() => setProofModalOpen(true)}
+              className="flex-1 py-2 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95"
+            >
+              <Camera size={14} />
+              <span>Retry Proof</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleActionClick}
+              className="flex-1 py-2 px-3 rounded-xl bg-cyber-surface hover:bg-cyber-card border border-cyber-border text-xs font-semibold text-slate-200 flex items-center justify-center space-x-1 transition-all active:scale-95"
+            >
+              <span>Open Link</span>
+              <ArrowUpRight size={14} className="text-cyber-cyan" />
+            </button>
+            <button
+              onClick={() => setProofModalOpen(true)}
+              className="flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all active:scale-95 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black shadow-lg shadow-yellow-500/20 font-extrabold"
+            >
+              <Camera size={14} />
+              <span>Submit Proof</span>
+            </button>
+          </div>
+        )
       ) : (
         <div className="flex items-center space-x-2">
           <button
@@ -152,6 +207,19 @@ export const MissionCard: React.FC<MissionCardProps> = ({ mission, onClaim }) =>
         <div className="mt-2 text-[11px] text-cyber-red font-medium">
           ⚠️ {claimError}
         </div>
+      )}
+
+      {/* Screenshot Proof Modal */}
+      {proofModalOpen && (
+        <ScreenshotProofModal
+          mission={mission}
+          userId={userId || '9990001'}
+          onClose={() => setProofModalOpen(false)}
+          onSubmitted={() => {
+            setProofModalOpen(false);
+            onProofSubmitted?.();
+          }}
+        />
       )}
     </div>
   );
