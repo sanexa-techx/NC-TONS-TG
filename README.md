@@ -247,5 +247,34 @@ NC TONS TG/
     - `POST /api/notion/test-sync`: Dispatches test records to Notion to verify database schemas and integration tokens.
     - `POST /api/notion/configure`: Allows setting or updating `NOTION_API_KEY`, `NOTION_WITHDRAWALS_DATABASE_ID`, and `NOTION_TASKS_DATABASE_ID`.
 
+---
 
+## 15. RENDER BACKEND DEPLOYMENT
 
+The backend is configured for automated zero-downtime deployment on [Render](https://render.com) using the included `render.yaml` Blueprint or native Node / Docker web service.
+
+### Option A: 1-Click Blueprint Deployment (Recommended)
+1. Go to [Render Dashboard](https://dashboard.render.com/) and click **New +** -> **Blueprint**.
+2. Select your connected repository: `sanexa-techx/NC-TONS-TG`.
+3. Render will automatically read `render.yaml` from the root directory.
+4. Fill in your secret environment variables:
+   - `DATABASE_URL`: Your Neon PostgreSQL pooled connection string
+   - `DIRECT_URL`: Your Neon PostgreSQL direct connection string
+   - `BOT_TOKEN`: Your Telegram Bot Token from `@BotFather`
+   - `ADMIN_CHANNEL_ID`: Your private Telegram channel ID (e.g. `-1001234567890`)
+   - `ADMIN_TELEGRAM_IDS`: Your Telegram User ID (e.g. `123456789`)
+   - `WEBAPP_URL`: `https://nctons-tg.netlify.app`
+5. Click **Apply**. Render will automatically build, generate Prisma client, and launch the service.
+
+### Option B: Manual Web Service on Render
+If configuring manually as a **Web Service**:
+- **Name**: `nc-tons-backend`
+- **Region**: `Oregon (US West)` or `Ohio (US East)`
+- **Root Directory**: `backend`
+- **Runtime**: `Node`
+- **Build Command**: `npm install && npx prisma generate && npm run build`
+- **Start Command**: `npm start`
+- **Health Check Path**: `/api/health`
+
+### Netlify Frontend Proxy Integration
+The Netlify frontend at [nctons-tg.netlify.app](https://nctons-tg.netlify.app) includes a proxy rule in `netlify.toml` forwarding `/api/*` requests directly to `https://nc-tons-backend.onrender.com/api/:splat`.
