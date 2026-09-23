@@ -98,7 +98,35 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
               <Copy className="w-3.5 h-3.5 text-neutral-400" />
             )}
           </button>
+
+          {/* Owner / System Admin Tag */}
+          {user.isAdmin && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-[11px] font-mono font-bold mt-1 shadow-sm">
+              <Shield className="w-3.5 h-3.5 text-red-400" />
+              <span>OWNER / SYSTEM ADMIN DETECTED</span>
+            </div>
+          )}
         </div>
+
+        {/* Admin Verified Privilege Card */}
+        {user.isAdmin && (
+          <div className="bg-red-950/30 border border-red-500/30 rounded-2xl p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 shadow-sm">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="block text-[10px] text-red-300 uppercase font-semibold">
+                  Access Level
+                </span>
+                <h4 className="text-xs font-bold text-white">Full Administrator Rights</h4>
+              </div>
+            </div>
+            <span className="text-xs font-mono font-bold text-red-400 bg-red-950/60 px-2 py-1 rounded-lg border border-red-500/30">
+              Verified
+            </span>
+          </div>
+        )}
 
         {/* Miner Rank Card */}
         <div className="bg-neutral-950 border border-neutral-800/80 rounded-2xl p-3.5 flex items-center justify-between">

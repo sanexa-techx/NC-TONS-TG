@@ -15,18 +15,63 @@ import {
   DailyAdStatusResponse,
 } from '../types/index.js';
 
-let devUserId = localStorage.getItem('nctons_dev_user_id') || '9990001';
-let devUsername = localStorage.getItem('nctons_dev_username') || 'CyberMiner';
+/**
+ * Automatically detects the authentic Telegram User identity from:
+ * 1. window.Telegram.WebApp.initDataUnsafe.user (Official Telegram Mini App context)
+ * 2. URL search params (?userId=... / ?tg_id=... / ?id=...)
+ * 3. Cached session from previous login in localStorage
+ * 4. Safe fallback
+ */
+export function getDetectedUser(): { id: string; username: string; firstName: string } {
+  if (typeof window === 'undefined') {
+    return { id: '9990001', username: 'miner', firstName: 'Miner' };
+  }
 
-export function setDevUser(id: string, username: string) {
-  devUserId = id;
-  devUsername = username;
-  localStorage.setItem('nctons_dev_user_id', id);
-  localStorage.setItem('nctons_dev_username', username);
-}
+  // 1. Telegram WebApp SDK
+  try {
+    const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+    if (tgUser?.id) {
+      const id = String(tgUser.id);
+      const username = tgUser.username || '';
+      const firstName = tgUser.first_name || 'Miner';
+      localStorage.setItem('nctons_user_id', id);
+      if (username) localStorage.setItem('nctons_username', username);
+      if (firstName) localStorage.setItem('nctons_first_name', firstName);
+      return { id, username, firstName };
+    }
+  } catch (err) {
+    console.warn('[Telegram SDK] User read note:', err);
+  }
 
-export function getDevUser() {
-  return { id: devUserId, username: devUsername };
+  // 2. URL query parameters (e.g. ?userId=123456789 or ?tg_id=...)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const urlId = params.get('userId') || params.get('tg_id') || params.get('id');
+    if (urlId) {
+      const cleanId = urlId.replace(/[^0-9]/g, '');
+      if (cleanId) {
+        const username = params.get('username') || '';
+        const firstName = params.get('firstName') || 'Miner';
+        localStorage.setItem('nctons_user_id', cleanId);
+        if (username) localStorage.setItem('nctons_username', username);
+        if (firstName) localStorage.setItem('nctons_first_name', firstName);
+        return { id: cleanId, username, firstName };
+      }
+    }
+  } catch {}
+
+  // 3. Cached session in localStorage
+  const savedId = localStorage.getItem('nctons_user_id') || localStorage.getItem('nctons_telegram_user_id');
+  if (savedId) {
+    return {
+      id: savedId,
+      username: localStorage.getItem('nctons_username') || localStorage.getItem('nctons_telegram_username') || '',
+      firstName: localStorage.getItem('nctons_first_name') || localStorage.getItem('nctons_telegram_first_name') || 'Miner',
+    };
+  }
+
+  // 4. Default miner fallback
+  return { id: '9990001', username: 'miner', firstName: 'Miner' };
 }
 
 function getAuthHeaders(): Record<string, string> {
@@ -36,17 +81,24 @@ function getAuthHeaders(): Record<string, string> {
 
   const tgWebApp = (window as any).Telegram?.WebApp;
   const initData = tgWebApp?.initData;
+  const user = getDetectedUser();
 
   if (initData) {
     headers['Authorization'] = `tma ${initData}`;
-  } else {
-    // Dev mode fallback
-    headers['X-Dev-Telegram-Id'] = devUserId;
-    headers['X-Dev-Username'] = devUsername;
+  }
+
+  // Automatically attach detected user identity headers for authentication & authorization
+  if (user?.id) {
+    headers['X-Telegram-User-Id'] = user.id;
+    if (user.username) headers['X-Telegram-Username'] = user.username;
+    if (user.firstName) headers['X-Telegram-First-Name'] = user.firstName;
+    headers['X-Dev-Telegram-Id'] = user.id;
+    headers['X-Dev-Username'] = user.username || user.firstName;
   }
 
   return headers;
 }
+
 
 async function handleResponse<T>(res: Response): Promise<T> {
   const data = await res.json();

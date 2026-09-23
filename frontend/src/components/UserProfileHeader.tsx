@@ -83,6 +83,11 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
             <span className="text-[9px] bg-yellow-500/10 text-yellow-400 font-mono px-1.5 rounded border border-yellow-500/30 leading-5">
               LVL {minerLevel}
             </span>
+            {user.isAdmin && (
+              <span className="text-[9px] bg-red-500/20 text-red-400 font-mono px-1.5 rounded border border-red-500/40 flex items-center gap-0.5 leading-5 font-bold shadow-sm animate-pulse">
+                🛡️ ADMIN
+              </span>
+            )}
           </div>
 
           {/* Clickable Telegram ID with copy pill */}

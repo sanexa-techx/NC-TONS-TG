@@ -33,12 +33,21 @@ if (!parsedEnv.success) {
 
 export const ENV = parsedEnv.data;
 
-export const adminIdsSet = new Set<string>(
-  ENV.ADMIN_TELEGRAM_IDS.split(',')
-    .map((id) => id.trim())
-    .filter(Boolean)
-);
+export function getAdminIds(): Set<string> {
+  const raw = process.env.ADMIN_TELEGRAM_IDS || ENV.ADMIN_TELEGRAM_IDS || '';
+  return new Set<string>(
+    raw
+      .split(/[,;\s]+/)
+      .map((id) => id.trim())
+      .filter(Boolean)
+  );
+}
 
-export function isAdmin(telegramId: string | number | bigint): boolean {
-  return adminIdsSet.has(telegramId.toString());
+export const adminIdsSet = getAdminIds();
+
+export function isAdmin(telegramId: string | number | bigint | null | undefined): boolean {
+  if (!telegramId) return false;
+  const targetId = telegramId.toString().trim();
+  const currentSet = getAdminIds();
+  return currentSet.has(targetId);
 }

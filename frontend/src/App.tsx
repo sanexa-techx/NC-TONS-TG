@@ -4,7 +4,6 @@ import { UserProfile } from './types/index.js';
 import { api } from './services/api.js';
 import { useMining } from './hooks/useMining.js';
 import { Navbar, NavTab } from './components/Navbar.js';
-import { DevTelegramBar } from './components/DevTelegramBar.js';
 import { MiningDashboard } from './pages/MiningDashboard.js';
 import { GamePage } from './pages/GamePage.js';
 import { MissionsPage } from './pages/MissionsPage.js';
@@ -106,14 +105,6 @@ export const App: React.FC = () => {
   return (
     <TonConnectUIProvider manifestUrl={manifestUrl}>
       <div className="min-h-screen bg-cyber-bg text-slate-100 flex flex-col">
-        {/* Dev Mode Banner for testing in standard desktop browser */}
-        <DevTelegramBar
-          currentUserId={user?.id || '9990001'}
-          isAdmin={Boolean(user?.isAdmin)}
-          onUserChanged={initAuth}
-          onSync={sync}
-        />
-
         {/* Sticky Profile Header — spec: bg-neutral-900/80, full-width, profile left, online badge right */}
         <header className="sticky top-0 z-20 w-full bg-neutral-900/80 backdrop-blur-md border-b border-neutral-800/80 px-4 py-2.5 shadow-sm">
           <div className="w-full max-w-md mx-auto flex items-center justify-between gap-3">

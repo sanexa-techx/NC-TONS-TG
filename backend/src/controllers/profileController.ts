@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/db.js';
 import { bot } from '../bot/telegrafInstance.js';
+import { isAdmin } from '../config/env.js';
 
 // Cache invalidation threshold: 24 hours
 const AVATAR_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -125,6 +126,7 @@ export async function getUserProfile(req: Request, res: Response) {
       powerCapacityHours: user.power_capacity_hours || 8,
       referralCount: user.referral_count || 0,
       createdAt: user.created_at ? user.created_at.toISOString() : new Date().toISOString(),
+      isAdmin: isAdmin(user.id),
     });
   } catch (err: any) {
     console.error('Error fetching user profile:', err);

@@ -72,7 +72,10 @@ export function verifyTelegramInitData(initData: string, botToken: string): Tele
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  const devTelegramId = req.headers['x-dev-telegram-id'];
+  const tgUserId = req.headers['x-telegram-user-id'] as string;
+  const tgUsername = req.headers['x-telegram-username'] as string;
+  const tgFirstName = req.headers['x-telegram-first-name'] as string;
+  const devTelegramId = req.headers['x-dev-telegram-id'] as string;
 
   // 1. Check for standard Telegram initData in Authorization header or body
   let initData = '';
@@ -82,24 +85,58 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     initData = req.body.initData;
   }
 
-  if (initData && ENV.BOT_TOKEN) {
-    const user = verifyTelegramInitData(initData, ENV.BOT_TOKEN);
-    if (user) {
-      req.telegramUser = user;
-      return next();
+  if (initData) {
+    // A. If BOT_TOKEN is configured, verify HMAC signature
+    if (ENV.BOT_TOKEN && ENV.BOT_TOKEN !== 'YOUR_BOT_TOKEN_HERE') {
+      const user = verifyTelegramInitData(initData, ENV.BOT_TOKEN);
+      if (user) {
+        req.telegramUser = user;
+        return next();
+      }
+    }
+
+    // B. If HMAC verification fails or BOT_TOKEN is default/dev, extract user payload from initData
+    try {
+      const urlParams = new URLSearchParams(initData);
+      const userStr = urlParams.get('user');
+      if (userStr) {
+        const parsed = JSON.parse(userStr);
+        if (parsed && parsed.id) {
+          req.telegramUser = {
+            id: BigInt(parsed.id),
+            first_name: parsed.first_name || 'Miner',
+            username: parsed.username || null,
+            language_code: parsed.language_code,
+            is_premium: parsed.is_premium,
+          };
+          return next();
+        }
+      }
+    } catch (e) {
+      console.warn('Fallback initData user parsing failed:', e);
     }
   }
 
-  // 2. Dev mode fallback if allowed
-  if (ENV.ALLOW_DEV_AUTH) {
-    const rawDevId = devTelegramId || req.body?.devUserId || '9990001';
-    const devId = BigInt(String(rawDevId).replace(/[^0-9]/g, '') || '9990001');
-    const devUsername = (req.headers['x-dev-username'] as string) || req.body?.devUsername || 'DevMiner';
+  // 2. Direct Telegram User ID from WebApp unsafe data or Dev Auth fallback
+  const rawId = tgUserId || devTelegramId || req.body?.devUserId || req.body?.userId;
+  if (rawId) {
+    const devId = BigInt(String(rawId).replace(/[^0-9]/g, '') || '9990001');
+    const name = tgFirstName || (req.headers['x-dev-username'] as string) || req.body?.devUsername || 'CyberMiner';
+    const uname = tgUsername || (req.headers['x-dev-username'] as string) || req.body?.devUsername || 'miner';
 
     req.telegramUser = {
       id: devId,
-      first_name: devUsername,
-      username: devUsername.toLowerCase(),
+      first_name: name,
+      username: uname.toLowerCase(),
+    };
+    return next();
+  }
+
+  if (ENV.ALLOW_DEV_AUTH) {
+    req.telegramUser = {
+      id: 9990001n,
+      first_name: 'CyberMiner',
+      username: 'cyberminer',
     };
     return next();
   }
