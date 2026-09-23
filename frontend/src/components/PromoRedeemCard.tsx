@@ -163,7 +163,7 @@ export const PromoRedeemCard: React.FC<PromoRedeemCardProps> = ({
           </button>
         </div>
         <p className="text-[9px] text-slate-500 font-mono pl-1">
-          Single redemption per miner. Try codes: <span className="text-cyber-cyan">WELCOME500</span>, <span className="text-cyber-gold">NCTONS2026</span>
+          Single redemption per miner. Rewards are credited instantly to your balance.
         </p>
       </form>
     </div>

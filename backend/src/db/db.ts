@@ -190,28 +190,7 @@ const memoryStore = {
   gameSessions: new Map<string, any>(),
   withdrawalIdSeq: 101,
   missionIdSeq: 4,
-  promoCodes: [
-    {
-      id: 1,
-      code: 'WELCOME500',
-      nc_reward: 500,
-      ton_reward: new Decimal('0.000050'),
-      max_claims: 1000 as number | null,
-      claimed_count: 0,
-      is_active: true,
-      created_at: new Date(),
-    },
-    {
-      id: 2,
-      code: 'NCTONS2026',
-      nc_reward: 1000,
-      ton_reward: new Decimal('0.000100'),
-      max_claims: 500 as number | null,
-      claimed_count: 0,
-      is_active: true,
-      created_at: new Date(),
-    },
-  ] as Array<{
+  promoCodes: [] as Array<{
     id: number;
     code: string;
     nc_reward: number;
@@ -222,7 +201,7 @@ const memoryStore = {
     created_at: Date;
   }>,
   promoClaims: [] as Array<{ id: number; promo_code_id: number; user_id: bigint; claimed_at: Date }>,
-  promoCodeIdSeq: 3,
+  promoCodeIdSeq: 1,
   promoClaimIdSeq: 1,
   referrals: [] as Array<{
     id: number;

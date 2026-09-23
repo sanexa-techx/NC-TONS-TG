@@ -119,13 +119,6 @@ CREATE TABLE IF NOT EXISTS user_promo_claims (
     CONSTRAINT unique_user_promo UNIQUE (user_id, promo_code_id)
 );
 
--- Seed Initial Promo Codes
-INSERT INTO promo_codes (code, nc_reward, ton_reward, max_claims, claimed_count, is_active)
-VALUES
-    ('WELCOME500', 500, 0.000050, 1000, 0, true),
-    ('NCTONS2026', 1000, 0.000100, 500, 0, true)
-ON CONFLICT (code) DO NOTHING;
-
 -- Referral System & Friends Hub Schema
 -- 1. Extend Users Table
 ALTER TABLE users 
