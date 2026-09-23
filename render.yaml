@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: nc-tons-backend
+    name: nctons-backend
     runtime: node
     plan: free
     region: oregon
@@ -13,21 +13,21 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: "5000"
+        value: 10000
       - key: DATABASE_URL
-        sync: false
-      - key: DIRECT_URL
         sync: false
       - key: BOT_TOKEN
         sync: false
       - key: ADMIN_TELEGRAM_IDS
-        value: "123456789"
+        sync: false
       - key: ADMIN_CHANNEL_ID
         sync: false
+      - key: PUBLIC_PAYOUT_CHANNEL_ID
+        sync: false
       - key: WEBAPP_URL
-        value: "https://nctons-tg.netlify.app"
+        value: https://nctons-tg.netlify.app
       - key: ALLOW_DEV_AUTH
-        value: "true"
+        value: "false"
       - key: NOTION_API_KEY
         sync: false
       - key: NOTION_WITHDRAWALS_DATABASE_ID
