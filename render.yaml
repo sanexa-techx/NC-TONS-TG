@@ -1,35 +1,36 @@
 services:
   - type: web
     name: nc-tons-backend
-    env: node
-    region: oregon
+    runtime: node
     plan: free
+    region: oregon
     rootDir: backend
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-      - key: ALLOW_DEV_AUTH
-        value: "false"
+      - key: PORT
+        value: "5000"
       - key: DATABASE_URL
-        fromDatabase:
-          name: nc-tons-db
-          property: connectionString
+        sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: BOT_TOKEN
         sync: false
       - key: ADMIN_TELEGRAM_IDS
-        sync: false
+        value: "123456789"
       - key: ADMIN_CHANNEL_ID
         sync: false
       - key: WEBAPP_URL
+        value: "https://nctons-tg.netlify.app"
+      - key: ALLOW_DEV_AUTH
+        value: "true"
+      - key: NOTION_API_KEY
         sync: false
-
-databases:
-  - name: nc-tons-db
-    plan: free
-    databaseName: nctons
-    user: nctons_user
-    region: oregon
+      - key: NOTION_WITHDRAWALS_DATABASE_ID
+        sync: false
+      - key: NOTION_TASKS_DATABASE_ID
+        sync: false

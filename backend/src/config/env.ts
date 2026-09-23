@@ -11,14 +11,14 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config();
 
 const envSchema = z.object({
-  PORT: z.string().default('5000').transform(Number),
+  PORT: z.union([z.string(), z.number()]).default('5000').transform((v) => Number(v)),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().default('postgresql://postgres:postgres@localhost:5432/nctons?schema=public'),
   BOT_TOKEN: z.string().default(''),
   ADMIN_TELEGRAM_IDS: z.string().default('123456789'),
   ADMIN_CHANNEL_ID: z.string().default(''),
   WEBAPP_URL: z.string().default('http://localhost:5173'),
-  ALLOW_DEV_AUTH: z.string().default('true').transform((v) => v === 'true'),
+  ALLOW_DEV_AUTH: z.union([z.string(), z.boolean()]).default('true').transform((v) => String(v) === 'true'),
   NOTION_API_KEY: z.string().default(''),
   NOTION_WITHDRAWALS_DATABASE_ID: z.string().default(''),
   NOTION_TASKS_DATABASE_ID: z.string().default(''),
