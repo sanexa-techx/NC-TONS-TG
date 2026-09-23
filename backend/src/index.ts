@@ -29,13 +29,11 @@ import { getOnlineStats, pingOnlineStatus } from './controllers/statsController.
 import { getFriendStats, claimFriendRewards, simulateReferral } from './controllers/friendsController.js';
 import { getUserProfile, getAvatarProxy } from './controllers/profileController.js';
 import dailyRouter from './routes/daily.js';
-import proofTasksRouter, { registerTaskProofBotHandlers } from './routes/proofTasks.js';
+import proofTasksRouter from './routes/proofTasks.js';
 import adsRouter from './routes/ads.js';
 
 // Telegraf Bot
-import { bot } from './bot/telegrafInstance.js';
-import { registerStartHandler } from './bot/handlers/startHandler.js';
-import { registerAdminActionHandlers } from './bot/handlers/adminActionHandler.js';
+import { bot, registerMasterBotHandlers, setupBotCommands } from './bot/bot.js';
 
 const app = express();
 
@@ -117,9 +115,8 @@ async function startServer() {
   await connectDB();
 
   if (bot) {
-    registerStartHandler(bot);
-    registerAdminActionHandlers(bot);
-    registerTaskProofBotHandlers(bot);
+    registerMasterBotHandlers(bot);
+    await setupBotCommands(bot);
 
     bot.launch({ dropPendingUpdates: true })
       .then(() => {

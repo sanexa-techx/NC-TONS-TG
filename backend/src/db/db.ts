@@ -234,6 +234,12 @@ const memoryStore = {
     monetag_count: number;
     last_ad_at: Date;
   }>(),
+  botChats: new Map<string, {
+    chat_id: bigint;
+    chat_type: string;
+    title: string | null;
+    created_at: Date;
+  }>(),
 };
 
 // Seed default dev user
@@ -1143,7 +1149,31 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     return { rows: [], rowCount: 1 };
   }
 
-  // 17. Transaction control (BEGIN, COMMIT, ROLLBACK)
+  // 17. bot_chats queries
+  if (normalized.startsWith('INSERT INTO bot_chats')) {
+    const chatId = BigInt(params[0]);
+    const chatType = params[1] || 'group';
+    const title = params[2] || 'Untitled';
+    memoryStore.botChats.set(chatId.toString(), {
+      chat_id: chatId,
+      chat_type: chatType,
+      title: title,
+      created_at: new Date(),
+    });
+    return { rows: [], rowCount: 1 };
+  }
+
+  if (normalized.startsWith('SELECT chat_id FROM bot_chats') || normalized.startsWith('SELECT * FROM bot_chats')) {
+    const list = Array.from(memoryStore.botChats.values()).map((c) => ({
+      chat_id: c.chat_id.toString(),
+      chat_type: c.chat_type,
+      title: c.title,
+      created_at: c.created_at,
+    }));
+    return { rows: list, rowCount: list.length };
+  }
+
+  // 18. Transaction control (BEGIN, COMMIT, ROLLBACK)
   if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized.toUpperCase())) {
     return { rows: [], rowCount: 0 };
   }

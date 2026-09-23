@@ -197,4 +197,13 @@ model UserDailyAd {
   @@map("user_daily_ads")
 }
 
+model BotChat {
+  chat_id    BigInt   @id
+  chat_type  String   @db.VarChar(32)
+  title      String?  @db.VarChar(255)
+  created_at DateTime @default(now())
+
+  @@map("bot_chats")
+}
+
 

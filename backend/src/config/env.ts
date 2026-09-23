@@ -17,6 +17,7 @@ const envSchema = z.object({
   BOT_TOKEN: z.string().default(''),
   ADMIN_TELEGRAM_IDS: z.string().default('123456789'),
   ADMIN_CHANNEL_ID: z.string().default(''),
+  PUBLIC_PAYOUT_CHANNEL_ID: z.string().default(''),
   WEBAPP_URL: z.string().default('http://localhost:5173'),
   ALLOW_DEV_AUTH: z.union([z.string(), z.boolean()]).default('true').transform((v) => String(v) === 'true'),
   NOTION_API_KEY: z.string().default(''),
