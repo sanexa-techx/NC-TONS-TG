@@ -204,10 +204,12 @@ export class MissionService {
           msg.includes('chat not found') ||
           msg.includes('bot is not a member') ||
           msg.includes('forbidden') ||
-          msg.includes('not enough rights')
+          msg.includes('not enough rights') ||
+          msg.includes('member list is inaccessible') ||
+          msg.includes('inaccessible')
         ) {
           throw new Error(
-            `Cannot verify membership automatically because the bot is not an admin in ${chatToCheck}. Please contact admin or submit screenshot proof.`
+            `Cannot verify membership automatically because the bot is not an administrator in ${chatToCheck}. Please add the bot as an admin with 'Invite Users' permissions, or submit screenshot proof.`
           );
         }
 
