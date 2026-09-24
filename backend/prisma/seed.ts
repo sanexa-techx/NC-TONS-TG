@@ -1,3 +1,4 @@
+import * as process from 'node:process';
 import { PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
