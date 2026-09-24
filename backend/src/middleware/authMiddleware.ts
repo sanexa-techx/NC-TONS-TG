@@ -117,42 +117,36 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     }
   }
 
-  // 2. Direct Telegram User ID from WebApp unsafe data or Dev Auth fallback
+  // 2. Direct Telegram User ID from WebApp unsafe data
   const rawId = tgUserId || devTelegramId || req.body?.devUserId || req.body?.userId;
   if (rawId) {
-    const devId = BigInt(String(rawId).replace(/[^0-9]/g, '') || '9990001');
-    const rawName = tgFirstName || (req.headers['x-dev-username'] as string) || req.body?.devUsername || req.body?.firstName || 'CyberMiner';
-    const rawUname = tgUsername || (req.headers['x-dev-username'] as string) || req.body?.devUsername || req.body?.username || 'miner';
+    const cleanDigits = String(rawId).replace(/[^0-9]/g, '');
+    if (cleanDigits) {
+      const userId = BigInt(cleanDigits);
+      const rawName = tgFirstName || (req.headers['x-dev-username'] as string) || req.body?.devUsername || req.body?.firstName || 'Miner';
+      const rawUname = tgUsername || (req.headers['x-dev-username'] as string) || req.body?.devUsername || req.body?.username || '';
 
-    let name = String(rawName);
-    try {
-      name = decodeURIComponent(name);
-    } catch {}
+      let name = String(rawName);
+      try {
+        name = decodeURIComponent(name);
+      } catch {}
 
-    let uname = String(rawUname);
-    try {
-      uname = decodeURIComponent(uname);
-    } catch {}
+      let uname = String(rawUname);
+      try {
+        uname = decodeURIComponent(uname);
+      } catch {}
 
-    req.telegramUser = {
-      id: devId,
-      first_name: name,
-      username: uname.toLowerCase(),
-    };
-    return next();
-  }
-
-  if (ENV.ALLOW_DEV_AUTH) {
-    req.telegramUser = {
-      id: 9990001n,
-      first_name: 'CyberMiner',
-      username: 'cyberminer',
-    };
-    return next();
+      req.telegramUser = {
+        id: userId,
+        first_name: name,
+        username: uname ? uname.toLowerCase() : undefined,
+      };
+      return next();
+    }
   }
 
   return res.status(401).json({
     error: 'Unauthorized',
-    message: 'Valid Telegram WebApp initData is required',
+    message: 'Telegram authentication required',
   });
 }

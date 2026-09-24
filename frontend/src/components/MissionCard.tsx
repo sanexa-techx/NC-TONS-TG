@@ -213,7 +213,7 @@ export const MissionCard: React.FC<MissionCardProps> = ({
       {proofModalOpen && (
         <ScreenshotProofModal
           mission={mission}
-          userId={userId || '9990001'}
+          userId={userId || ''}
           onClose={() => setProofModalOpen(false)}
           onSubmitted={() => {
             setProofModalOpen(false);

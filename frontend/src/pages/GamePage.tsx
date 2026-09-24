@@ -13,7 +13,7 @@ interface GamePageProps {
 
 export const GamePage: React.FC<GamePageProps> = ({ onGameFinished, userId }) => {
   const [activeGame, setActiveGame] = useState<ActiveGameType | null>(null);
-  const { triggerInterstitial } = useAdManager(userId || '9990001');
+  const { triggerInterstitial } = useAdManager(userId || '');
 
   const handleSelectGame = (type: ActiveGameType) => {
     triggerInterstitial('start');

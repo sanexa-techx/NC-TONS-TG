@@ -52,7 +52,7 @@ export const App: React.FC = () => {
     setMiningState,
   } = useMining();
 
-  const { triggerInterstitial } = useAdManager(user?.id || '9990001');
+  const { triggerInterstitial } = useAdManager(user?.id || '');
 
   const handleTabChange = (newTab: NavTab) => {
     if (newTab !== activeTab) {
@@ -158,20 +158,20 @@ export const App: React.FC = () => {
           {activeTab === 'game' && (
             <GamePage
               onGameFinished={handleGameFinished}
-              userId={user?.id || '9990001'}
+              userId={user?.id || ''}
             />
           )}
 
           {activeTab === 'missions' && (
             <MissionsPage
               onRewardClaimed={handleRewardClaimed}
-              userId={user?.id || '9990001'}
+              userId={user?.id || ''}
             />
           )}
 
           {activeTab === 'friends' && (
             <FriendsView
-              userId={user?.id || '9990001'}
+              userId={user?.id || ''}
               onBalanceUpdated={() => sync()}
             />
           )}
@@ -181,7 +181,7 @@ export const App: React.FC = () => {
               tonBalance={liveTonBalance}
               onWithdrawalRequested={sync}
               onPromoRedeemed={sync}
-              userId={user?.id || '9990001'}
+              userId={user?.id || ''}
             />
           )}
 
@@ -198,7 +198,7 @@ export const App: React.FC = () => {
         {/* 7-Day Roadmap Modal */}
         {dailyModalOpen && dailyStatus && (
           <DailyStreakModal
-            userId={user?.id || '9990001'}
+            userId={user?.id || ''}
             statusData={dailyStatus}
             onClose={() => setDailyModalOpen(false)}
             onClaimSuccess={handleDailyClaimSuccess}

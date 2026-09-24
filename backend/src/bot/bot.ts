@@ -140,6 +140,8 @@ export function registerMasterBotHandlers(b: Telegraf) {
         client.release();
       }
 
+      const launchUrl = `${WEBAPP_URL}?userId=${newUserId}&firstName=${encodeURIComponent(firstName)}${username ? `&username=${encodeURIComponent(username)}` : ''}`;
+
       return ctx.reply(
         `⚡ <b>Welcome to NC TONs, ${firstName}!</b>\n\n` +
           `Mine real TON, play arcade games, and earn daily rewards directly inside Telegram.\n\n` +
@@ -147,7 +149,7 @@ export function registerMasterBotHandlers(b: Telegraf) {
         {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
-            [Markup.button.webApp('Launch NC TONs 🚀', WEBAPP_URL)],
+            [Markup.button.webApp('Launch NC TONs 🚀', launchUrl)],
             [Markup.button.url('Official Updates Channel 📢', 'https://t.me/nctons_official')],
           ]),
         }

@@ -83,7 +83,7 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
       {/* Rewarded Ad Networks & Withdrawal Gatekeeper HUD */}
       <div className="w-full mb-3">
         <AdMissionsSection
-          userId={userId || '9990001'}
+          userId={userId || ''}
           onRewardClaimed={() => {
             fetchMissions();
             onRewardClaimed(200, '0.000300');

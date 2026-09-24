@@ -19,7 +19,7 @@ const envSchema = z.object({
   ADMIN_CHANNEL_ID: z.string().default(''),
   PUBLIC_PAYOUT_CHANNEL_ID: z.string().default(''),
   WEBAPP_URL: z.string().default('http://localhost:5173'),
-  ALLOW_DEV_AUTH: z.union([z.string(), z.boolean()]).default('true').transform((v) => String(v) === 'true'),
+  ALLOW_DEV_AUTH: z.union([z.string(), z.boolean()]).default('false').transform((v) => String(v) === 'true'),
   NOTION_API_KEY: z.string().default(''),
   NOTION_WITHDRAWALS_DATABASE_ID: z.string().default(''),
   NOTION_TASKS_DATABASE_ID: z.string().default(''),

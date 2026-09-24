@@ -26,7 +26,7 @@ import {
   deleteAdminPromo,
 } from './controllers/promoController.js';
 import { getOnlineStats, pingOnlineStatus } from './controllers/statsController.js';
-import { getFriendStats, claimFriendRewards, simulateReferral } from './controllers/friendsController.js';
+import { getFriendStats, claimFriendRewards } from './controllers/friendsController.js';
 import { getUserProfile, getAvatarProxy } from './controllers/profileController.js';
 import dailyRouter from './routes/daily.js';
 import proofTasksRouter from './routes/proofTasks.js';
@@ -78,7 +78,6 @@ app.post('/api/promos/redeem', authMiddleware, redeemPromo);
 // Referral System & Friends Hub
 app.get('/api/friends/stats', authMiddleware, getFriendStats);
 app.post('/api/friends/claim', authMiddleware, claimFriendRewards);
-app.post('/api/friends/simulate-referral', authMiddleware, simulateReferral);
 
 // Daily Streak & Rewards
 app.use('/api/daily', dailyRouter);

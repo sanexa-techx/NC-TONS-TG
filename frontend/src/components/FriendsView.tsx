@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import WebApp from '@twa-dev/sdk';
-import { Users, Copy, Share2, Sparkles, Check, Loader2, UserPlus } from 'lucide-react';
+import { Users, Copy, Share2, Sparkles, Check, Loader2 } from 'lucide-react';
 import TonIcon from './icons/TonIcon.js';
 import NcIcon from './icons/NcIcon.js';
 import { api } from '../services/api.js';
@@ -22,7 +22,6 @@ export default function FriendsView({
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [simulating, setSimulating] = useState(false);
 
   const inviteLink = `https://t.me/${effectiveBot}?start=ref_${userId}`;
 
@@ -91,24 +90,6 @@ export default function FriendsView({
       alert(err.message || 'Claim failed');
     } finally {
       setClaiming(false);
-    }
-  };
-
-  const handleSimulate = async (isPremium: boolean) => {
-    setSimulating(true);
-    try {
-      await api.simulateReferral({
-        referrerId: userId,
-        isPremium,
-      });
-      if (WebApp?.HapticFeedback) {
-        WebApp.HapticFeedback.notificationOccurred('success');
-      }
-      await fetchReferrals();
-    } catch (err) {
-      console.error('Simulate referral failed:', err);
-    } finally {
-      setSimulating(false);
     }
   };
 
@@ -257,34 +238,6 @@ export default function FriendsView({
             ))}
           </div>
         )}
-      </div>
-
-      {/* Developer Testing Bar for instant preview testing */}
-      <div className="pt-3 border-t border-neutral-800/60">
-        <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-2.5">
-          <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-1.5">
-            <span className="font-semibold flex items-center gap-1">
-              <UserPlus className="w-3 h-3 text-cyan-400" /> Test Referral Simulator
-            </span>
-            <span className="text-[9px] text-neutral-500">Dev Only</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <button
-              onClick={() => handleSimulate(false)}
-              disabled={simulating}
-              className="py-1 px-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] font-medium rounded-lg transition"
-            >
-              + Standard Friend
-            </button>
-            <button
-              onClick={() => handleSimulate(true)}
-              disabled={simulating}
-              className="py-1 px-2 bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/30 text-indigo-300 text-[10px] font-medium rounded-lg transition"
-            >
-              + TG Premium Friend
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

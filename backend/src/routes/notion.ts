@@ -31,18 +31,18 @@ router.post('/test-sync', async (req, res) => {
   try {
     if (type === 'withdrawal') {
       const result = await syncWithdrawalToNotion({
-        id: sampleData?.id || 999,
-        userId: sampleData?.userId || '9990001',
-        tonAddress: sampleData?.tonAddress || 'UQD123456789012345678901234567890123456789012345',
-        tonAmount: sampleData?.tonAmount || 0.05,
+        id: sampleData?.id || 1,
+        userId: sampleData?.userId || req.telegramUser?.id?.toString() || '0',
+        tonAddress: sampleData?.tonAddress || '',
+        tonAmount: sampleData?.tonAmount || 0,
         status: sampleData?.status || 'PENDING',
       });
       return res.json(result);
     } else if (type === 'task') {
       const result = await syncTaskSubmissionToNotion({
-        id: sampleData?.id || 888,
-        userId: sampleData?.userId || '9990001',
-        missionTitle: sampleData?.missionTitle || 'Subscribe to YouTube Test',
+        id: sampleData?.id || 1,
+        userId: sampleData?.userId || req.telegramUser?.id?.toString() || '0',
+        missionTitle: sampleData?.missionTitle || 'Task Verification',
         status: sampleData?.status || 'PENDING_REVIEW',
       });
       return res.json(result);

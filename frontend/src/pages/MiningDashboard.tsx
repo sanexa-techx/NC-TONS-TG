@@ -31,7 +31,7 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
   onNavigate,
 }) => {
   const [rechargeOpen, setRechargeOpen] = useState(false);
-  const { triggerInterstitial } = useAdManager(user?.id || '9990001');
+  const { triggerInterstitial } = useAdManager(user?.id || '');
 
   const hashrate = mining ? mining.tonHashratePerSec : '0.00000100';
   const capacityHours = mining ? mining.powerCapacityHours : 8;
@@ -51,7 +51,7 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-sm text-white">{user?.firstName || 'Cyber Miner'}</span>
+              <span className="font-bold text-sm text-white">{user?.firstName || 'Miner'}</span>
               {user?.isAdmin && (
                 <span title="Verified Admin">
                   <ShieldCheck size={14} className="text-cyber-cyan" />
@@ -59,7 +59,7 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
               )}
             </div>
             <div className="text-[11px] font-mono text-slate-400">
-              ID: {user?.id || '9990001'}
+              {user?.id ? `ID: ${user.id}` : ''}
             </div>
           </div>
         </div>

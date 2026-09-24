@@ -29,7 +29,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
 
-  const { triggerInterstitial } = useAdManager(userId || '9990001');
+  const { triggerInterstitial } = useAdManager(userId || '');
 
   // Auto-fill connected TON address if available
   useEffect(() => {

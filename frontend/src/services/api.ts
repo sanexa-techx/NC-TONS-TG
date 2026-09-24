@@ -22,9 +22,9 @@ import {
  * 3. Cached session from previous login in localStorage
  * 4. Safe fallback
  */
-export function getDetectedUser(): { id: string; username: string; firstName: string } {
+export function getDetectedUser(): { id: string; username: string; firstName: string } | null {
   if (typeof window === 'undefined') {
-    return { id: '9990001', username: 'miner', firstName: 'Miner' };
+    return null;
   }
 
   // 1. Telegram WebApp SDK
@@ -49,7 +49,7 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
     const urlId = params.get('userId') || params.get('tg_id') || params.get('id');
     if (urlId) {
       const cleanId = urlId.replace(/[^0-9]/g, '');
-      if (cleanId) {
+      if (cleanId && cleanId !== '9990001') {
         const username = params.get('username') || '';
         const firstName = params.get('firstName') || 'Miner';
         localStorage.setItem('nctons_user_id', cleanId);
@@ -60,9 +60,9 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
     }
   } catch {}
 
-  // 3. Cached session in localStorage
+  // 3. Cached session in localStorage (excluding legacy mock ID 9990001)
   const savedId = localStorage.getItem('nctons_user_id') || localStorage.getItem('nctons_telegram_user_id');
-  if (savedId) {
+  if (savedId && savedId !== '9990001') {
     return {
       id: savedId,
       username: localStorage.getItem('nctons_username') || localStorage.getItem('nctons_telegram_username') || '',
@@ -70,8 +70,15 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
     };
   }
 
-  // 4. Default miner fallback
-  return { id: '9990001', username: 'miner', firstName: 'Miner' };
+  // Clear legacy mock ID from localStorage if found
+  if (savedId === '9990001') {
+    localStorage.removeItem('nctons_user_id');
+    localStorage.removeItem('nctons_telegram_user_id');
+    localStorage.removeItem('nctons_username');
+    localStorage.removeItem('nctons_first_name');
+  }
+
+  return null;
 }
 
 /**
@@ -371,19 +378,6 @@ export const api = {
     return handleResponse(res);
   },
 
-  async simulateReferral(data: {
-    referrerId?: string | number;
-    isPremium?: boolean;
-    firstName?: string;
-    username?: string;
-  }): Promise<any> {
-    const res = await fetch('/api/friends/simulate-referral', {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return handleResponse(res);
-  },
 
   // Daily Streak & Reward System
   async getDailyStatus(userId?: string | number): Promise<DailyStreakStatusResponse> {

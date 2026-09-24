@@ -242,56 +242,7 @@ const memoryStore = {
   }>(),
 };
 
-// Seed default dev user
-memoryStore.users.set('9990001', {
-  id: 9990001n,
-  first_name: 'CyberMiner',
-  username: 'cyberminer',
-  ton_balance: new Decimal('0.054200'),
-  nc_balance: 1250n,
-  power_percentage: 86,
-  power_capacity_hours: 8,
-  ton_hashrate_per_sec: new Decimal('0.00000100'),
-  last_sync_at: new Date(Date.now() - 3600 * 1000), // 1 hour ago
-  referred_by: null,
-  referral_count: 0,
-  unclaimed_referral_nc: 0n,
-  unclaimed_referral_ton: new Decimal('0.000000'),
-  total_referral_nc: 0n,
-  total_referral_ton: new Decimal('0.000000'),
-  photo_url: null,
-  photo_synced_at: null,
-  miner_level: 1,
-  daily_streak: 0,
-  last_daily_claim_date: null,
-  total_daily_claims: 0,
-  created_at: new Date(),
-});
 
-memoryStore.users.set('123456789', {
-  id: 123456789n,
-  first_name: 'AdminMiner',
-  username: 'admin',
-  ton_balance: new Decimal('2.500000'),
-  nc_balance: 5000n,
-  power_percentage: 100,
-  power_capacity_hours: 8,
-  ton_hashrate_per_sec: new Decimal('0.00000250'),
-  last_sync_at: new Date(),
-  referred_by: null,
-  referral_count: 0,
-  unclaimed_referral_nc: 0n,
-  unclaimed_referral_ton: new Decimal('0.000000'),
-  total_referral_nc: 0n,
-  total_referral_ton: new Decimal('0.000000'),
-  photo_url: null,
-  photo_synced_at: null,
-  miner_level: 1,
-  daily_streak: 0,
-  last_daily_claim_date: null,
-  total_daily_claims: 0,
-  created_at: new Date(),
-});
 
 // Mock Prisma client for zero-dependency standalone testing
 const mockPrisma = {
