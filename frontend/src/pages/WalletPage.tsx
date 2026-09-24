@@ -6,6 +6,7 @@ import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Load
 import { TonIcon } from '../components/icons/index.js';
 import { PromoRedeemCard } from '../components/PromoRedeemCard.js';
 import { useAdManager } from '../hooks/useAdManager.js';
+import { LegalModal } from '../components/LegalModal.js';
 
 interface WalletPageProps {
   tonBalance: string;
@@ -28,6 +29,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
+  const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
 
   const { triggerInterstitial } = useAdManager(userId || '');
 
@@ -322,6 +324,30 @@ export const WalletPage: React.FC<WalletPageProps> = ({
           </div>
         )}
       </div>
+
+      {/* Legal & Compliance Footer Links */}
+      <div className="w-full mt-6 mb-2 pt-4 border-t border-cyber-border/40 flex items-center justify-center gap-3 text-[11px] font-mono text-slate-500">
+        <button
+          onClick={() => setLegalModalTab('terms')}
+          className="hover:text-cyber-cyan underline underline-offset-4 transition-colors"
+        >
+          Terms & Conditions
+        </button>
+        <span>•</span>
+        <button
+          onClick={() => setLegalModalTab('privacy')}
+          className="hover:text-cyber-cyan underline underline-offset-4 transition-colors"
+        >
+          Privacy Policy
+        </button>
+      </div>
+
+      {/* Embedded Legal Modal */}
+      <LegalModal
+        isOpen={legalModalTab !== null}
+        initialTab={legalModalTab || 'terms'}
+        onClose={() => setLegalModalTab(null)}
+      />
     </div>
   );
 };

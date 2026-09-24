@@ -344,6 +344,52 @@ export function registerMasterBotHandlers(b: Telegraf) {
   b.hears(['ℹ️ Guide & Rules', 'ℹ️ How to Play', 'Guide & Rules'], handleHelp);
   b.command('help', handleHelp);
 
+  const handleTerms = async (ctx: any) => {
+    const termsUrl = `${WEBAPP_URL}/terms`;
+    const fromId = ctx.from?.id || '';
+    return ctx.reply(
+      `📜 <b>NC TONs — Terms & Conditions</b>\n\n` +
+        `• <b>Eligibility:</b> Players must be at least 18 years old or legal age of majority.\n` +
+        `• <b>Mining & Battery:</b> Passive mining mints TON based on battery uptime. Battery can be recharged with NC fuel or sponsored clips.\n` +
+        `• <b>Anti-Cheat:</b> Automated bots, multi-accounts, and tampered scores are strictly prohibited.\n` +
+        `• <b>Withdrawals:</b> Non-custodial payouts to verified TON wallets upon fulfilling daily ad mission verification.\n\n` +
+        `Read the full operational documentation below:`,
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.url('Read Full Terms & Conditions 📜', termsUrl)],
+          [Markup.button.webApp('Launch Mining Rig ⛏️', `${WEBAPP_URL}?userId=${fromId}`)],
+        ]),
+      }
+    );
+  };
+
+  const handlePrivacy = async (ctx: any) => {
+    const privacyUrl = `${WEBAPP_URL}/privacy`;
+    const fromId = ctx.from?.id || '';
+    return ctx.reply(
+      `🛡️ <b>NC TONs — Privacy Policy</b>\n\n` +
+        `• <b>Data Minimalization:</b> We only receive basic Telegram metadata (ID, name, username, avatar) to sync your profile.\n` +
+        `• <b>Zero Custody:</b> We never request or store private keys, seed phrases, or sensitive payment credentials.\n` +
+        `• <b>Third-Party Services:</b> Anonymous IDs are shared with ad providers (Adsgram, Monetag) solely to reward gameplay.\n` +
+        `• <b>Your Rights:</b> You have full control to disconnect your wallet or delete in-game data at any time.\n\n` +
+        `Read the complete Privacy Policy below:`,
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.url('Read Complete Privacy Policy 🛡️', privacyUrl)],
+          [Markup.button.webApp('Launch Mining Rig ⛏️', `${WEBAPP_URL}?userId=${fromId}`)],
+        ]),
+      }
+    );
+  };
+
+  b.hears(['📜 Terms & Conditions', 'Terms & Conditions', 'Terms of Service', 'Terms'], handleTerms);
+  b.command(['terms', 'tos'], handleTerms);
+
+  b.hears(['🛡️ Privacy Policy', 'Privacy Policy', 'Privacy'], handlePrivacy);
+  b.command('privacy', handlePrivacy);
+
   // ============================================================================
   // 3. ADMIN DASHBOARD & MENU (/admin)
   // ============================================================================

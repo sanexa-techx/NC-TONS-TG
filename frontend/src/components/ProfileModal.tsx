@@ -4,6 +4,7 @@ import { X, Copy, Check, Shield, Terminal } from 'lucide-react';
 import { TonIcon } from './icons/index.js';
 import { NcIcon } from './icons/index.js';
 import { UserProfile } from '../types/index.js';
+import { LegalModal } from './LegalModal.js';
 
 interface ProfileModalProps {
   user: UserProfile | null;
@@ -22,6 +23,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [legalTab, setLegalTab] = useState<'terms' | 'privacy' | null>(null);
 
   if (!isOpen || !user) return null;
 
@@ -176,6 +178,23 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
         )}
 
+        {/* Legal & Compliance Links */}
+        <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-center gap-3 text-[11px] font-mono text-neutral-400">
+          <button
+            onClick={() => setLegalTab('terms')}
+            className="hover:text-yellow-400 underline underline-offset-4 transition-colors"
+          >
+            Terms & Conditions
+          </button>
+          <span>•</span>
+          <button
+            onClick={() => setLegalTab('privacy')}
+            className="hover:text-emerald-400 underline underline-offset-4 transition-colors"
+          >
+            Privacy Policy
+          </button>
+        </div>
+
         <button
           onClick={onClose}
           className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-bold text-xs rounded-xl transition-colors"
@@ -183,6 +202,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
           Close Profile
         </button>
       </div>
+
+      {/* Embedded Legal Modal */}
+      <LegalModal
+        isOpen={legalTab !== null}
+        initialTab={legalTab || 'terms'}
+        onClose={() => setLegalTab(null)}
+      />
     </div>
   );
 };
