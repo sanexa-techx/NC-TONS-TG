@@ -3,7 +3,7 @@ import { useCallback, useRef } from "react";
 declare global {
   interface Window {
     Adsgram?: {
-      init: (params: { blockId: string; debug?: boolean }) => {
+      init: (params: { blockId: string; debug?: boolean; userId?: string }) => {
         show: () => Promise<{ done: boolean }>;
       };
     };
@@ -48,7 +48,10 @@ export function useAdManager(
   // 1. Play Rewarded Adsgram Video
   const showAdsgramRewarded = useCallback(async () => {
     if (window.Adsgram) {
-      const controller = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
+      const controller = window.Adsgram.init({
+        blockId: ADSGRAM_BLOCK_ID,
+        userId: String(userId),
+      });
       try {
         const result = await controller.show();
         if (result.done) {

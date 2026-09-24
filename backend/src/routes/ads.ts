@@ -150,7 +150,101 @@ router.post("/claim", async (req, res) => {
   }
 });
 
-// 3. Dev / Test Helper to configure ad counts & test balance
+// 3. Adsgram Server-to-Server (S2S) Reward Webhook (GET / POST)
+// Configured in Adsgram Dashboard -> Ad Block -> Reward URL:
+// https://nctons-backend.onrender.com/api/ads/reward?userid=[userId]
+router.all(["/reward", "/adsgram-reward"], async (req, res) => {
+  const userId =
+    req.query.userid ||
+    req.query.userId ||
+    req.query.user_id ||
+    req.body?.userid ||
+    req.body?.userId ||
+    req.body?.user_id;
+
+  if (!userId) {
+    return res.status(400).send("Missing userid");
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Ensure user exists
+    await client.query(
+      `INSERT INTO users (id, first_name)
+       VALUES ($1, 'Miner')
+       ON CONFLICT (id) DO NOTHING`,
+      [userId]
+    );
+
+    // Initialize daily ads record
+    await client.query(
+      `INSERT INTO user_daily_ads (user_id, ad_date, adsgram_count, monetag_count)
+       VALUES ($1, CURRENT_DATE, 0, 0)
+       ON CONFLICT (user_id, ad_date) DO NOTHING`,
+      [userId]
+    );
+
+    const recordRes = await client.query(
+      `SELECT adsgram_count, monetag_count, last_ad_at,
+              EXTRACT(EPOCH FROM (NOW() - last_ad_at)) as seconds_since_last_ad
+       FROM user_daily_ads 
+       WHERE user_id = $1 AND ad_date = CURRENT_DATE FOR UPDATE`,
+      [userId]
+    );
+    const counts = recordRes.rows[0];
+
+    // Anti-spam cooldown (10s)
+    const secondsSince = counts?.seconds_since_last_ad != null 
+      ? Number(counts.seconds_since_last_ad) 
+      : (counts?.last_ad_at ? (Date.now() - new Date(counts.last_ad_at).getTime()) / 1000 : 999);
+
+    if (Number(counts?.adsgram_count || 0) > 0) {
+      if (secondsSince < 10) {
+        await client.query("ROLLBACK");
+        return res.status(200).send("Cooldown active");
+      }
+    }
+
+    if (counts.adsgram_count >= AD_LIMITS.adsgram.max) {
+      await client.query("ROLLBACK");
+      return res.status(200).send("Daily limit reached");
+    }
+
+    const config = AD_LIMITS.adsgram;
+
+    // Increment count & timestamp
+    await client.query(
+      `UPDATE user_daily_ads 
+       SET adsgram_count = adsgram_count + 1,
+           last_ad_at = NOW()
+       WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
+      [userId]
+    );
+
+    // Credit balance (+200 NC, +0.000300 TON)
+    await client.query(
+      `UPDATE users 
+       SET nc_balance = nc_balance + $1,
+           ton_balance = ton_balance + $2
+       WHERE id = $3`,
+      [config.nc, config.ton, userId]
+    );
+
+    await client.query("COMMIT");
+    console.log(`[Adsgram S2S] Reward credited to user ${userId}: +${config.nc} NC, +${config.ton} TON`);
+    return res.status(200).send("OK");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Adsgram S2S reward error:", err);
+    return res.status(500).send("Error");
+  } finally {
+    client.release();
+  }
+});
+
+// 4. Dev / Test Helper to configure ad counts & test balance
 router.post("/dev-set", async (req, res) => {
   const { userId, adsgram, monetag, addTon } = req.body;
   if (!userId) return res.status(400).json({ error: "Missing userId" });
