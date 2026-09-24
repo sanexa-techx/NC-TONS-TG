@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import { UserProfile } from './types/index.js';
-import { api } from './services/api.js';
+import { api, getDetectedUser } from './services/api.js';
 import { useMining } from './hooks/useMining.js';
 import { Navbar, NavTab } from './components/Navbar.js';
 import { MiningDashboard } from './pages/MiningDashboard.js';
@@ -19,7 +19,26 @@ import { Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('mining');
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    const d = getDetectedUser();
+    if (d && d.id !== '9990001') {
+      return {
+        id: d.id,
+        firstName: d.firstName,
+        username: d.username,
+        photoUrl: null,
+        minerLevel: 1,
+        tonBalance: '0.000000',
+        ncBalance: '0',
+        powerPercentage: 100,
+        powerCapacityHours: 8,
+        referralCount: 0,
+        createdAt: new Date().toISOString(),
+        isAdmin: false,
+      };
+    }
+    return null;
+  });
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [dailyStatus, setDailyStatus] = useState<DailyStreakStatusResponse | null>(null);
   const [dailyModalOpen, setDailyModalOpen] = useState<boolean>(false);

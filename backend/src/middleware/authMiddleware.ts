@@ -121,8 +121,18 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   const rawId = tgUserId || devTelegramId || req.body?.devUserId || req.body?.userId;
   if (rawId) {
     const devId = BigInt(String(rawId).replace(/[^0-9]/g, '') || '9990001');
-    const name = tgFirstName || (req.headers['x-dev-username'] as string) || req.body?.devUsername || 'CyberMiner';
-    const uname = tgUsername || (req.headers['x-dev-username'] as string) || req.body?.devUsername || 'miner';
+    const rawName = tgFirstName || (req.headers['x-dev-username'] as string) || req.body?.devUsername || req.body?.firstName || 'CyberMiner';
+    const rawUname = tgUsername || (req.headers['x-dev-username'] as string) || req.body?.devUsername || req.body?.username || 'miner';
+
+    let name = String(rawName);
+    try {
+      name = decodeURIComponent(name);
+    } catch {}
+
+    let uname = String(rawUname);
+    try {
+      uname = decodeURIComponent(uname);
+    } catch {}
 
     req.telegramUser = {
       id: devId,

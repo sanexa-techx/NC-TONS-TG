@@ -74,6 +74,16 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
   return { id: '9990001', username: 'miner', firstName: 'Miner' };
 }
 
+/**
+ * Ensures header values only contain Byte / ISO-8859-1 characters (code points 0-255).
+ * Emojis and unicode characters are encoded so window.fetch never throws a TypeError.
+ */
+function sanitizeHeader(val: string | number | null | undefined): string {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  return str.replace(/[^\x00-\xFF]/gu, (char) => encodeURIComponent(char));
+}
+
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -84,21 +94,20 @@ function getAuthHeaders(): Record<string, string> {
   const user = getDetectedUser();
 
   if (initData) {
-    headers['Authorization'] = `tma ${initData}`;
+    headers['Authorization'] = sanitizeHeader(`tma ${initData}`);
   }
 
   // Automatically attach detected user identity headers for authentication & authorization
   if (user?.id) {
-    headers['X-Telegram-User-Id'] = user.id;
-    if (user.username) headers['X-Telegram-Username'] = user.username;
-    if (user.firstName) headers['X-Telegram-First-Name'] = user.firstName;
-    headers['X-Dev-Telegram-Id'] = user.id;
-    headers['X-Dev-Username'] = user.username || user.firstName;
+    headers['X-Telegram-User-Id'] = sanitizeHeader(user.id);
+    if (user.username) headers['X-Telegram-Username'] = sanitizeHeader(user.username);
+    if (user.firstName) headers['X-Telegram-First-Name'] = sanitizeHeader(user.firstName);
+    headers['X-Dev-Telegram-Id'] = sanitizeHeader(user.id);
+    headers['X-Dev-Username'] = sanitizeHeader(user.username || user.firstName);
   }
 
   return headers;
 }
-
 
 async function handleResponse<T>(res: Response): Promise<T> {
   const data = await res.json();
@@ -111,10 +120,18 @@ async function handleResponse<T>(res: Response): Promise<T> {
 export const api = {
   // Auth
   async verifyAuth(): Promise<{ user: UserProfile; mining: MiningState }> {
+    const tgWebApp = (window as any).Telegram?.WebApp;
+    const initData = tgWebApp?.initData || '';
+    const user = getDetectedUser();
     const res = await fetch('/api/auth/verify', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        initData,
+        userId: user?.id,
+        firstName: user?.firstName,
+        username: user?.username,
+      }),
     });
     return handleResponse(res);
   },
