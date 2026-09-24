@@ -25,14 +25,15 @@ const envSchema = z.object({
   NOTION_TASKS_DATABASE_ID: z.string().default(''),
 });
 
-const parsedEnv = envSchema.safeParse(process.env);
-
-if (!parsedEnv.success) {
-  console.error('❌ Invalid environment variables:', parsedEnv.error.format());
+let parsedData: z.infer<typeof envSchema>;
+try {
+  parsedData = envSchema.parse(process.env);
+} catch (err: any) {
+  console.error('❌ Invalid environment variables:', err.errors || err);
   process.exit(1);
 }
 
-export const ENV = parsedEnv.data;
+export const ENV = parsedData;
 
 export function getAdminIds(): Set<string> {
   const raw = process.env.ADMIN_TELEGRAM_IDS || ENV.ADMIN_TELEGRAM_IDS || '';
