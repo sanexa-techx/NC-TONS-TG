@@ -17,6 +17,7 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   if (!user) return null;
 
@@ -36,7 +37,6 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const [imgError, setImgError] = useState(false);
   const initial = user.firstName ? user.firstName.charAt(0).toUpperCase() : '?';
   const avatarUrl = user.photoUrl || null;
   const minerLevel = user.minerLevel || 1;

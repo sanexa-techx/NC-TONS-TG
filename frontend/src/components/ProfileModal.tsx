@@ -21,6 +21,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   if (!isOpen || !user) return null;
 
@@ -39,13 +40,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const [imgError, setImgError] = useState(false);
   const initial = user.firstName ? user.firstName.charAt(0).toUpperCase() : '?';
   const avatarUrl = user.photoUrl || null;
   const minerLevel = user.minerLevel || 1;
   const tonDisplay = liveTonBalance || user.tonBalance || '0.000000';
   const ncDisplay = user.ncBalance ? Number(user.ncBalance).toLocaleString() : '0';
-  const tonDisplayNum = parseFloat(tonDisplay).toFixed(5);
+  const parsedTon = parseFloat(tonDisplay);
+  const tonDisplayNum = isNaN(parsedTon) ? '0.00000' : parsedTon.toFixed(5);
 
   return (
     <div
