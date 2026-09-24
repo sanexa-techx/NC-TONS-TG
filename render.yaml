@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=none
 services:
   - type: web
     name: nctons-backend
