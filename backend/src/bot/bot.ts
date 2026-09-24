@@ -31,21 +31,68 @@ export function maskUserId(id: string | number | bigint): string {
 }
 
 /**
- * Configure default bot menu commands for regular users and admins
+ * Main Persistent Menu Keyboard (Reply Keyboard) for users
+ * Replaces typed slash commands with one-tap interactive menu buttons
+ */
+export function getMainMenuKeyboard(webappUrl: string) {
+  return Markup.keyboard([
+    [Markup.button.webApp('⛏️ Launch NC TONs 🚀', webappUrl)],
+    [Markup.button.text('📊 Balance & Stats'), Markup.button.text('👥 Invite Friends')],
+    [Markup.button.text('🎁 Daily Check-in'), Markup.button.text('ℹ️ Guide & Rules')],
+  ]).resize();
+}
+
+/**
+ * Configure bot menu:
+ * 1. Hide slash commands menu from regular users
+ * 2. Configure Telegram bottom-left Menu Button to launch the WebApp directly
+ * 3. Scope administrative commands strictly to verified admin chats
  */
 export async function setupBotCommands(b: Telegraf) {
+  const WEBAPP_URL = process.env.WEBAPP_URL || ENV.WEBAPP_URL;
+
+  // 1. Hide slash commands menu from regular users
   try {
-    await b.telegram.setMyCommands([
-      { command: 'start', description: '🚀 Launch NC TONs Mining Rig' },
-      { command: 'stats', description: '📊 View personal mining balances & status' },
-      { command: 'help', description: 'ℹ️ Mining guide, rules & reward rates' },
-      { command: 'admin', description: '🛡️ Admin Command Center (Admins only)' },
-      { command: 'broadcast', description: '📢 Global broadcast to all miners & chats' },
-      { command: 'stats_global', description: '🌐 Global platform metrics (Admins only)' },
-    ]);
-    console.log('✅ Bot menu commands configured');
+    await b.telegram.deleteMyCommands({ scope: { type: 'default' } });
+    console.log('✅ Bot slash commands hidden for users (menu button mode active)');
   } catch (err: any) {
-    console.warn('Could not set bot commands:', err.message);
+    console.warn('Could not clear default bot commands:', err.message);
+  }
+
+  // 2. Set Telegram Chat Menu Button to directly open the Mini App
+  if (WEBAPP_URL && WEBAPP_URL.startsWith('http')) {
+    try {
+      await b.telegram.setChatMenuButton({
+        menuButton: {
+          type: 'web_app',
+          text: '⛏️ Play / Mine',
+          web_app: { url: WEBAPP_URL },
+        },
+      });
+      console.log('✅ Telegram Chat Menu button set to WebApp launcher');
+    } catch (err: any) {
+      console.warn('Could not set chat menu button:', err.message);
+    }
+  }
+
+  // 3. Register commands only for admins in their private chats
+  const adminIds = getAdminIds();
+  for (const adminId of adminIds) {
+    const numId = parseInt(adminId, 10);
+    if (!isNaN(numId)) {
+      try {
+        await b.telegram.setMyCommands(
+          [
+            { command: 'admin', description: '🛡️ Admin Command Center' },
+            { command: 'broadcast', description: '📢 Global broadcast' },
+            { command: 'stats_global', description: '🌐 Global platform metrics' },
+          ],
+          { scope: { type: 'chat', chat_id: numId } }
+        );
+      } catch {
+        // Admin might not have initiated a chat with the bot yet
+      }
+    }
   }
 }
 
@@ -142,10 +189,19 @@ export function registerMasterBotHandlers(b: Telegraf) {
 
       const launchUrl = `${WEBAPP_URL}?userId=${newUserId}&firstName=${encodeURIComponent(firstName)}${username ? `&username=${encodeURIComponent(username)}` : ''}`;
 
-      return ctx.reply(
+      await ctx.reply(
         `⚡ <b>Welcome to NC TONs, ${firstName}!</b>\n\n` +
           `Mine real TON, play arcade games, and earn daily rewards directly inside Telegram.\n\n` +
-          `🔋 <i>Keep your battery charged to maintain continuous mining!</i>`,
+          `🔋 <i>Keep your battery charged to maintain continuous mining!</i>\n\n` +
+          `👇 <b>Tap the menu buttons below to begin!</b>`,
+        {
+          parse_mode: 'HTML',
+          ...getMainMenuKeyboard(launchUrl),
+        }
+      );
+
+      return ctx.reply(
+        `🚀 <b>Launch NC TONs Rig:</b>\nClick below to open your mining rig or join the community.`,
         {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
@@ -160,15 +216,18 @@ export function registerMasterBotHandlers(b: Telegraf) {
   });
 
   // ============================================================================
-  // 2. USER HELPER COMMANDS (/stats & /help)
+  // 2. USER MENU BUTTONS & ACTIONS (Balance, Referral, Daily, Guide)
   // ============================================================================
-  b.command('stats', async (ctx) => {
+  const handleStats = async (ctx: any) => {
     try {
       const from = ctx.from;
       if (!from) return;
       const res = await pool.query('SELECT * FROM users WHERE id = $1', [from.id]);
+      const launchUrl = `${WEBAPP_URL}?userId=${from.id}`;
       if (res.rows.length === 0) {
-        return ctx.reply('⚠️ No miner profile found. Press /start to begin mining!');
+        return ctx.reply('⚠️ No miner profile found. Tap Launch NC TONs below to begin mining!', {
+          ...getMainMenuKeyboard(launchUrl),
+        });
       }
       const u = res.rows[0];
       const tonVal = parseFloat(u.ton_balance || 0).toFixed(6);
@@ -186,15 +245,73 @@ export function registerMasterBotHandlers(b: Telegraf) {
           `Tap below to open your mining rig:`,
         {
           parse_mode: 'HTML',
-          ...Markup.inlineKeyboard([[Markup.button.webApp('Launch Mining Rig ⛏️', WEBAPP_URL)]]),
+          ...Markup.inlineKeyboard([[Markup.button.webApp('Launch Mining Rig ⛏️', launchUrl)]]),
         }
       );
     } catch (err) {
       return ctx.reply('❌ Error fetching your stats.');
     }
-  });
+  };
 
-  b.command('help', async (ctx) => {
+  const handleReferral = async (ctx: any) => {
+    try {
+      const from = ctx.from;
+      if (!from) return;
+      const botUsername = ctx.botInfo?.username || 'NCTons_Bot';
+      const refLink = `https://t.me/${botUsername}?start=ref_${from.id}`;
+      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Mine real TON coins with me on NC TONs! ⛏️💎')}`;
+      const launchUrl = `${WEBAPP_URL}?userId=${from.id}`;
+
+      return ctx.reply(
+        `👥 <b>NC TONs Referral Program</b>\n\n` +
+          `Invite friends and earn bonus cryptocurrency from their mining!\n\n` +
+          `🎁 <b>Standard Friends:</b> +1,000 NC & +0.000080 TON\n` +
+          `⭐ <b>Telegram Premium:</b> +2,500 NC & +0.000200 TON\n\n` +
+          `🔗 <b>Your Personal Referral Link:</b>\n<code>${refLink}</code>`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.url('🚀 Share With Friends', shareUrl)],
+            [Markup.button.webApp('Open Squad in App 👥', launchUrl)],
+          ]),
+        }
+      );
+    } catch (err) {
+      return ctx.reply('❌ Error generating referral link.');
+    }
+  };
+
+  const handleDaily = async (ctx: any) => {
+    try {
+      const from = ctx.from;
+      if (!from) return;
+      const launchUrl = `${WEBAPP_URL}?userId=${from.id}`;
+      return ctx.reply(
+        `🎁 <b>Daily Streak & Check-in</b>\n\n` +
+          `Claim ascending bonuses every calendar day to maintain your streak!\n\n` +
+          `• <b>Day 1:</b> +100 NC\n` +
+          `• <b>Day 2:</b> +250 NC\n` +
+          `• <b>Day 3:</b> +500 NC & +0.000100 TON\n` +
+          `• <b>Day 4:</b> +750 NC\n` +
+          `• <b>Day 5:</b> +1,000 NC & +0.000200 TON\n` +
+          `• <b>Day 6:</b> +1,500 NC\n` +
+          `• <b>Day 7:</b> +3,000 NC & +0.000500 TON (Jackpot! 🎉)\n\n` +
+          `Tap below to claim today's streak reward:`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.webApp('Claim Daily Streak 🎁', launchUrl)],
+          ]),
+        }
+      );
+    } catch (err) {
+      return ctx.reply('❌ Error fetching daily check-in info.');
+    }
+  };
+
+  const handleHelp = async (ctx: any) => {
+    const from = ctx.from;
+    const launchUrl = from ? `${WEBAPP_URL}?userId=${from.id}` : WEBAPP_URL;
     return ctx.reply(
       `ℹ️ <b>NC TONs — Miner Guide & Operations Manual</b>\n\n` +
         `⛏️ <b>Passive Mining:</b>\n` +
@@ -209,10 +326,23 @@ export function registerMasterBotHandlers(b: Telegraf) {
         `Invite friends to earn +1,000 NC and +0.000080 TON (up to +2,500 NC and +0.000200 TON for Telegram Premium friends)!`,
       {
         parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([[Markup.button.webApp('Open NC TONs 🚀', WEBAPP_URL)]]),
+        ...Markup.inlineKeyboard([[Markup.button.webApp('Open NC TONs 🚀', launchUrl)]]),
       }
     );
-  });
+  };
+
+  // Menu button handlers (and command fallbacks)
+  b.hears(['📊 Balance & Stats', '📊 My Balance & Stats', 'Balance & Stats'], handleStats);
+  b.command('stats', handleStats);
+
+  b.hears(['👥 Invite Friends', '👥 Referral Link', 'Invite Friends'], handleReferral);
+  b.command('ref', handleReferral);
+
+  b.hears(['🎁 Daily Check-in', '🎁 Daily Rewards', 'Daily Check-in'], handleDaily);
+  b.command('daily', handleDaily);
+
+  b.hears(['ℹ️ Guide & Rules', 'ℹ️ How to Play', 'Guide & Rules'], handleHelp);
+  b.command('help', handleHelp);
 
   // ============================================================================
   // 3. ADMIN DASHBOARD & MENU (/admin)
@@ -722,5 +852,24 @@ export function registerMasterBotHandlers(b: Telegraf) {
           .catch((e) => console.error('Failed to activate mission:', e));
       }
     }
+  });
+
+  // ============================================================================
+  // 10. GENERAL TEXT FALLBACK (Menu buttons guidance)
+  // ============================================================================
+  b.on('text', async (ctx, next) => {
+    const text = ctx.message.text;
+    if (text.startsWith('/')) {
+      return next();
+    }
+    const from = ctx.from;
+    const launchUrl = from ? `${WEBAPP_URL}?userId=${from.id}` : WEBAPP_URL;
+    return ctx.reply(
+      `👋 Hello <b>${from.first_name || 'Miner'}</b>!\nUse the menu buttons below or click Launch to open your mining rig:`,
+      {
+        parse_mode: 'HTML',
+        ...getMainMenuKeyboard(launchUrl),
+      }
+    );
   });
 }
