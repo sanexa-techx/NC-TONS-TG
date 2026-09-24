@@ -33,7 +33,7 @@ export class MissionService {
       success: true,
       missionId,
       startedAt: new Date().toISOString(),
-      requiredEngagementSeconds: 15,
+      requiredEngagementSeconds: 10,
     };
   }
 
@@ -233,7 +233,7 @@ export class MissionService {
         }
 
         const elapsedSec = parseFloat(visitRes.rows[0].elapsed_sec);
-        const REQUIRED_ENGAGEMENT_SEC = 15;
+        const REQUIRED_ENGAGEMENT_SEC = 10;
         if (isNaN(elapsedSec) || elapsedSec < REQUIRED_ENGAGEMENT_SEC) {
           const remaining = Math.ceil(REQUIRED_ENGAGEMENT_SEC - (elapsedSec || 0));
           throw new Error(

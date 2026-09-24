@@ -118,7 +118,7 @@ export async function getUserProfile(req: Request, res: Response) {
       id: user.id.toString(),
       firstName: user.first_name,
       username: user.username,
-      photoUrl: user.photo_url ? `/api/user/avatar/${user.id.toString()}` : null,
+      photoUrl: user.photo_url ? (user.photo_url.startsWith('http') ? user.photo_url : `/api/user/avatar/${user.id.toString()}`) : null,
       minerLevel: user.miner_level || 1,
       tonBalance: user.ton_balance.toString(),
       ncBalance: user.nc_balance.toString(),

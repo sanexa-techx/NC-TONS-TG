@@ -9,6 +9,7 @@ export interface TelegramUserData {
   username?: string;
   language_code?: string;
   is_premium?: boolean;
+  photo_url?: string;
 }
 
 declare global {
@@ -60,6 +61,7 @@ export function verifyTelegramInitData(initData: string, botToken: string): Tele
       username: parsedUser.username,
       language_code: parsedUser.language_code,
       is_premium: parsedUser.is_premium,
+      photo_url: parsedUser.photo_url || undefined,
     };
   } catch (err) {
     console.error('Error verifying Telegram initData:', err);
@@ -108,6 +110,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
             username: parsed.username || null,
             language_code: parsed.language_code,
             is_premium: parsed.is_premium,
+            photo_url: parsed.photo_url || undefined,
           };
           return next();
         }
@@ -140,6 +143,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
         id: userId,
         first_name: name,
         username: uname ? uname.toLowerCase() : undefined,
+        photo_url: req.body?.photoUrl || undefined,
       };
       return next();
     }

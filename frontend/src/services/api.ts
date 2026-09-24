@@ -22,7 +22,7 @@ import {
  * 3. Cached session from previous login in localStorage
  * 4. Safe fallback
  */
-export function getDetectedUser(): { id: string; username: string; firstName: string } | null {
+export function getDetectedUser(): { id: string; username: string; firstName: string; photoUrl?: string } | null {
   if (typeof window === 'undefined') {
     return null;
   }
@@ -34,10 +34,12 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
       const id = String(tgUser.id);
       const username = tgUser.username || '';
       const firstName = tgUser.first_name || 'Miner';
+      const photoUrl = tgUser.photo_url || '';
       localStorage.setItem('nctons_user_id', id);
       if (username) localStorage.setItem('nctons_username', username);
       if (firstName) localStorage.setItem('nctons_first_name', firstName);
-      return { id, username, firstName };
+      if (photoUrl) localStorage.setItem('nctons_photo_url', photoUrl);
+      return { id, username, firstName, photoUrl };
     }
   } catch (err) {
     console.warn('[Telegram SDK] User read note:', err);
@@ -52,10 +54,12 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
       if (cleanId && cleanId !== '9990001') {
         const username = params.get('username') || '';
         const firstName = params.get('firstName') || 'Miner';
+        const photoUrl = params.get('photoUrl') || '';
         localStorage.setItem('nctons_user_id', cleanId);
         if (username) localStorage.setItem('nctons_username', username);
         if (firstName) localStorage.setItem('nctons_first_name', firstName);
-        return { id: cleanId, username, firstName };
+        if (photoUrl) localStorage.setItem('nctons_photo_url', photoUrl);
+        return { id: cleanId, username, firstName, photoUrl };
       }
     }
   } catch {}
@@ -67,6 +71,7 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
       id: savedId,
       username: localStorage.getItem('nctons_username') || localStorage.getItem('nctons_telegram_username') || '',
       firstName: localStorage.getItem('nctons_first_name') || localStorage.getItem('nctons_telegram_first_name') || 'Miner',
+      photoUrl: localStorage.getItem('nctons_photo_url') || '',
     };
   }
 
@@ -130,6 +135,7 @@ export const api = {
     const tgWebApp = (window as any).Telegram?.WebApp;
     const initData = tgWebApp?.initData || '';
     const user = getDetectedUser();
+    const photoUrl = user?.photoUrl || tgWebApp?.initDataUnsafe?.user?.photo_url || localStorage.getItem('nctons_photo_url') || '';
     const res = await fetch('/api/auth/verify', {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -138,9 +144,16 @@ export const api = {
         userId: user?.id,
         firstName: user?.firstName,
         username: user?.username,
+        photoUrl: photoUrl || undefined,
       }),
     });
-    return handleResponse(res);
+    const data = await handleResponse<{ user: UserProfile; mining: MiningState }>(res);
+    if (data?.user?.photoUrl) {
+      localStorage.setItem('nctons_photo_url', data.user.photoUrl);
+    } else if (photoUrl) {
+      data.user.photoUrl = photoUrl;
+    }
+    return data;
   },
 
   // User Profile

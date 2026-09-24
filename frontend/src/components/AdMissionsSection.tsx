@@ -16,6 +16,15 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
 }) => {
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [adCooldown, setAdCooldown] = useState<number>(0);
+
+  useEffect(() => {
+    if (adCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setAdCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [adCooldown]);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -30,6 +39,7 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     userId,
     () => {
       fetchStatus();
+      setAdCooldown(10);
       if (onRewardClaimed) onRewardClaimed();
     }
   );
@@ -41,14 +51,18 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
   if (!adStatus) return null;
 
   const handleWatchAdsgram = async () => {
+    if (adCooldown > 0 || loading) return;
     setLoading(true);
     await showAdsgramRewarded();
+    setAdCooldown(10);
     setLoading(false);
   };
 
   const handleWatchMonetag = async () => {
+    if (adCooldown > 0 || loading) return;
     setLoading(true);
     await showMonetagRewarded();
+    setAdCooldown(10);
     setLoading(false);
   };
 
@@ -115,10 +129,14 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
 
         <button
           onClick={handleWatchAdsgram}
-          disabled={adStatus.adsgram.watched >= adStatus.adsgram.max || loading}
-          className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-xl transition shadow-md shadow-yellow-500/10 active:scale-95"
+          disabled={adStatus.adsgram.watched >= adStatus.adsgram.max || loading || adCooldown > 0}
+          className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-xl transition shadow-md shadow-yellow-500/10 active:scale-95 min-w-[85px] text-center"
         >
-          {adStatus.adsgram.watched >= adStatus.adsgram.max ? "Maxed" : "Watch"}
+          {adStatus.adsgram.watched >= adStatus.adsgram.max
+            ? "Maxed"
+            : adCooldown > 0
+            ? `Wait (${adCooldown}s)`
+            : "Watch"}
         </button>
       </div>
 
@@ -146,10 +164,14 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
 
         <button
           onClick={handleWatchMonetag}
-          disabled={adStatus.monetag.watched >= adStatus.monetag.max || loading}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-500/10 active:scale-95"
+          disabled={adStatus.monetag.watched >= adStatus.monetag.max || loading || adCooldown > 0}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-500/10 active:scale-95 min-w-[85px] text-center"
         >
-          {adStatus.monetag.watched >= adStatus.monetag.max ? "Maxed" : "Watch"}
+          {adStatus.monetag.watched >= adStatus.monetag.max
+            ? "Maxed"
+            : adCooldown > 0
+            ? `Wait (${adCooldown}s)`
+            : "Watch"}
         </button>
       </div>
     </div>

@@ -57,8 +57,8 @@ export const MissionCard: React.FC<MissionCardProps> = ({
     setClaimError(null);
     // Register engagement start in backend
     api.startMission(mission.id).catch((e) => console.warn('Start mission visit:', e));
-    // Start mandatory 15s engagement countdown
-    setCountdown(15);
+    // Start mandatory 10s engagement countdown
+    setCountdown(10);
   };
 
   const handleClaim = async () => {

@@ -96,9 +96,10 @@ router.post("/claim", async (req, res) => {
       : (counts?.last_ad_at ? (Date.now() - new Date(counts.last_ad_at).getTime()) / 1000 : 999);
 
     if (Number(counts.adsgram_count || 0) > 0 || Number(counts.monetag_count || 0) > 0) {
-      if (secondsSince < 20) {
+      if (secondsSince < 10) {
         await client.query("ROLLBACK");
-        return res.status(429).json({ error: "Please wait 20 seconds between ads" });
+        const waitSec = Math.ceil(10 - secondsSince);
+        return res.status(429).json({ error: `Please wait ${waitSec}s between ad watches` });
       }
     }
 

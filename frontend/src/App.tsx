@@ -22,11 +22,13 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(() => {
     const d = getDetectedUser();
     if (d && d.id !== '9990001') {
+      const tgPhoto = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.photo_url;
+      const initialPhoto = d.photoUrl || tgPhoto || localStorage.getItem('nctons_photo_url') || null;
       return {
         id: d.id,
         firstName: d.firstName,
         username: d.username,
-        photoUrl: null,
+        photoUrl: initialPhoto,
         minerLevel: 1,
         tonBalance: '0.000000',
         ncBalance: '0',
@@ -65,7 +67,12 @@ export const App: React.FC = () => {
     setAuthLoading(true);
     try {
       const res = await api.verifyAuth();
-      setUser(res.user);
+      const tgPhoto = (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.photo_url;
+      const finalPhoto = res.user.photoUrl || tgPhoto || localStorage.getItem('nctons_photo_url') || null;
+      setUser({ ...res.user, photoUrl: finalPhoto });
+      if (finalPhoto) {
+        localStorage.setItem('nctons_photo_url', finalPhoto);
+      }
       setMiningState(res.mining);
 
       // Fetch daily streak status and auto-popup if ready

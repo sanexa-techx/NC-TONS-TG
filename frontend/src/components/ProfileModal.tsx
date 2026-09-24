@@ -39,6 +39,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const [imgError, setImgError] = useState(false);
   const initial = user.firstName ? user.firstName.charAt(0).toUpperCase() : '?';
   const avatarUrl = user.photoUrl || null;
   const minerLevel = user.minerLevel || 1;
@@ -67,12 +68,13 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({
         {/* Profile Avatar & Display */}
         <div className="flex flex-col items-center text-center space-y-2 pt-2">
           <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-yellow-500/80 bg-neutral-950 shadow-[0_0_25px_rgba(234,179,8,0.25)] flex items-center justify-center">
-            {avatarUrl ? (
+            {avatarUrl && !imgError ? (
               <img
                 src={avatarUrl}
                 alt={user.firstName}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
               />
             ) : (
               <span className="text-3xl font-black text-yellow-400 font-mono">{initial}</span>

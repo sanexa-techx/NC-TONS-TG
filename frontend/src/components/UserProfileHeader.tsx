@@ -36,6 +36,7 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const [imgError, setImgError] = useState(false);
   const initial = user.firstName ? user.firstName.charAt(0).toUpperCase() : '?';
   const avatarUrl = user.photoUrl || null;
   const minerLevel = user.minerLevel || 1;
@@ -54,12 +55,13 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
         {/* Avatar with power ring indicator */}
         <div className="relative flex-shrink-0">
           <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-yellow-500/60 bg-neutral-800 flex items-center justify-center shadow-md">
-            {avatarUrl ? (
+            {avatarUrl && !imgError ? (
               <img
                 src={avatarUrl}
                 alt={user.firstName}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
               />
             ) : (
               <span className="font-bold text-sm text-yellow-400 font-mono">{initial}</span>
