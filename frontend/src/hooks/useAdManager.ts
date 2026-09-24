@@ -17,7 +17,7 @@ export function useAdManager(
 ) {
   const lastInterstitialRef = useRef<number>(0);
   const ADSGRAM_BLOCK_ID =
-    (import.meta as any).env?.VITE_ADSGRAM_BLOCK_ID || "YOUR_ADSGRAM_BLOCK_ID";
+    (import.meta as any).env?.VITE_ADSGRAM_BLOCK_ID || "49696";
 
   // Claim reward with backend
   const claimReward = async (provider: "adsgram" | "monetag") => {
