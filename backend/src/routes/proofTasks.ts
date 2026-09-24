@@ -24,8 +24,9 @@ const upload = multer({
 
 // 1. Submit Screenshot Proof Endpoint
 router.post("/submit", upload.single("proofImage"), async (req, res) => {
-  const rawUserId = req.body.userId || (req as any).telegramUser?.id;
-  const userId = parseInt(rawUserId, 10);
+  const rawUserId = req.body.userId || req.headers['x-telegram-user-id'] || req.headers['x-dev-telegram-id'] || (req as any).telegramUser?.id;
+  const cleanDigits = rawUserId ? String(rawUserId).replace(/[^0-9]/g, '') : '';
+  const userId = cleanDigits ? BigInt(cleanDigits) : null;
   const missionId = parseInt(req.body.missionId, 10);
 
   if (!userId || !missionId || !req.file) {
@@ -38,8 +39,8 @@ router.post("/submit", upload.single("proofImage"), async (req, res) => {
 
     // Check if task already completed or pending
     const existingClaim = await client.query(
-      "SELECT id FROM user_mission_claims WHERE user_id = $1 AND mission_id = $2",
-      [userId, missionId]
+      "SELECT id FROM mission_claims WHERE user_id = $1 AND mission_id = $2 UNION SELECT id FROM user_mission_claims WHERE user_id = $1 AND mission_id = $2",
+      [userId.toString(), missionId]
     );
     if (existingClaim.rows.length > 0) {
       await client.query("ROLLBACK");
@@ -185,7 +186,7 @@ router.post("/resolve", async (req, res) => {
       return res.status(400).json({ error: `Already resolved: ${sub.status}` });
     }
 
-    const adminId = reviewerId || 123456789;
+    const adminId = reviewerId || null;
 
     if (action === "appr") {
       await client.query(
@@ -193,7 +194,11 @@ router.post("/resolve", async (req, res) => {
         [adminId, submissionId]
       );
       await client.query(
-        "INSERT INTO user_mission_claims (user_id, mission_id) VALUES ($1, $2)",
+        "INSERT INTO mission_claims (user_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [sub.user_id, sub.mission_id]
+      );
+      await client.query(
+        "INSERT INTO user_mission_claims (user_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
         [sub.user_id, sub.mission_id]
       );
       await client.query(
@@ -268,7 +273,11 @@ export function registerTaskProofBotHandlers(botInstance: Telegraf) {
 
         // Record mission completion
         await client.query(
-          "INSERT INTO user_mission_claims (user_id, mission_id) VALUES ($1, $2)",
+          "INSERT INTO mission_claims (user_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+          [sub.user_id, sub.mission_id]
+        );
+        await client.query(
+          "INSERT INTO user_mission_claims (user_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
           [sub.user_id, sub.mission_id]
         );
 

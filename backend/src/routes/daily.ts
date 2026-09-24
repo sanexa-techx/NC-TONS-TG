@@ -5,7 +5,7 @@ const router = Router();
 
 // 1. Get user streak status & rewards roadmap
 router.get("/status", async (req, res) => {
-  const userId = req.query.userId || (req as any).telegramUser?.id;
+  const userId = req.query.userId || req.headers['x-telegram-user-id'] || req.headers['x-dev-telegram-id'] || (req as any).telegramUser?.id;
   if (!userId) return res.status(400).json({ error: "Missing userId" });
 
   try {
@@ -66,7 +66,7 @@ router.get("/status", async (req, res) => {
 
 // 2. Claim daily bonus
 router.post("/claim", async (req, res) => {
-  const userId = req.body?.userId || (req as any).telegramUser?.id;
+  const userId = req.body?.userId || req.headers['x-telegram-user-id'] || req.headers['x-dev-telegram-id'] || (req as any).telegramUser?.id;
   if (!userId) return res.status(400).json({ error: "Missing userId" });
 
   const client = await pool.connect();

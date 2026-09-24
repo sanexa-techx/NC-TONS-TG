@@ -10,7 +10,7 @@ export const AD_LIMITS = {
 
 // 1. Get User Daily Ad Status
 router.get("/status", async (req, res) => {
-  const userId = req.query.userId || (req as any).telegramUser?.id;
+  const userId = req.query.userId || req.headers['x-telegram-user-id'] || req.headers['x-dev-telegram-id'] || (req as any).telegramUser?.id;
   if (!userId) return res.status(400).json({ error: "Missing userId" });
 
   try {
@@ -50,7 +50,7 @@ router.get("/status", async (req, res) => {
 
 // 2. Claim Ad Reward (Called after verified ad view)
 router.post("/claim", async (req, res) => {
-  const userId = req.body.userId || (req as any).telegramUser?.id;
+  const userId = req.body.userId || req.headers['x-telegram-user-id'] || req.headers['x-dev-telegram-id'] || (req as any).telegramUser?.id;
   const provider = req.body.provider; // provider: 'adsgram' | 'monetag'
 
   if (!userId) {

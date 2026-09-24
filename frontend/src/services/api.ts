@@ -381,7 +381,8 @@ export const api = {
 
   // Daily Streak & Reward System
   async getDailyStatus(userId?: string | number): Promise<DailyStreakStatusResponse> {
-    const queryParam = userId ? `?userId=${userId}` : '';
+    const id = userId || getDetectedUser()?.id;
+    const queryParam = id ? `?userId=${id}` : '';
     const res = await fetch(`/api/daily/status${queryParam}`, {
       headers: getAuthHeaders(),
     });
@@ -389,17 +390,19 @@ export const api = {
   },
 
   async claimDailyReward(userId?: string | number): Promise<DailyStreakClaimResponse> {
+    const id = userId || getDetectedUser()?.id;
     const res = await fetch('/api/daily/claim', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ userId: id }),
     });
     return handleResponse(res);
   },
 
   // Dual Ad Networks (Adsgram & Monetag)
   async getAdStatus(userId?: string | number): Promise<DailyAdStatusResponse> {
-    const queryParam = userId ? `?userId=${userId}` : '';
+    const id = userId || getDetectedUser()?.id;
+    const queryParam = id ? `?userId=${id}` : '';
     const res = await fetch(`/api/ads/status${queryParam}`, {
       headers: getAuthHeaders(),
     });
@@ -410,10 +413,11 @@ export const api = {
     provider: 'adsgram' | 'monetag',
     userId?: string | number
   ): Promise<{ success: boolean; reward: { nc: number; ton: number }; newBalances: any }> {
+    const id = userId || getDetectedUser()?.id;
     const res = await fetch('/api/ads/claim', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ provider, userId }),
+      body: JSON.stringify({ provider, userId: id }),
     });
     return handleResponse(res);
   },
