@@ -202,6 +202,17 @@ export const api = {
     return handleResponse(res);
   },
 
+  async startMission(
+    missionId: number
+  ): Promise<{ success: boolean; missionId: number; startedAt: string; requiredEngagementSeconds: number }> {
+    const res = await fetch('/api/missions/start', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ missionId }),
+    });
+    return handleResponse(res);
+  },
+
   async claimMission(
     missionId: number
   ): Promise<{ success: boolean; ncAwarded: number; tonAwarded: string; newNcBalance: string; newTonBalance: string }> {

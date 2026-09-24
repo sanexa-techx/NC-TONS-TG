@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mission } from '../types/index.js';
 import { Send, Globe, Bot, CheckCircle2, ArrowUpRight, Loader2, Camera, Clock } from 'lucide-react';
 import { TonIcon, NcIcon } from './icons/index.js';
 import { useTelegram } from '../hooks/useTelegram.js';
+import { api } from '../services/api.js';
 import ScreenshotProofModal from './ScreenshotProofModal.js';
 
 interface MissionCardProps {
@@ -20,9 +21,18 @@ export const MissionCard: React.FC<MissionCardProps> = ({
 }) => {
   const { openLink, haptic } = useTelegram();
   const [visited, setVisited] = useState(false);
+  const [countdown, setCountdown] = useState<number>(0);
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [proofModalOpen, setProofModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
 
   const isScreenshotTask = Boolean(mission.requiresProof || mission.taskType === 'screenshot_social');
 
@@ -44,9 +54,25 @@ export const MissionCard: React.FC<MissionCardProps> = ({
     haptic('light');
     openLink(mission.actionUrl);
     setVisited(true);
+    setClaimError(null);
+    // Register engagement start in backend
+    api.startMission(mission.id).catch((e) => console.warn('Start mission visit:', e));
+    // Start mandatory 15s engagement countdown
+    setCountdown(15);
   };
 
   const handleClaim = async () => {
+    if (!visited) {
+      setClaimError('Please open and engage with the link before claiming.');
+      haptic('error');
+      return;
+    }
+    if (countdown > 0) {
+      setClaimError(`Please wait ${countdown} more seconds while engagement is being verified.`);
+      haptic('error');
+      return;
+    }
+
     setClaiming(true);
     setClaimError(null);
     try {
@@ -178,23 +204,30 @@ export const MissionCard: React.FC<MissionCardProps> = ({
             onClick={handleActionClick}
             className="flex-1 py-2 px-3 rounded-xl bg-cyber-surface hover:bg-cyber-card border border-cyber-border text-xs font-semibold text-slate-200 flex items-center justify-center space-x-1 transition-all active:scale-95"
           >
-            <span>Open Link</span>
+            <span>{visited ? 'Re-open Link' : 'Open Link'}</span>
             <ArrowUpRight size={14} className="text-cyber-cyan" />
           </button>
 
           <button
             onClick={handleClaim}
-            disabled={claiming}
+            disabled={claiming || !visited || countdown > 0}
             className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95 ${
-              visited
-                ? 'bg-gradient-to-r from-cyber-cyan to-cyber-blue text-cyber-bg shadow-glow-cyan font-extrabold'
-                : 'bg-cyber-card border border-cyber-cyan/40 text-cyber-cyan hover:bg-cyber-cyan/10'
+              !visited
+                ? 'bg-cyber-surface border border-cyber-border/40 text-slate-500 cursor-not-allowed opacity-60'
+                : countdown > 0
+                ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 cursor-wait'
+                : 'bg-gradient-to-r from-cyber-cyan to-cyber-blue text-cyber-bg shadow-glow-cyan font-extrabold'
             }`}
           >
             {claiming ? (
               <>
                 <Loader2 size={14} className="animate-spin" />
                 <span>Checking...</span>
+              </>
+            ) : countdown > 0 ? (
+              <>
+                <Clock size={14} className="animate-pulse" />
+                <span>Wait ({countdown}s)</span>
               </>
             ) : (
               <span>Verify & Claim</span>

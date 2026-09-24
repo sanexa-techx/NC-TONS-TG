@@ -9,7 +9,7 @@ import { adminMiddleware } from './middleware/adminMiddleware.js';
 import { verifyAuth } from './controllers/authController.js';
 import { syncMining, rechargeMining } from './controllers/miningController.js';
 import { startGame, finishGame } from './controllers/gameController.js';
-import { getAvailableMissions, claimMission, createMission } from './controllers/missionController.js';
+import { getAvailableMissions, startMission, claimMission, createMission } from './controllers/missionController.js';
 import { requestWithdrawal, getWithdrawalHistory } from './controllers/withdrawController.js';
 import {
   getRewardConfigs,
@@ -65,6 +65,7 @@ app.post('/api/game/finish', authMiddleware, finishGame);
 
 // Missions Marketplace
 app.get('/api/missions/available', authMiddleware, getAvailableMissions);
+app.post('/api/missions/start', authMiddleware, startMission);
 app.post('/api/missions/claim', authMiddleware, claimMission);
 app.post('/api/missions/create', authMiddleware, createMission);
 

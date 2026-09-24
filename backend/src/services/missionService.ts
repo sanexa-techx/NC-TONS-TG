@@ -1,8 +1,42 @@
-import { prisma } from '../db/db.js';
+import { prisma, pool } from '../db/db.js';
 import { bot } from '../bot/telegrafInstance.js';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export class MissionService {
+  /**
+   * Records that a user has opened and started engaging with a mission
+   */
+  static async startMission(userId: bigint, missionId: number) {
+    const mission = await prisma.dynamicMission.findUnique({
+      where: { id: missionId },
+    });
+
+    if (!mission) {
+      throw new Error('Mission not found');
+    }
+
+    if (!mission.is_active) {
+      throw new Error('Mission is no longer active');
+    }
+
+    if (pool) {
+      await pool.query(
+        `INSERT INTO mission_visits (user_id, mission_id, started_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (user_id, mission_id)
+         DO UPDATE SET started_at = NOW()`,
+        [userId.toString(), missionId]
+      );
+    }
+
+    return {
+      success: true,
+      missionId,
+      startedAt: new Date().toISOString(),
+      requiredEngagementSeconds: 15,
+    };
+  }
+
   /**
    * Retrieves active missions not yet claimed by the user and within target quota
    */
@@ -14,6 +48,19 @@ export class MissionService {
 
     const claimedMissionIds = new Set(claims.map((c) => c.mission_id));
 
+    // Also check user_mission_claims table if present
+    if (pool) {
+      try {
+        const altClaims = await pool.query(
+          'SELECT mission_id FROM user_mission_claims WHERE user_id = $1',
+          [userId.toString()]
+        );
+        for (const row of altClaims.rows) {
+          claimedMissionIds.add(Number(row.mission_id));
+        }
+      } catch (e) {}
+    }
+
     // Fetch user proof submissions
     const proofStatusMap = new Map<number, string>();
     try {
@@ -23,6 +70,14 @@ export class MissionService {
         });
         for (const p of proofs) {
           proofStatusMap.set(p.mission_id, p.status);
+        }
+      } else if (pool) {
+        const proofs = await pool.query(
+          'SELECT mission_id, status FROM task_proof_submissions WHERE user_id = $1',
+          [userId.toString()]
+        );
+        for (const p of proofs.rows) {
+          proofStatusMap.set(Number(p.mission_id), p.status);
         }
       }
     } catch (e) {
@@ -76,7 +131,7 @@ export class MissionService {
       throw new Error('Mission reward budget has been exhausted');
     }
 
-    // Check if user already claimed
+    // 1. Check if user already claimed
     const existingClaim = await prisma.missionClaim.findUnique({
       where: {
         user_id_mission_id: {
@@ -90,19 +145,98 @@ export class MissionService {
       throw new Error('Mission already claimed by user');
     }
 
-    // Verification logic for telegram_join
-    if (mission.task_type === 'telegram_join' && mission.telegram_chat_id) {
-      if (bot) {
-        try {
-          const member = await bot.telegram.getChatMember(mission.telegram_chat_id, Number(userId));
-          const validStatuses = ['creator', 'administrator', 'member', 'restricted'];
-          if (!validStatuses.includes(member.status)) {
-            throw new Error(`You must join ${mission.telegram_chat_id} before claiming rewards.`);
-          }
-        } catch (chatErr) {
-          // If bot is not an admin in the channel or error, log warning
-          console.warn(`Could not verify channel membership for user ${userId}:`, (chatErr as Error).message);
-          // Allow dev fallback if chat lookup fails due to bot channel permissions
+    if (pool) {
+      const altCheck = await pool.query(
+        'SELECT id FROM user_mission_claims WHERE user_id = $1 AND mission_id = $2',
+        [userId.toString(), missionId]
+      );
+      if (altCheck.rows.length > 0) {
+        throw new Error('Mission already claimed by user');
+      }
+    }
+
+    // 2. STRICT CHECK: Screenshot proof missions CANNOT be claimed directly via API
+    if (mission.requires_proof || mission.task_type === 'screenshot_social') {
+      throw new Error(
+        'This mission requires screenshot proof. Please upload and submit your screenshot proof for review.'
+      );
+    }
+
+    // 3. STRICT CHECK: Telegram Channel/Group Join Verification
+    let targetChatId = mission.telegram_chat_id;
+    if (!targetChatId && mission.action_url) {
+      const match = mission.action_url.match(/(?:t\.me\/|telegram\.me\/)([\w_]+)/i);
+      if (match && match[1] && !match[1].toLowerCase().includes('bot')) {
+        targetChatId = `@${match[1]}`;
+      }
+    }
+
+    if (mission.task_type === 'telegram_join' || targetChatId) {
+      const chatToCheck = targetChatId || mission.telegram_chat_id;
+      if (!chatToCheck) {
+        throw new Error('Invalid Telegram channel configuration for this mission.');
+      }
+
+      if (!bot) {
+        throw new Error(
+          'Telegram verification service is unavailable. Please make sure the bot is running or try again later.'
+        );
+      }
+
+      try {
+        const member = await bot.telegram.getChatMember(chatToCheck, Number(userId));
+        const validStatuses = ['creator', 'administrator', 'member', 'restricted'];
+        if (!member || !validStatuses.includes(member.status)) {
+          throw new Error(`You have not joined ${chatToCheck}. Please join the channel first to claim your reward.`);
+        }
+      } catch (err: any) {
+        const msg = (err.message || '').toLowerCase();
+        if (
+          msg.includes('user not found') ||
+          msg.includes('participant_id_invalid') ||
+          msg.includes('have not joined') ||
+          msg.includes('member not found')
+        ) {
+          throw new Error(`You have not joined ${chatToCheck}. Please join the channel first to claim your reward.`);
+        }
+
+        if (
+          msg.includes('chat not found') ||
+          msg.includes('bot is not a member') ||
+          msg.includes('forbidden') ||
+          msg.includes('not enough rights')
+        ) {
+          throw new Error(
+            `Cannot verify membership automatically because the bot is not an admin in ${chatToCheck}. Please contact admin or submit screenshot proof.`
+          );
+        }
+
+        // Any other explicit failure from Telegram
+        throw new Error(`Channel verification failed for ${chatToCheck}: ${err.message}`);
+      }
+    }
+
+    // 4. STRICT CHECK: Engagement / Link Visit Timing for external URLs & bot launches
+    if (mission.task_type === 'visit_url' || mission.task_type === 'bot_launch') {
+      if (pool) {
+        const visitRes = await pool.query(
+          `SELECT started_at, EXTRACT(EPOCH FROM (NOW() - started_at)) as elapsed_sec 
+           FROM mission_visits 
+           WHERE user_id = $1 AND mission_id = $2`,
+          [userId.toString(), missionId]
+        );
+
+        if (visitRes.rows.length === 0) {
+          throw new Error('You must open and engage with the mission link before claiming.');
+        }
+
+        const elapsedSec = parseFloat(visitRes.rows[0].elapsed_sec);
+        const REQUIRED_ENGAGEMENT_SEC = 15;
+        if (isNaN(elapsedSec) || elapsedSec < REQUIRED_ENGAGEMENT_SEC) {
+          const remaining = Math.ceil(REQUIRED_ENGAGEMENT_SEC - (elapsedSec || 0));
+          throw new Error(
+            `Engagement check in progress. Please review the link for at least ${remaining} more second${remaining === 1 ? '' : 's'} before claiming.`
+          );
         }
       }
     }
@@ -116,6 +250,15 @@ export class MissionService {
           user_id: userId,
         },
       });
+
+      if (pool) {
+        try {
+          await pool.query(
+            'INSERT INTO user_mission_claims (user_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [userId.toString(), missionId]
+          );
+        } catch (e) {}
+      }
 
       // 2. Increment completed count atomically
       const updatedMission = await tx.dynamicMission.update({

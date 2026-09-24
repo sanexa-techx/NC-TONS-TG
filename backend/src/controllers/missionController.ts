@@ -12,6 +12,23 @@ export async function getAvailableMissions(req: Request, res: Response) {
   }
 }
 
+export async function startMission(req: Request, res: Response) {
+  try {
+    const userId = req.telegramUser!.id;
+    const { missionId } = req.body;
+
+    if (!missionId) {
+      return res.status(400).json({ error: 'Missing missionId' });
+    }
+
+    const result = await MissionService.startMission(userId, Number(missionId));
+    return res.json(result);
+  } catch (err) {
+    console.error('Error starting mission:', err);
+    return res.status(400).json({ error: 'Failed to start mission', message: (err as Error).message });
+  }
+}
+
 export async function claimMission(req: Request, res: Response) {
   try {
     const userId = req.telegramUser!.id;
