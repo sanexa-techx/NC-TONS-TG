@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import createAdHandler from "monetag-tg-sdk";
 
 declare global {
   interface Window {
@@ -8,6 +9,19 @@ declare global {
       };
     };
     showMonetagInterstitial?: () => Promise<boolean>;
+  }
+}
+
+const rawMonetagZone = (import.meta as any).env?.VITE_MONETAG_ZONE_ID;
+const MONETAG_ZONE_ID = rawMonetagZone ? parseInt(rawMonetagZone, 10) : 0;
+
+let monetagHandler: ((options?: any) => Promise<void>) | null = null;
+if (typeof window !== "undefined" && MONETAG_ZONE_ID > 0) {
+  try {
+    monetagHandler = createAdHandler(MONETAG_ZONE_ID);
+    console.log(`[Monetag] Initialized monetag-tg-sdk with Zone ID: ${MONETAG_ZONE_ID}`);
+  } catch (err) {
+    console.warn("[Monetag] Failed to initialize monetag-tg-sdk:", err);
   }
 }
 
@@ -70,16 +84,27 @@ export function useAdManager(
   // 2. Play Rewarded Monetag Ad
   const showMonetagRewarded = useCallback(async () => {
     try {
-      if (window.showMonetagInterstitial) {
+      if (monetagHandler) {
+        try {
+          // Attempt Rewarded Interstitial with user attribution
+          await monetagHandler({ ymid: String(userId) });
+          await claimReward("monetag");
+        } catch (interstitialErr) {
+          console.warn("[Monetag] Interstitial fallback to popup format:", interstitialErr);
+          // Fallback to Rewarded Pop format
+          await monetagHandler('pop');
+          await claimReward("monetag");
+        }
+      } else if (window.showMonetagInterstitial) {
         const watched = await window.showMonetagInterstitial();
         if (watched) await claimReward("monetag");
       } else {
-        // Fallback for Monetag in-app link tag
-        console.log("[Dev Mode] Simulating Monetag Rewarded Ad playback...");
+        // Fallback simulation for dev mode or when Zone ID is not configured yet
+        console.log("[Monetag] Simulating Rewarded Ad playback (no Zone ID configured yet)...");
         await claimReward("monetag");
       }
-    } catch (e) {
-      console.warn("Monetag error", e);
+    } catch (e: any) {
+      console.warn("Monetag error or dismissed:", e?.message || e);
     }
   }, [userId]);
 
@@ -98,6 +123,16 @@ export function useAdManager(
       if (provider === "adsgram" && window.Adsgram) {
         const controller = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
         controller.show().catch(() => {});
+      } else if (monetagHandler) {
+        monetagHandler({
+          type: "inApp",
+          inAppSettings: {
+            frequency: 2,
+            capping: 0.25,
+            interval: 45,
+            timeout: 5,
+          },
+        }).catch(() => {});
       } else if (window.showMonetagInterstitial) {
         window.showMonetagInterstitial().catch(() => {});
       }
