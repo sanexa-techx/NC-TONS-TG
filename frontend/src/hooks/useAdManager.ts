@@ -9,11 +9,13 @@ declare global {
       };
     };
     showMonetagInterstitial?: () => Promise<boolean>;
+    show_11886350?: (options?: any) => Promise<any>;
   }
 }
 
-const rawMonetagZone = (import.meta as any).env?.VITE_MONETAG_ZONE_ID;
-const MONETAG_ZONE_ID = rawMonetagZone ? parseInt(rawMonetagZone, 10) : 0;
+const rawMonetagZone = (import.meta as any).env?.VITE_MONETAG_ZONE_ID || "11886350";
+const MONETAG_ZONE_ID = rawMonetagZone ? parseInt(rawMonetagZone, 10) : 11886350;
+const MONETAG_SDK_FN = `show_${MONETAG_ZONE_ID}`;
 
 let monetagHandler: ((options?: any) => Promise<void>) | null = null;
 if (typeof window !== "undefined" && MONETAG_ZONE_ID > 0) {
@@ -84,29 +86,45 @@ export function useAdManager(
   // 2. Play Rewarded Monetag Ad
   const showMonetagRewarded = useCallback(async () => {
     try {
-      if (monetagHandler) {
+      const globalSdkFn = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
+
+      if (typeof globalSdkFn === "function") {
         try {
-          // Attempt Rewarded Interstitial with user attribution
+          console.log(`[Monetag] Calling global ${MONETAG_SDK_FN} interstitial...`);
+          await globalSdkFn({ ymid: String(userId) });
+          await claimReward("monetag");
+          return;
+        } catch (interstitialErr) {
+          console.warn(`[Monetag] ${MONETAG_SDK_FN} interstitial failed, trying pop:`, interstitialErr);
+          await globalSdkFn("pop");
+          await claimReward("monetag");
+          return;
+        }
+      } else if (monetagHandler) {
+        try {
+          console.log("[Monetag] Calling monetag-tg-sdk handler...");
           await monetagHandler({ ymid: String(userId) });
           await claimReward("monetag");
+          return;
         } catch (interstitialErr) {
           console.warn("[Monetag] Interstitial fallback to popup format:", interstitialErr);
-          // Fallback to Rewarded Pop format
-          await monetagHandler('pop');
+          await monetagHandler("pop");
           await claimReward("monetag");
+          return;
         }
       } else if (window.showMonetagInterstitial) {
         const watched = await window.showMonetagInterstitial();
         if (watched) await claimReward("monetag");
+        return;
       } else {
-        // Fallback simulation for dev mode or when Zone ID is not configured yet
-        console.log("[Monetag] Simulating Rewarded Ad playback (no Zone ID configured yet)...");
+        // Fallback simulation for dev mode or when script is still loading
+        console.log("[Monetag] Simulating Rewarded Ad playback in dev mode...");
         await claimReward("monetag");
       }
     } catch (e: any) {
       console.warn("Monetag error or dismissed:", e?.message || e);
     }
-  }, [userId]);
+  }, [userId, MONETAG_SDK_FN, monetagHandler]);
 
   // 3. Interstitial Trigger (Throttled to max 1 ad every 45 seconds)
   const triggerInterstitial = useCallback(
@@ -123,21 +141,34 @@ export function useAdManager(
       if (provider === "adsgram" && window.Adsgram) {
         const controller = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
         controller.show().catch(() => {});
-      } else if (monetagHandler) {
-        monetagHandler({
-          type: "inApp",
-          inAppSettings: {
-            frequency: 2,
-            capping: 0.25,
-            interval: 45,
-            timeout: 5,
-          },
-        }).catch(() => {});
-      } else if (window.showMonetagInterstitial) {
-        window.showMonetagInterstitial().catch(() => {});
+      } else {
+        const globalSdkFn = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
+        if (typeof globalSdkFn === "function") {
+          globalSdkFn({
+            type: "inApp",
+            inAppSettings: {
+              frequency: 2,
+              capping: 0.25,
+              interval: 45,
+              timeout: 5,
+            },
+          }).catch(() => {});
+        } else if (monetagHandler) {
+          monetagHandler({
+            type: "inApp",
+            inAppSettings: {
+              frequency: 2,
+              capping: 0.25,
+              interval: 45,
+              timeout: 5,
+            },
+          }).catch(() => {});
+        } else if (window.showMonetagInterstitial) {
+          window.showMonetagInterstitial().catch(() => {});
+        }
       }
     },
-    [ADSGRAM_BLOCK_ID]
+    [ADSGRAM_BLOCK_ID, MONETAG_SDK_FN, monetagHandler]
   );
 
   return {
