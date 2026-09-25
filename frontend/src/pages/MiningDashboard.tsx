@@ -4,7 +4,7 @@ import { DualCurrencyBar } from '../components/DualCurrencyBar.js';
 import { CircularBatteryGauge } from '../components/CircularBatteryGauge.js';
 import { RechargeModal } from '../components/RechargeModal.js';
 import DailyCheckInBanner from '../components/DailyCheckInBanner.js';
-import { Gamepad2, Target, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Gamepad2, Target, ArrowRight } from 'lucide-react';
 import { useAdManager } from '../hooks/useAdManager.js';
 
 interface MiningDashboardProps {
@@ -41,35 +41,6 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
 
   return (
     <div className="flex flex-col items-center w-full max-w-md mx-auto px-4 pb-24 pt-2">
-      {/* Header Info */}
-      <div className="w-full flex items-center justify-between py-2 mb-2">
-        <div className="flex items-center space-x-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyber-cyan to-cyber-blue p-0.5 shadow-glow-cyan/50">
-            <div className="w-full h-full bg-cyber-bg rounded-2xl flex items-center justify-center font-bold text-cyber-cyan text-sm">
-              {user?.firstName?.charAt(0) || 'M'}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-sm text-white">{user?.firstName || 'Miner'}</span>
-              {user?.isAdmin && (
-                <span title="Verified Admin">
-                  <ShieldCheck size={14} className="text-cyber-cyan" />
-                </span>
-              )}
-            </div>
-            <div className="text-[11px] font-mono text-slate-400">
-              {user?.id ? `ID: ${user.id}` : ''}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-cyber-card/80 border border-cyber-border text-xs font-mono">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyber-cyan animate-pulse" />
-          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">NODE ONLINE</span>
-        </div>
-      </div>
-
       {/* Dual Currency Bar */}
       <DualCurrencyBar
         tonBalance={liveTonBalance}
