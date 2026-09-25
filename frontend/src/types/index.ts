@@ -132,9 +132,31 @@ export interface ReferralFriend {
   username: string | null;
 }
 
+export interface ReferralMilestoneItem {
+  targetCount: number;
+  displayName: string;
+  ncReward: number;
+  tonReward: string;
+  isClaimed: boolean;
+  canClaim: boolean;
+}
+
+export interface ReferralRates {
+  standard: {
+    nc: number;
+    ton: string;
+  };
+  premium: {
+    nc: number;
+    ton: string;
+  };
+}
+
 export interface FriendStatsResponse {
   stats: ReferralStats;
   friends: ReferralFriend[];
+  milestones?: ReferralMilestoneItem[];
+  rates?: ReferralRates;
   botUsername: string;
 }
 

@@ -164,3 +164,131 @@ export async function getAdminStats(req: Request, res: Response) {
     return res.status(500).json({ error: 'Failed to fetch stats', message: (err as Error).message });
   }
 }
+
+// ==========================================
+// 4. DAILY STREAK REWARDS MANAGEMENT
+// ==========================================
+export async function getDailyStreakConfigs(req: Request, res: Response) {
+  try {
+    const raw = await prisma.dailyStreakReward.findMany({
+      orderBy: { day_number: 'asc' },
+    });
+    const days = raw.map((d: any) => ({
+      dayNumber: d.day_number,
+      ncReward: d.nc_reward,
+      tonReward: d.ton_reward instanceof Decimal ? d.ton_reward.toFixed(6) : Number(d.ton_reward).toFixed(6),
+      batteryBonusPct: d.battery_bonus_pct || 0,
+      updatedAt: d.updated_at,
+    }));
+    return res.json({ days });
+  } catch (err: any) {
+    console.error('Error fetching daily streak configs:', err);
+    return res.status(500).json({ error: 'Failed to fetch daily streak configs', message: err.message });
+  }
+}
+
+export async function updateDailyStreakConfig(req: Request, res: Response) {
+  try {
+    const dayNumber = parseInt(req.params.day || req.body.dayNumber, 10);
+    const { ncReward, tonReward, batteryBonusPct } = req.body;
+
+    if (isNaN(dayNumber) || ncReward === undefined || tonReward === undefined) {
+      return res.status(400).json({ error: 'Missing required fields: dayNumber, ncReward, tonReward' });
+    }
+
+    const updated = await prisma.dailyStreakReward.upsert({
+      where: { day_number: dayNumber },
+      update: {
+        nc_reward: Number(ncReward),
+        ton_reward: new Decimal(Number(tonReward).toFixed(6)),
+        battery_bonus_pct: batteryBonusPct !== undefined ? Number(batteryBonusPct) : 0,
+        updated_at: new Date(),
+      },
+      create: {
+        day_number: dayNumber,
+        nc_reward: Number(ncReward),
+        ton_reward: new Decimal(Number(tonReward).toFixed(6)),
+        battery_bonus_pct: batteryBonusPct !== undefined ? Number(batteryBonusPct) : 0,
+        updated_at: new Date(),
+      },
+    });
+
+    return res.json({
+      success: true,
+      day: {
+        dayNumber: updated.day_number,
+        ncReward: updated.nc_reward,
+        tonReward: updated.ton_reward.toFixed(6),
+        batteryBonusPct: updated.battery_bonus_pct,
+        updatedAt: updated.updated_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('Error updating daily streak config:', err);
+    return res.status(500).json({ error: 'Failed to update daily streak config', message: err.message });
+  }
+}
+
+// ==========================================
+// 5. REFERRAL MILESTONES (1, 3, 7, 10)
+// ==========================================
+export async function getReferralMilestones(req: Request, res: Response) {
+  try {
+    const raw = await prisma.referralMilestone.findMany({
+      orderBy: { target_count: 'asc' },
+    });
+    const milestones = raw.map((m: any) => ({
+      targetCount: m.target_count,
+      displayName: m.display_name,
+      ncReward: m.nc_reward,
+      tonReward: m.ton_reward instanceof Decimal ? m.ton_reward.toFixed(6) : Number(m.ton_reward).toFixed(6),
+      updatedAt: m.updated_at,
+    }));
+    return res.json({ milestones });
+  } catch (err: any) {
+    console.error('Error fetching referral milestones:', err);
+    return res.status(500).json({ error: 'Failed to fetch referral milestones', message: err.message });
+  }
+}
+
+export async function updateReferralMilestone(req: Request, res: Response) {
+  try {
+    const targetCount = parseInt(req.params.count || req.body.targetCount, 10);
+    const { ncReward, tonReward, displayName } = req.body;
+
+    if (isNaN(targetCount) || ncReward === undefined || tonReward === undefined) {
+      return res.status(400).json({ error: 'Missing required fields: targetCount, ncReward, tonReward' });
+    }
+
+    const updated = await prisma.referralMilestone.upsert({
+      where: { target_count: targetCount },
+      update: {
+        nc_reward: Number(ncReward),
+        ton_reward: new Decimal(Number(tonReward).toFixed(6)),
+        display_name: displayName || undefined,
+        updated_at: new Date(),
+      },
+      create: {
+        target_count: targetCount,
+        display_name: displayName || `${targetCount} Referrals Milestone`,
+        nc_reward: Number(ncReward),
+        ton_reward: new Decimal(Number(tonReward).toFixed(6)),
+        updated_at: new Date(),
+      },
+    });
+
+    return res.json({
+      success: true,
+      milestone: {
+        targetCount: updated.target_count,
+        displayName: updated.display_name,
+        ncReward: updated.nc_reward,
+        tonReward: updated.ton_reward.toFixed(6),
+        updatedAt: updated.updated_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('Error updating referral milestone:', err);
+    return res.status(500).json({ error: 'Failed to update referral milestone', message: err.message });
+  }
+}

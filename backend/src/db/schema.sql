@@ -229,10 +229,41 @@ CREATE INDEX IF NOT EXISTS idx_user_daily_ads ON user_daily_ads(user_id, ad_date
 INSERT INTO reward_configs (action_type, display_name, nc_reward, ton_reward)
 VALUES 
   ('ad_adsgram', 'Adsgram Rewarded Video', 200, 0.000300),
-  ('ad_monetag', 'Monetag Rewarded Ad', 200, 0.000200)
+  ('ad_monetag', 'Monetag Rewarded Ad', 200, 0.000200),
+  ('referral_standard', 'Standard Referral Bonus', 1000, 0.000080),
+  ('referral_premium', 'Telegram Premium Referral Bonus', 2500, 0.000200)
 ON CONFLICT (action_type) DO UPDATE 
 SET nc_reward = EXCLUDED.nc_reward,
     ton_reward = EXCLUDED.ton_reward,
     display_name = EXCLUDED.display_name;
+
+-- 3. Referral Milestones System (1, 3, 7, 10 Referrals)
+CREATE TABLE IF NOT EXISTS referral_milestones (
+    target_count INT PRIMARY KEY,
+    display_name VARCHAR(64) NOT NULL,
+    nc_reward INT NOT NULL,
+    ton_reward NUMERIC(12, 6) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+INSERT INTO referral_milestones (target_count, display_name, nc_reward, ton_reward)
+VALUES
+  (1, '1 Miner Recruited', 1000, 0.000100),
+  (3, '3 Miners Recruited', 3000, 0.000300),
+  (7, '7 Miners Recruited', 7500, 0.000800),
+  (10, '10 Miners Recruited (Master Squad)', 15000, 0.002000)
+ON CONFLICT (target_count) DO UPDATE
+SET display_name = EXCLUDED.display_name,
+    nc_reward = EXCLUDED.nc_reward,
+    ton_reward = EXCLUDED.ton_reward;
+
+CREATE TABLE IF NOT EXISTS user_milestone_claims (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_count INT NOT NULL REFERENCES referral_milestones(target_count) ON DELETE CASCADE,
+    claimed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT unique_user_milestone UNIQUE (user_id, target_count)
+);
+
 
 

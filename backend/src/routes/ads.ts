@@ -114,6 +114,20 @@ router.post("/claim", async (req, res) => {
     }
 
     const config = AD_LIMITS[provider as "adsgram" | "monetag"];
+    let ncBonus = config.nc;
+    let tonBonus = config.ton;
+    try {
+      const cfgRes = await client.query(
+        "SELECT nc_reward, ton_reward FROM reward_configs WHERE action_type = $1",
+        [`ad_${provider}`]
+      );
+      if (cfgRes.rows.length > 0) {
+        ncBonus = Number(cfgRes.rows[0].nc_reward);
+        tonBonus = parseFloat(cfgRes.rows[0].ton_reward);
+      }
+    } catch {
+      // fallback
+    }
 
     // Increment count
     await client.query(
@@ -131,14 +145,14 @@ router.post("/claim", async (req, res) => {
            ton_balance = ton_balance + $2
        WHERE id = $3
        RETURNING nc_balance, ton_balance`,
-      [config.nc, config.ton, userId]
+      [ncBonus, tonBonus, userId]
     );
 
     await client.query("COMMIT");
 
     return res.json({
       success: true,
-      reward: { nc: config.nc, ton: config.ton },
+      reward: { nc: ncBonus, ton: tonBonus },
       newBalances: userRes.rows[0],
     });
   } catch (err) {

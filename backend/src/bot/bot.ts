@@ -136,9 +136,26 @@ export function registerMasterBotHandlers(b: Telegraf) {
         const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [newUserId]);
 
         if (userCheck.rows.length === 0) {
-          const starterNc = isPremium ? 2000 : 1000;
-          const bonusNc = isPremium ? 2500 : 1000;
-          const bonusTon = isPremium ? 0.000200 : 0.000080;
+          let starterNc = isPremium ? 2000 : 1000;
+          let bonusNc = isPremium ? 2500 : 1000;
+          let bonusTon = isPremium ? 0.000200 : 0.000080;
+
+          try {
+            const refCfg = await client.query(
+              "SELECT action_type, nc_reward, ton_reward FROM reward_configs WHERE action_type IN ('referral_standard', 'referral_premium')"
+            );
+            for (const row of refCfg.rows) {
+              if (row.action_type === 'referral_standard' && !isPremium) {
+                bonusNc = Number(row.nc_reward);
+                bonusTon = parseFloat(row.ton_reward);
+              } else if (row.action_type === 'referral_premium' && isPremium) {
+                bonusNc = Number(row.nc_reward);
+                bonusTon = parseFloat(row.ton_reward);
+              }
+            }
+          } catch {
+            // fallback defaults
+          }
 
           await client.query(
             `INSERT INTO users (id, first_name, username, nc_balance, referred_by)

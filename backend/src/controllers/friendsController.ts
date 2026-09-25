@@ -31,6 +31,30 @@ export async function getFriendStats(req: Request, res: Response) {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Fetch milestones, user milestone claims, and dynamic referral rates
+    const [allMilestones, userClaims, stdCfg, premCfg] = await Promise.all([
+      prisma.referralMilestone.findMany({ orderBy: { target_count: 'asc' } }),
+      prisma.userMilestoneClaim.findMany({ where: { user_id: userId } }),
+      prisma.rewardConfig.findUnique({ where: { action_type: 'referral_standard' } }),
+      prisma.rewardConfig.findUnique({ where: { action_type: 'referral_premium' } }),
+    ]);
+
+    const claimedSet = new Set(userClaims.map((c: any) => c.target_count));
+    const userReferralCount = user.referral_count || 0;
+
+    const milestones = allMilestones.map((m: any) => {
+      const isClaimed = claimedSet.has(m.target_count);
+      const canClaim = !isClaimed && userReferralCount >= m.target_count;
+      return {
+        targetCount: m.target_count,
+        displayName: m.display_name,
+        ncReward: m.nc_reward,
+        tonReward: m.ton_reward instanceof Decimal ? m.ton_reward.toFixed(6) : Number(m.ton_reward).toFixed(6),
+        isClaimed,
+        canClaim,
+      };
+    });
+
     // Fetch last 50 invited friends
     const referrals = await prisma.referral.findMany({
       where: { referrer_id: userId },
@@ -64,11 +88,99 @@ export async function getFriendStats(req: Request, res: Response) {
         total_referral_ton: user.total_referral_ton ? user.total_referral_ton.toString() : '0.000000',
       },
       friends,
+      milestones,
+      rates: {
+        standard: {
+          nc: stdCfg?.nc_reward ?? 1000,
+          ton: stdCfg?.ton_reward ? (stdCfg.ton_reward instanceof Decimal ? stdCfg.ton_reward.toFixed(6) : Number(stdCfg.ton_reward).toFixed(6)) : '0.000080',
+        },
+        premium: {
+          nc: premCfg?.nc_reward ?? 2500,
+          ton: premCfg?.ton_reward ? (premCfg.ton_reward instanceof Decimal ? premCfg.ton_reward.toFixed(6) : Number(premCfg.ton_reward).toFixed(6)) : '0.000200',
+        },
+      },
       botUsername: (process.env.BOT_USERNAME || 'NCTONs_bot').replace('@', ''),
     });
   } catch (err: any) {
     console.error('Error fetching referral stats:', err);
     return res.status(500).json({ error: 'Database error', message: err.message });
+  }
+}
+
+/**
+ * POST /api/friends/claim-milestone
+ * Claim reward for reaching 1, 3, 7, 10 recruited friends
+ */
+export async function claimMilestoneReward(req: Request, res: Response) {
+  try {
+    const rawUserId = req.body?.userId || req.telegramUser?.id;
+    const targetCount = parseInt(req.body?.targetCount, 10);
+    if (!rawUserId || isNaN(targetCount)) {
+      return res.status(400).json({ error: 'Missing userId or targetCount' });
+    }
+    const userId = BigInt(String(rawUserId).replace(/[^0-9]/g, ''));
+
+    const user: any = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { referral_count: true },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if ((user.referral_count || 0) < targetCount) {
+      return res.status(400).json({
+        error: `Requires at least ${targetCount} recruited friends to unlock this milestone.`,
+      });
+    }
+
+    const milestone = await prisma.referralMilestone.findUnique({
+      where: { target_count: targetCount },
+    });
+    if (!milestone) return res.status(404).json({ error: 'Milestone tier not found' });
+
+    const existingClaim = await prisma.userMilestoneClaim.findUnique({
+      where: { unique_user_milestone: { user_id: userId, target_count: targetCount } },
+    });
+    if (existingClaim) {
+      return res.status(400).json({ error: 'Milestone already claimed' });
+    }
+
+    const ncReward = BigInt(milestone.nc_reward);
+    const tonReward = milestone.ton_reward instanceof Decimal ? milestone.ton_reward : new Decimal(milestone.ton_reward);
+
+    const result = await prisma.$transaction(async (tx: any) => {
+      await tx.userMilestoneClaim.create({
+        data: {
+          user_id: userId,
+          target_count: targetCount,
+        },
+      });
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          nc_balance: { increment: ncReward },
+          ton_balance: { increment: tonReward },
+        },
+      });
+
+      return {
+        nc_balance: updated.nc_balance.toString(),
+        ton_balance: updated.ton_balance instanceof Decimal ? updated.ton_balance.toFixed(6) : Number(updated.ton_balance).toFixed(6),
+      };
+    });
+
+    return res.json({
+      success: true,
+      claimed: {
+        targetCount,
+        ncReward: milestone.nc_reward,
+        tonReward: tonReward.toFixed(6),
+      },
+      newBalances: result,
+    });
+  } catch (err: any) {
+    console.error('Error claiming milestone reward:', err);
+    return res.status(500).json({ error: 'Failed to claim milestone', message: err.message });
   }
 }
 

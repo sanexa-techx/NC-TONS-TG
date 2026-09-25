@@ -206,4 +206,24 @@ model BotChat {
   @@map("bot_chats")
 }
 
+model ReferralMilestone {
+  target_count Int      @id
+  display_name String   @db.VarChar(64)
+  nc_reward    Int
+  ton_reward   Decimal  @db.Decimal(12, 6)
+  updated_at   DateTime @default(now()) @updatedAt
+
+  @@map("referral_milestones")
+}
+
+model UserMilestoneClaim {
+  id           Int      @id @default(autoincrement())
+  user_id      BigInt
+  target_count Int
+  claimed_at   DateTime @default(now())
+
+  @@unique([user_id, target_count], name: "unique_user_milestone")
+  @@map("user_milestone_claims")
+}
+
 

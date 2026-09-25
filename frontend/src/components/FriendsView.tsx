@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import WebApp from '@twa-dev/sdk';
-import { Users, Copy, Share2, Sparkles, Check, Loader2 } from 'lucide-react';
+import { Users, Copy, Share2, Sparkles, Check, Loader2, Trophy, Lock, CheckCircle2 } from 'lucide-react';
 import TonIcon from './icons/TonIcon.js';
 import NcIcon from './icons/NcIcon.js';
 import { api } from '../services/api.js';
@@ -18,9 +18,12 @@ export default function FriendsView({
 }: FriendsViewProps) {
   const [stats, setStats] = useState<any>(null);
   const [friends, setFriends] = useState<any[]>([]);
+  const [milestones, setMilestones] = useState<any[]>([]);
+  const [rates, setRates] = useState<any>(null);
   const [effectiveBot, setEffectiveBot] = useState<string>(botUsername);
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [claimingMilestone, setClaimingMilestone] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const inviteLink = `https://t.me/${effectiveBot}?start=ref_${userId}`;
@@ -31,6 +34,12 @@ export default function FriendsView({
       if (data?.stats) {
         setStats(data.stats);
         setFriends(data.friends || []);
+        if (data.milestones) {
+          setMilestones(data.milestones);
+        }
+        if (data.rates) {
+          setRates(data.rates);
+        }
         if (data.botUsername) {
           setEffectiveBot(data.botUsername);
         }
@@ -93,9 +102,43 @@ export default function FriendsView({
     }
   };
 
+  const handleClaimMilestone = async (targetCount: number) => {
+    if (claimingMilestone !== null) return;
+    setClaimingMilestone(targetCount);
+    try {
+      const data = await api.claimMilestoneReward(userId, targetCount);
+      if (data.success) {
+        if (WebApp?.HapticFeedback) {
+          WebApp.HapticFeedback.notificationOccurred('success');
+        }
+        if (onBalanceUpdated && data.newBalances) {
+          onBalanceUpdated({
+            nc_balance: data.newBalances.nc_balance,
+            ton_balance: data.newBalances.ton_balance,
+          });
+        }
+        await fetchReferrals();
+      } else {
+        alert((data as any).message || 'Milestone reward not available');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Milestone claim failed');
+    } finally {
+      setClaimingMilestone(null);
+    }
+  };
+
   const pendingNc = stats ? parseInt(stats.unclaimed_referral_nc || '0', 10) : 0;
   const pendingTon = stats ? parseFloat(stats.unclaimed_referral_ton || '0') : 0;
   const hasClaimable = pendingNc > 0 || pendingTon > 0;
+
+  // Active or fallback milestone tiers
+  const activeMilestones = (milestones && milestones.length > 0) ? milestones : [
+    { targetCount: 1, displayName: '1 Friend Recruited', ncReward: 5000, tonReward: '0.000500', isClaimed: false, canClaim: (stats?.referral_count || 0) >= 1 },
+    { targetCount: 3, displayName: '3 Friends Recruited', ncReward: 15000, tonReward: '0.001500', isClaimed: false, canClaim: (stats?.referral_count || 0) >= 3 },
+    { targetCount: 7, displayName: '7 Friends Recruited', ncReward: 40000, tonReward: '0.004000', isClaimed: false, canClaim: (stats?.referral_count || 0) >= 7 },
+    { targetCount: 10, displayName: '10 Friends Recruited', ncReward: 80000, tonReward: '0.008000', isClaimed: false, canClaim: (stats?.referral_count || 0) >= 10 },
+  ];
 
   return (
     <div className="w-full max-w-sm mx-auto p-4 space-y-4 text-white pb-24 select-none">
@@ -114,10 +157,10 @@ export default function FriendsView({
           <span className="text-[11px] text-neutral-400 font-semibold">Standard Friend</span>
           <div className="mt-2 space-y-1">
             <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-yellow-400">
-              <NcIcon className="w-3.5 h-3.5" /> +1,000 NC
+              <NcIcon className="w-3.5 h-3.5" /> +{rates?.standard?.nc ? Number(rates.standard.nc).toLocaleString() : '1,000'} NC
             </div>
             <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-blue-400">
-              <TonIcon className="w-3.5 h-3.5" /> +0.00008 TON
+              <TonIcon className="w-3.5 h-3.5" /> +{rates?.standard?.ton || '0.000080'} TON
             </div>
           </div>
         </div>
@@ -128,10 +171,10 @@ export default function FriendsView({
           </span>
           <div className="mt-2 space-y-1">
             <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-yellow-400">
-              <NcIcon className="w-3.5 h-3.5" /> +2,500 NC
+              <NcIcon className="w-3.5 h-3.5" /> +{rates?.premium?.nc ? Number(rates.premium.nc).toLocaleString() : '2,500'} NC
             </div>
             <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-blue-400">
-              <TonIcon className="w-3.5 h-3.5" /> +0.00020 TON
+              <TonIcon className="w-3.5 h-3.5" /> +{rates?.premium?.ton || '0.000200'} TON
             </div>
           </div>
         </div>
@@ -184,6 +227,106 @@ export default function FriendsView({
         >
           {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
         </button>
+      </div>
+
+      {/* Squad Referral Milestones (1, 3, 7, 10 Referrals) */}
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-bold text-neutral-300 flex items-center gap-1.5 uppercase tracking-wider">
+            <Trophy className="w-3.5 h-3.5 text-amber-400" /> Squad Milestones
+          </span>
+          <span className="text-[10px] font-mono text-neutral-400 bg-neutral-800/80 px-2 py-0.5 rounded-full border border-neutral-700/50">
+            {stats?.referral_count || 0} Recruited
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {activeMilestones.map((m) => {
+            const currentCount = stats?.referral_count || 0;
+            const progressPct = Math.min(100, Math.round((currentCount / m.targetCount) * 100));
+
+            return (
+              <div
+                key={m.targetCount}
+                className={`p-3 rounded-2xl border transition relative overflow-hidden ${
+                  m.isClaimed
+                    ? 'bg-neutral-900/60 border-neutral-800/60 opacity-80'
+                    : m.canClaim
+                    ? 'bg-gradient-to-r from-amber-950/40 via-neutral-900 to-emerald-950/30 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                    : 'bg-neutral-900 border-neutral-800/80 hover:border-neutral-700'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                        m.isClaimed
+                          ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30'
+                          : m.canClaim
+                          ? 'bg-gradient-to-br from-amber-400 to-yellow-500 text-black shadow-lg shadow-amber-500/30 font-bold'
+                          : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                      }`}
+                    >
+                      {m.isClaimed ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : `${m.targetCount}x`}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        {m.displayName || `${m.targetCount} Referrals`}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 text-[11px] font-mono">
+                        <span className="text-yellow-400 font-bold flex items-center gap-1">
+                          <NcIcon className="w-3 h-3" /> +{Number(m.ncReward).toLocaleString()}
+                        </span>
+                        <span className="text-blue-400 font-bold flex items-center gap-1">
+                          <TonIcon className="w-3 h-3" /> +{m.tonReward}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 text-right">
+                    {m.isClaimed ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-[10px] font-mono font-bold text-emerald-400">
+                        <Check className="w-3 h-3" /> CLAIMED
+                      </span>
+                    ) : m.canClaim ? (
+                      <button
+                        onClick={() => handleClaimMilestone(m.targetCount)}
+                        disabled={claimingMilestone !== null}
+                        className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-black font-extrabold text-[11px] rounded-xl shadow-lg shadow-amber-500/25 active:scale-95 transition flex items-center gap-1 animate-pulse"
+                      >
+                        {claimingMilestone === m.targetCount ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" /> Claiming...
+                          </>
+                        ) : (
+                          'CLAIM'
+                        )}
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1 text-[11px] font-mono text-neutral-500">
+                        <Lock className="w-3 h-3" />
+                        <span>{currentCount}/{m.targetCount}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress bar for unclaimed milestones */}
+                {!m.isClaimed && (
+                  <div className="w-full bg-neutral-800/80 rounded-full h-1 mt-2.5 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        m.canClaim ? 'bg-gradient-to-r from-amber-400 to-emerald-400' : 'bg-neutral-600'
+                      }`}
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Friends List */}

@@ -17,6 +17,10 @@ import {
   createAdminMission,
   updateAdminMission,
   getAdminStats,
+  getDailyStreakConfigs,
+  updateDailyStreakConfig,
+  getReferralMilestones,
+  updateReferralMilestone,
 } from './controllers/adminController.js';
 import {
   redeemPromo,
@@ -26,7 +30,7 @@ import {
   deleteAdminPromo,
 } from './controllers/promoController.js';
 import { getOnlineStats, pingOnlineStatus } from './controllers/statsController.js';
-import { getFriendStats, claimFriendRewards } from './controllers/friendsController.js';
+import { getFriendStats, claimFriendRewards, claimMilestoneReward } from './controllers/friendsController.js';
 import { getUserProfile, getAvatarProxy } from './controllers/profileController.js';
 import dailyRouter from './routes/daily.js';
 import proofTasksRouter from './routes/proofTasks.js';
@@ -79,6 +83,7 @@ app.post('/api/promos/redeem', authMiddleware, redeemPromo);
 // Referral System & Friends Hub
 app.get('/api/friends/stats', authMiddleware, getFriendStats);
 app.post('/api/friends/claim', authMiddleware, claimFriendRewards);
+app.post('/api/friends/claim-milestone', authMiddleware, claimMilestoneReward);
 
 // Daily Streak & Rewards
 app.use('/api/daily', dailyRouter);
@@ -100,6 +105,10 @@ app.post('/api/stats/ping', pingOnlineStatus);
 // Admin Routes (Protected by ADMIN_TELEGRAM_IDS)
 app.get('/api/admin/config', authMiddleware, adminMiddleware, getRewardConfigs);
 app.put('/api/admin/config', authMiddleware, adminMiddleware, updateRewardConfig);
+app.get('/api/admin/daily-rewards', authMiddleware, adminMiddleware, getDailyStreakConfigs);
+app.put('/api/admin/daily-rewards/:day', authMiddleware, adminMiddleware, updateDailyStreakConfig);
+app.get('/api/admin/referral-milestones', authMiddleware, adminMiddleware, getReferralMilestones);
+app.put('/api/admin/referral-milestones/:count', authMiddleware, adminMiddleware, updateReferralMilestone);
 app.post('/api/admin/missions', authMiddleware, adminMiddleware, createAdminMission);
 app.put('/api/admin/missions/:id', authMiddleware, adminMiddleware, updateAdminMission);
 app.get('/api/admin/stats', authMiddleware, adminMiddleware, getAdminStats);

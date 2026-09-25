@@ -100,6 +100,26 @@ const memoryStore = {
         updated_at: new Date(),
       },
     ],
+    [
+      'referral_standard',
+      {
+        action_type: 'referral_standard',
+        display_name: 'Standard Referral Bonus',
+        nc_reward: 1000,
+        ton_reward: new Decimal('0.000080'),
+        updated_at: new Date(),
+      },
+    ],
+    [
+      'referral_premium',
+      {
+        action_type: 'referral_premium',
+        display_name: 'TG Premium Referral Bonus',
+        nc_reward: 2500,
+        ton_reward: new Decimal('0.000200'),
+        updated_at: new Date(),
+      },
+    ],
   ]),
   missions: [
     {
@@ -240,6 +260,20 @@ const memoryStore = {
     title: string | null;
     created_at: Date;
   }>(),
+  referralMilestones: [
+    { target_count: 1, display_name: '1 Friend Recruited', nc_reward: 5000, ton_reward: new Decimal('0.000500'), updated_at: new Date() },
+    { target_count: 3, display_name: '3 Friends Recruited', nc_reward: 15000, ton_reward: new Decimal('0.001500'), updated_at: new Date() },
+    { target_count: 7, display_name: '7 Friends Recruited', nc_reward: 40000, ton_reward: new Decimal('0.004000'), updated_at: new Date() },
+    { target_count: 10, display_name: '10 Friends Recruited', nc_reward: 80000, ton_reward: new Decimal('0.008000'), updated_at: new Date() },
+  ] as Array<{
+    target_count: number;
+    display_name: string;
+    nc_reward: number;
+    ton_reward: Decimal;
+    updated_at: Date;
+  }>,
+  userMilestoneClaims: [] as Array<{ id: number; user_id: bigint; target_count: number; claimed_at: Date }>,
+  userMilestoneClaimIdSeq: 1,
 };
 
 
@@ -783,6 +817,66 @@ const mockPrisma = {
     },
     async findMany({ where }: any = {}) {
       return Array.from(memoryStore.dailyAds.values());
+    },
+  },
+
+  referralMilestone: {
+    async findMany({ orderBy }: any = {}) {
+      const list = [...memoryStore.referralMilestones];
+      if (orderBy?.target_count === 'asc') {
+        list.sort((a, b) => a.target_count - b.target_count);
+      }
+      return list;
+    },
+    async findUnique({ where }: any) {
+      return memoryStore.referralMilestones.find((m) => m.target_count === where.target_count) || null;
+    },
+    async upsert({ where, update, create }: any) {
+      const idx = memoryStore.referralMilestones.findIndex((m) => m.target_count === where.target_count);
+      if (idx >= 0) {
+        memoryStore.referralMilestones[idx] = { ...memoryStore.referralMilestones[idx], ...update };
+        return memoryStore.referralMilestones[idx];
+      } else {
+        const item = { ...create, target_count: where.target_count };
+        memoryStore.referralMilestones.push(item);
+        return item;
+      }
+    },
+  },
+
+  userMilestoneClaim: {
+    async findMany({ where }: any = {}) {
+      let list = [...memoryStore.userMilestoneClaims];
+      if (where?.user_id !== undefined) {
+        list = list.filter((c) => c.user_id === BigInt(where.user_id));
+      }
+      return list;
+    },
+    async findUnique({ where }: any) {
+      if (where?.user_id_target_count) {
+        const uId = BigInt(where.user_id_target_count.user_id);
+        const tCount = Number(where.user_id_target_count.target_count);
+        return memoryStore.userMilestoneClaims.find((c) => c.user_id === uId && c.target_count === tCount) || null;
+      }
+      return null;
+    },
+    async create({ data }: any) {
+      const uId = BigInt(data.user_id);
+      const tCount = Number(data.target_count);
+      const existing = memoryStore.userMilestoneClaims.find((c) => c.user_id === uId && c.target_count === tCount);
+      if (existing) {
+        const err: any = new Error('Unique constraint failed on user_id_target_count');
+        err.code = 'P2002';
+        throw err;
+      }
+      const item = {
+        id: memoryStore.userMilestoneClaimIdSeq++,
+        user_id: uId,
+        target_count: tCount,
+        claimed_at: new Date(),
+      };
+      memoryStore.userMilestoneClaims.push(item);
+      return item;
     },
   },
 

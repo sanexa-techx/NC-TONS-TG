@@ -1,17 +1,41 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { RewardConfig, Mission } from '../types/index.js';
 import { api } from '../services/api.js';
-import { Shield, Sliders, PlusCircle, CheckCircle2, AlertCircle, Loader2, Power, Ticket } from 'lucide-react';
+import {
+  Shield,
+  Sliders,
+  PlusCircle,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Ticket,
+  Calendar,
+  Gamepad2,
+  Tv,
+  Users,
+  Award,
+  Zap,
+  Power,
+} from 'lucide-react';
 import { TonIcon, NcIcon } from '../components/icons/index.js';
 import { AdminPromoManager } from '../components/admin/AdminPromoManager.js';
 
 export const AdminPage: React.FC = () => {
-  const [adminTab, setAdminTab] = useState<'rewards' | 'missions' | 'promos'>('promos');
+  const [adminTab, setAdminTab] = useState<'rewards' | 'missions' | 'promos'>('rewards');
+  const [ratesSubTab, setRatesSubTab] = useState<'all' | 'daily' | 'games' | 'ads' | 'referrals' | 'milestones'>('all');
   const [configs, setConfigs] = useState<RewardConfig[]>([]);
+  const [dailyDays, setDailyDays] = useState<
+    Array<{ dayNumber: number; ncReward: number; tonReward: string; batteryBonusPct: number }>
+  >([]);
+  const [milestones, setMilestones] = useState<
+    Array<{ targetCount: number; displayName: string; ncReward: number; tonReward: string }>
+  >([]);
   const [missions, setMissions] = useState<Mission[]>([]);
   const [stats, setStats] = useState<{ totalUsers: number; activeMissionsCount: number; pendingWithdrawalsCount: number } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [savingConfig, setSavingConfig] = useState<string | null>(null);
+  const [savingDaily, setSavingDaily] = useState<number | null>(null);
+  const [savingMilestone, setSavingMilestone] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // New mission form state
@@ -30,14 +54,18 @@ export const AdminPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cfgRes, msnRes, statsRes] = await Promise.all([
+      const [cfgRes, msnRes, statsRes, dailyRes, milesRes] = await Promise.all([
         api.getRewardConfigs(),
         api.getAvailableMissions(),
         api.getAdminStats(),
+        api.getDailyStreakConfigs().catch(() => ({ days: [] })),
+        api.getReferralMilestones().catch(() => ({ milestones: [] })),
       ]);
       setConfigs(cfgRes.configs);
       setMissions(msnRes.missions);
       setStats(statsRes);
+      setDailyDays(dailyRes.days || []);
+      setMilestones(milesRes.milestones || []);
     } catch (err) {
       setFeedback({ type: 'error', text: (err as Error).message || 'Failed to load admin data' });
     } finally {
@@ -67,6 +95,50 @@ export const AdminPage: React.FC = () => {
       setFeedback({ type: 'error', text: (err as Error).message || 'Failed to update reward' });
     } finally {
       setSavingConfig(null);
+    }
+  };
+
+  const handleUpdateDailyStreak = async (day: {
+    dayNumber: number;
+    ncReward: number;
+    tonReward: string;
+    batteryBonusPct: number;
+  }) => {
+    setSavingDaily(day.dayNumber);
+    setFeedback(null);
+    try {
+      await api.updateDailyStreakConfig(day.dayNumber, {
+        ncReward: Number(day.ncReward),
+        tonReward: Number(day.tonReward),
+        batteryBonusPct: Number(day.batteryBonusPct || 0),
+      });
+      setFeedback({ type: 'success', text: `Saved Day ${day.dayNumber} streak rewards!` });
+    } catch (err) {
+      setFeedback({ type: 'error', text: (err as Error).message || 'Failed to update daily streak' });
+    } finally {
+      setSavingDaily(null);
+    }
+  };
+
+  const handleUpdateMilestone = async (m: {
+    targetCount: number;
+    displayName: string;
+    ncReward: number;
+    tonReward: string;
+  }) => {
+    setSavingMilestone(m.targetCount);
+    setFeedback(null);
+    try {
+      await api.updateReferralMilestone(m.targetCount, {
+        ncReward: Number(m.ncReward),
+        tonReward: Number(m.tonReward),
+        displayName: m.displayName,
+      });
+      setFeedback({ type: 'success', text: `Saved ${m.targetCount} Referrals Milestone reward!` });
+    } catch (err) {
+      setFeedback({ type: 'error', text: (err as Error).message || 'Failed to update milestone' });
+    } finally {
+      setSavingMilestone(null);
     }
   };
 
@@ -222,76 +294,344 @@ export const AdminPage: React.FC = () => {
 
       {/* Tab: Dynamic Reward Multipliers */}
       {adminTab === 'rewards' && (
-        <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border mb-4">
-          <h3 className="text-xs font-bold font-mono uppercase text-slate-300 mb-3 flex items-center space-x-1.5">
-            <Sliders size={16} className="text-cyber-cyan" />
-            <span>Live Reward Multipliers</span>
-          </h3>
-
-          <div className="space-y-3">
-            {configs.map((cfg) => {
-              const actionType = cfg.actionType || (cfg as any).action_type || '';
-              const displayName = cfg.displayName || (cfg as any).display_name || actionType;
-              const ncVal = cfg.ncReward !== undefined ? cfg.ncReward : (cfg as any).nc_reward;
-              const tonVal = cfg.tonReward !== undefined ? cfg.tonReward : (cfg as any).ton_reward;
+        <div className="w-full space-y-4 mb-4">
+          {/* Sub-Category Filter Chips */}
+          <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-mono">
+            {[
+              { id: 'all', label: 'All Rates', icon: Sliders },
+              { id: 'daily', label: 'Daily Streak (7D)', icon: Calendar },
+              { id: 'games', label: 'Game Bonus', icon: Gamepad2 },
+              { id: 'ads', label: 'Ad Amounts', icon: Tv },
+              { id: 'referrals', label: 'Refer Rates', icon: Users },
+              { id: 'milestones', label: 'Milestones (1,3,7,10)', icon: Award },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = ratesSubTab === tab.id;
               return (
-                <div key={actionType} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border">
-                  <div className="text-xs font-bold text-white mb-2">{displayName}</div>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <div>
-                      <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
-                        <NcIcon className="w-4 h-4" />
-                        <span>NC Reward</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={ncVal ?? ''}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setConfigs((prev) =>
-                            prev.map((c) =>
-                              (c.actionType || (c as any).action_type) === actionType ? { ...c, ncReward: val, nc_reward: val } : c
-                            )
-                          );
-                        }}
-                        className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-gold font-mono font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
-                        <TonIcon className="w-4 h-4" />
-                        <span>TON Reward</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={tonVal ?? ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setConfigs((prev) =>
-                            prev.map((c) =>
-                              (c.actionType || (c as any).action_type) === actionType ? { ...c, tonReward: val, ton_reward: val } : c
-                            )
-                          );
-                        }}
-                        className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleUpdateReward(cfg)}
-                    disabled={savingConfig === actionType}
-                    className="w-full py-1.5 rounded-lg bg-cyber-card hover:bg-cyber-surface border border-cyber-cyan/40 text-cyber-cyan text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
-                  >
-                    {savingConfig === actionType ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <span>Update Rates</span>
-                    )}
-                  </button>
-                </div>
+                <button
+                  key={tab.id}
+                  onClick={() => setRatesSubTab(tab.id as any)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                    isActive
+                      ? 'bg-cyber-cyan text-cyber-bg shadow-glow-cyan/40 scale-102'
+                      : 'bg-cyber-bg/80 text-slate-400 hover:text-white border border-cyber-border'
+                  }`}
+                >
+                  <Icon size={12} />
+                  <span>{tab.label}</span>
+                </button>
               );
             })}
           </div>
+
+          {/* 1. DAILY STREAK LADDER CONTROLS */}
+          {(ratesSubTab === 'all' || ratesSubTab === 'daily') && (
+            <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center space-x-1.5">
+                  <Calendar size={15} className="text-yellow-400" />
+                  <span>Daily Bonus Ladder (Days 1–7)</span>
+                </h3>
+                <span className="text-[10px] font-mono text-slate-500">7 Days Config</span>
+              </div>
+
+              <div className="space-y-3">
+                {dailyDays.map((d) => (
+                  <div key={d.dayNumber} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border/80">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-yellow-500/20 text-yellow-400 font-mono font-bold text-xs flex items-center justify-center">
+                          {d.dayNumber}
+                        </span>
+                        <span className="text-xs font-bold text-white">
+                          Day {d.dayNumber} {d.dayNumber === 7 ? '🎉 (Jackpot Streak)' : 'Reward'}
+                        </span>
+                      </div>
+                      {d.batteryBonusPct > 0 && (
+                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                          <Zap size={10} /> +{d.batteryBonusPct}% Battery
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-2">
+                      <div>
+                        <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                          <NcIcon className="w-3.5 h-3.5" />
+                          <span>NC Fuel</span>
+                        </label>
+                        <input
+                          type="number"
+                          value={d.ncReward ?? ''}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setDailyDays((prev) =>
+                              prev.map((item) => (item.dayNumber === d.dayNumber ? { ...item, ncReward: val } : item))
+                            );
+                          }}
+                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2 py-1.5 text-xs text-cyber-gold font-mono font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                          <TonIcon className="w-3.5 h-3.5" />
+                          <span>TON</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={d.tonReward ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDailyDays((prev) =>
+                              prev.map((item) => (item.dayNumber === d.dayNumber ? { ...item, tonReward: val } : item))
+                            );
+                          }}
+                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                          <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Power Boost %</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={d.batteryBonusPct ?? 0}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setDailyDays((prev) =>
+                              prev.map((item) => (item.dayNumber === d.dayNumber ? { ...item, batteryBonusPct: val } : item))
+                            );
+                          }}
+                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2 py-1.5 text-xs text-emerald-400 font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleUpdateDailyStreak(d)}
+                      disabled={savingDaily === d.dayNumber}
+                      className="w-full py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 border border-yellow-500/40 text-yellow-400 text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
+                    >
+                      {savingDaily === d.dayNumber ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <span>Save Day {d.dayNumber} Bonus</span>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 2. REFERRAL MILESTONES (1, 3, 7, 10 REFERRALS) */}
+          {(ratesSubTab === 'all' || ratesSubTab === 'milestones') && (
+            <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center space-x-1.5">
+                  <Award size={15} className="text-indigo-400" />
+                  <span>Referral Milestones (1, 3, 7, 10 Invites)</span>
+                </h3>
+                <span className="text-[10px] font-mono text-slate-500">Tier Bounties</span>
+              </div>
+
+              <div className="space-y-3">
+                {milestones.map((m) => (
+                  <div key={m.targetCount} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border/80">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono font-bold text-xs flex items-center justify-center border border-indigo-500/30">
+                          {m.targetCount}
+                        </span>
+                        <input
+                          type="text"
+                          value={m.displayName}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setMilestones((prev) =>
+                              prev.map((item) => (item.targetCount === m.targetCount ? { ...item, displayName: val } : item))
+                            );
+                          }}
+                          className="bg-transparent border-b border-dashed border-neutral-700 font-bold text-xs text-white focus:outline-none focus:border-indigo-400 px-1 py-0.5"
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-500/30">
+                        {m.targetCount} Referrals
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                          <NcIcon className="w-3.5 h-3.5" />
+                          <span>NC Reward</span>
+                        </label>
+                        <input
+                          type="number"
+                          value={m.ncReward ?? ''}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setMilestones((prev) =>
+                              prev.map((item) => (item.targetCount === m.targetCount ? { ...item, ncReward: val } : item))
+                            );
+                          }}
+                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-gold font-mono font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                          <TonIcon className="w-3.5 h-3.5" />
+                          <span>TON Reward</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={m.tonReward ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setMilestones((prev) =>
+                              prev.map((item) => (item.targetCount === m.targetCount ? { ...item, tonReward: val } : item))
+                            );
+                          }}
+                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleUpdateMilestone(m)}
+                      disabled={savingMilestone === m.targetCount}
+                      className="w-full py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
+                    >
+                      {savingMilestone === m.targetCount ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <span>Save {m.targetCount} Referrals Reward</span>
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. GAME, AD, AND GENERAL REWARDS */}
+          {(ratesSubTab === 'all' || ratesSubTab === 'games' || ratesSubTab === 'ads' || ratesSubTab === 'referrals') && (
+            <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border">
+              <h3 className="text-xs font-bold font-mono uppercase text-slate-300 mb-3 flex items-center space-x-1.5">
+                <Sliders size={16} className="text-cyber-cyan" />
+                <span>
+                  {ratesSubTab === 'games'
+                    ? '🎮 Arcade Game Bonuses'
+                    : ratesSubTab === 'ads'
+                    ? '📺 Ad Network View Rewards'
+                    : ratesSubTab === 'referrals'
+                    ? '👥 Direct Referral Bonuses'
+                    : '🎮 Games, 📺 Ads & 👥 Referral Rewards'}
+                </span>
+              </h3>
+
+              <div className="space-y-3">
+                {configs
+                  .filter((cfg) => {
+                    const actionType = cfg.actionType || (cfg as any).action_type || '';
+                    if (ratesSubTab === 'games') return actionType.startsWith('game_');
+                    if (ratesSubTab === 'ads') return actionType.startsWith('ad_') || actionType === 'watch_ad';
+                    if (ratesSubTab === 'referrals') return actionType.startsWith('referral_');
+                    return true;
+                  })
+                  .map((cfg) => {
+                    const actionType = cfg.actionType || (cfg as any).action_type || '';
+                    const displayName = cfg.displayName || (cfg as any).display_name || actionType;
+                    const ncVal = cfg.ncReward !== undefined ? cfg.ncReward : (cfg as any).nc_reward;
+                    const tonVal = cfg.tonReward !== undefined ? cfg.tonReward : (cfg as any).ton_reward;
+
+                    const isGame = actionType.startsWith('game_');
+                    const isAd = actionType.startsWith('ad_') || actionType === 'watch_ad';
+                    const isRef = actionType.startsWith('referral_');
+
+                    return (
+                      <div key={actionType} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                            {isGame && <Gamepad2 size={13} className="text-cyber-cyan" />}
+                            {isAd && <Tv size={13} className="text-amber-400" />}
+                            {isRef && <Users size={13} className="text-blue-400" />}
+                            <span>{displayName}</span>
+                          </div>
+                          <span className="text-[9px] font-mono text-slate-500 uppercase px-1.5 py-0.5 bg-black/40 rounded border border-cyber-border/40">
+                            {actionType}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <div>
+                            <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                              <NcIcon className="w-4 h-4" />
+                              <span>NC Reward</span>
+                            </label>
+                            <input
+                              type="number"
+                              value={ncVal ?? ''}
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setConfigs((prev) =>
+                                  prev.map((c) =>
+                                    (c.actionType || (c as any).action_type) === actionType
+                                      ? { ...c, ncReward: val, nc_reward: val }
+                                      : c
+                                  )
+                                );
+                              }}
+                              className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-gold font-mono font-bold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-400 uppercase mb-0.5">
+                              <TonIcon className="w-4 h-4" />
+                              <span>TON Reward</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={tonVal ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setConfigs((prev) =>
+                                  prev.map((c) =>
+                                    (c.actionType || (c as any).action_type) === actionType
+                                      ? { ...c, tonReward: val, ton_reward: val }
+                                      : c
+                                  )
+                                );
+                              }}
+                              className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleUpdateReward(cfg)}
+                          disabled={savingConfig === actionType}
+                          className="w-full py-1.5 rounded-lg bg-cyber-card hover:bg-cyber-surface border border-cyber-cyan/40 text-cyber-cyan text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
+                        >
+                          {savingConfig === actionType ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <span>Update Rates</span>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

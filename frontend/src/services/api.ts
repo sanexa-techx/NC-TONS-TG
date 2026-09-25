@@ -321,6 +321,75 @@ export const api = {
     return handleResponse(res);
   },
 
+  // Daily Streak Rewards Admin
+  async getDailyStreakConfigs(): Promise<{
+    days: Array<{
+      dayNumber: number;
+      ncReward: number;
+      tonReward: string;
+      batteryBonusPct: number;
+      updatedAt?: string;
+    }>;
+  }> {
+    const res = await fetch('/api/admin/daily-rewards', {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async updateDailyStreakConfig(
+    day: number,
+    data: { ncReward: number; tonReward: number | string; batteryBonusPct?: number }
+  ): Promise<{ success: boolean; day: any }> {
+    const res = await fetch(`/api/admin/daily-rewards/${day}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  // Referral Milestones Admin
+  async getReferralMilestones(): Promise<{
+    milestones: Array<{
+      targetCount: number;
+      displayName: string;
+      ncReward: number;
+      tonReward: string;
+      updatedAt?: string;
+    }>;
+  }> {
+    const res = await fetch('/api/admin/referral-milestones', {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async updateReferralMilestone(
+    targetCount: number,
+    data: { ncReward: number; tonReward: number | string; displayName?: string }
+  ): Promise<{ success: boolean; milestone: any }> {
+    const res = await fetch(`/api/admin/referral-milestones/${targetCount}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  // Claim Referral Milestone (User)
+  async claimMilestoneReward(
+    userId: string | number,
+    targetCount: number
+  ): Promise<{ success: boolean; claimed: any; newBalances: any }> {
+    const res = await fetch('/api/friends/claim-milestone', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId, targetCount }),
+    });
+    return handleResponse(res);
+  },
+
   // Promo Codes
   async redeemPromo(code: string, userId?: string | number): Promise<PromoRedeemResponse> {
     const res = await fetch('/api/promos/redeem', {
