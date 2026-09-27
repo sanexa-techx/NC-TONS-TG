@@ -534,10 +534,18 @@ export function registerMasterBotHandlers(b: Telegraf) {
       const resolvedTime = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 
       if (action === 'approve') {
-        await client.query(
-          "UPDATE withdrawals SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2",
-          [ctx.from.id, withdrawalId]
-        );
+        try {
+          await client.query(
+            "UPDATE withdrawals SET status = 'APPROVED', reviewed_by = $1, updated_at = NOW() WHERE id = $2",
+            [ctx.from.id, withdrawalId]
+          );
+        } catch (updateErr: any) {
+          console.warn('Withdrawal update with updated_at failed, attempting fallback:', updateErr.message);
+          await client.query(
+            "UPDATE withdrawals SET status = 'APPROVED', reviewed_by = $1 WHERE id = $2",
+            [ctx.from.id, withdrawalId]
+          );
+        }
 
         // Edit Private Admin Card
         await ctx
@@ -567,10 +575,13 @@ export function registerMasterBotHandlers(b: Telegraf) {
           .catch(() => {});
 
         // Public Proof Broadcast
+        let publicProofSent = false;
+        let publicProofError = '';
+
         if (PUBLIC_PAYOUT_CHANNEL_ID) {
-          const botUsername = ctx.botInfo?.username || 'NCTons_Bot';
-          await b.telegram
-            .sendMessage(
+          const botUsername = ctx.botInfo?.username || b.botInfo?.username || 'NCTons_Bot';
+          try {
+            await b.telegram.sendMessage(
               PUBLIC_PAYOUT_CHANNEL_ID,
               `💎 <b>NEW WITHDRAWAL SENT!</b>\n\n` +
                 `💰 <b>Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b>\n` +
@@ -579,20 +590,49 @@ export function registerMasterBotHandlers(b: Telegraf) {
                 `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n` +
                 `✅ <b>Status:</b> Confirmed & Paid\n\n` +
                 `🚀 <i>Mine real TON with @${botUsername}!</i>`,
-              { parse_mode: 'HTML' }
-            )
-            .catch((err) => console.error('Public proof failed:', err.message));
+              {
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: '⛏️ Start Mining TON', url: `https://t.me/${botUsername}` },
+                      { text: '🔍 View on Tonviewer', url: `https://tonviewer.com/${wd.ton_address}` },
+                    ],
+                  ],
+                },
+              }
+            );
+            publicProofSent = true;
+          } catch (err: any) {
+            publicProofError = err?.message || 'Failed to deliver';
+            console.error('Public proof broadcast error:', err);
+          }
         }
 
         await client.query('COMMIT');
-        return ctx.answerCbQuery('Withdrawal approved & posted to Public Proofs.');
+
+        if (publicProofSent) {
+          return ctx.answerCbQuery('✅ Approved & posted to Public Proof channel!');
+        } else if (!PUBLIC_PAYOUT_CHANNEL_ID) {
+          return ctx.answerCbQuery('✅ Approved & paid! (Note: PUBLIC_PAYOUT_CHANNEL_ID not set in .env/Render)', { show_alert: true });
+        } else {
+          return ctx.answerCbQuery(`✅ Approved! (⚠️ Channel post issue: ${publicProofError})`, { show_alert: true });
+        }
       }
 
       if (action === 'reject') {
-        await client.query(
-          "UPDATE withdrawals SET status = 'REJECTED', reviewed_by = $1, updated_at = NOW() WHERE id = $2",
-          [ctx.from.id, withdrawalId]
-        );
+        try {
+          await client.query(
+            "UPDATE withdrawals SET status = 'REJECTED', reviewed_by = $1, updated_at = NOW() WHERE id = $2",
+            [ctx.from.id, withdrawalId]
+          );
+        } catch (updateErr: any) {
+          console.warn('Withdrawal reject with updated_at failed, attempting fallback:', updateErr.message);
+          await client.query(
+            "UPDATE withdrawals SET status = 'REJECTED', reviewed_by = $1 WHERE id = $2",
+            [ctx.from.id, withdrawalId]
+          );
+        }
 
         // Refund TON balance
         await client.query('UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2', [
@@ -628,10 +668,10 @@ export function registerMasterBotHandlers(b: Telegraf) {
         await client.query('COMMIT');
         return ctx.answerCbQuery('Withdrawal rejected and balance refunded.');
       }
-    } catch (err) {
+    } catch (err: any) {
       await client.query('ROLLBACK');
       console.error('Withdrawal callback error:', err);
-      return ctx.answerCbQuery('Error processing request.', { show_alert: true });
+      return ctx.answerCbQuery(`⚠️ Error: ${err?.message || 'Error processing request.'}`, { show_alert: true });
     } finally {
       client.release();
     }

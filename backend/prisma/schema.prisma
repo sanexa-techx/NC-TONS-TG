@@ -90,15 +90,16 @@ model MissionClaim {
 }
 
 model Withdrawal {
-  id                 Int      @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   user_id            BigInt
-  ton_address        String   @db.VarChar(128)
-  ton_amount         Decimal  @db.Decimal(10, 4)
-  status             String   @default("PENDING") @db.VarChar(20) /// 'PENDING', 'APPROVED', 'REJECTED'
+  ton_address        String    @db.VarChar(128)
+  ton_amount         Decimal   @db.Decimal(10, 4)
+  status             String    @default("PENDING") @db.VarChar(20) /// 'PENDING', 'APPROVED', 'REJECTED'
   channel_message_id BigInt?
   reviewed_by        BigInt?
-  created_at         DateTime @default(now())
-  user               User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime? @default(now()) @updatedAt
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("withdrawals")
 }

@@ -1218,6 +1218,52 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     return { rows: list, rowCount: list.length };
   }
 
+  // 17b. Withdrawals queries for bot approval/rejection and admin telemetry
+  if (normalized.includes('FROM withdrawals w') && normalized.includes('JOIN users u')) {
+    const wdId = Number(params[0]);
+    const wd = memoryStore.withdrawals.find((w: any) => w.id === wdId);
+    if (wd) {
+      const u = memoryStore.users.get(wd.user_id.toString());
+      return {
+        rows: [
+          {
+            ...wd,
+            first_name: u?.first_name || 'Miner',
+            username: u?.username || null,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  if (normalized.startsWith('UPDATE withdrawals SET')) {
+    const statusMatch = normalized.match(/status\s*=\s*'([^']+)'/i);
+    const newStatus = statusMatch ? statusMatch[1] : 'APPROVED';
+    const reviewerId = params[0] ? BigInt(params[0]) : null;
+    const wdId = Number(params[1]);
+    const wd = memoryStore.withdrawals.find((w: any) => w.id === wdId);
+    if (wd) {
+      wd.status = newStatus;
+      wd.reviewed_by = reviewerId;
+      wd.updated_at = new Date();
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  if (normalized.includes("FROM withdrawals WHERE status = 'PENDING'")) {
+    const pending = memoryStore.withdrawals.filter((w: any) => w.status === 'PENDING');
+    const sum = pending.reduce((acc: number, cur: any) => acc + parseFloat(cur.ton_amount || 0), 0);
+    return { rows: [{ cnt: pending.length, sum }], rowCount: 1 };
+  }
+
+  if (normalized.includes("FROM withdrawals WHERE status = 'APPROVED'")) {
+    const approved = memoryStore.withdrawals.filter((w: any) => w.status === 'APPROVED');
+    const sum = approved.reduce((acc: number, cur: any) => acc + parseFloat(cur.ton_amount || 0), 0);
+    return { rows: [{ cnt: approved.length, sum }], rowCount: 1 };
+  }
+
   // 18. Transaction control (BEGIN, COMMIT, ROLLBACK)
   if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized.toUpperCase())) {
     return { rows: [], rowCount: 0 };
