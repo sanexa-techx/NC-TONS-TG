@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import createAdHandler from "monetag-tg-sdk";
 
 declare global {
@@ -27,11 +27,131 @@ if (typeof window !== "undefined" && MONETAG_ZONE_ID > 0) {
   }
 }
 
+// Global state tracking to prevent any ad from interrupting active gameplay
+let isGameActiveGlobal = false;
+let globalLastInterstitialTime = 0;
+
+export const setGameActiveState = (active: boolean) => {
+  isGameActiveGlobal = active;
+  console.log(`[AdManager] Active game state: ${active}`);
+};
+
+export const isGameActive = () => isGameActiveGlobal;
+
+// Internal executor for single on-demand interstitial display with safety timeout
+async function executeInterstitial(
+  provider: "adsgram" | "monetag",
+  userId: number | string,
+  adsgramBlockId: string
+): Promise<boolean> {
+  const timeoutMs = 6000;
+
+  const showPromise = new Promise<boolean>(async (resolve) => {
+    try {
+      const hasAdsgram = typeof window !== "undefined" && Boolean(window.Adsgram);
+      const globalMonetag = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
+      const hasMonetag =
+        Boolean(globalMonetag) ||
+        Boolean(monetagHandler) ||
+        (typeof window !== "undefined" && Boolean(window.showMonetagInterstitial));
+
+      // In dev mode without loaded ad networks, resolve cleanly
+      if (!hasAdsgram && !hasMonetag) {
+        console.log(`[AdManager Dev] Simulating interstitial ad (${provider})`);
+        setTimeout(() => resolve(true), 350);
+        return;
+      }
+
+      let displayed = false;
+
+      // 1. Try selected provider
+      if (provider === "adsgram" && hasAdsgram) {
+        try {
+          const controller = window.Adsgram!.init({
+            blockId: adsgramBlockId,
+            userId: String(userId),
+          });
+          const res = await controller.show();
+          displayed = Boolean(res?.done);
+        } catch (e) {
+          console.warn("[AdManager] Adsgram interstitial error:", e);
+        }
+      } else if (hasMonetag) {
+        try {
+          if (typeof globalMonetag === "function") {
+            await globalMonetag({ ymid: String(userId) });
+            displayed = true;
+          } else if (monetagHandler) {
+            await monetagHandler({ ymid: String(userId) });
+            displayed = true;
+          } else if (window.showMonetagInterstitial) {
+            displayed = await window.showMonetagInterstitial();
+          }
+        } catch (mErr) {
+          console.warn("[AdManager] Monetag standard interstitial failed, trying pop format:", mErr);
+          try {
+            if (typeof globalMonetag === "function") {
+              await globalMonetag("pop");
+              displayed = true;
+            } else if (monetagHandler) {
+              await monetagHandler("pop");
+              displayed = true;
+            }
+          } catch (popErr) {
+            console.warn("[AdManager] Monetag pop error:", popErr);
+          }
+        }
+      }
+
+      // 2. Fallback to alternative provider if initial failed
+      if (!displayed) {
+        if (provider === "adsgram" && hasMonetag) {
+          try {
+            if (typeof globalMonetag === "function") {
+              await globalMonetag({ ymid: String(userId) });
+              displayed = true;
+            } else if (monetagHandler) {
+              await monetagHandler({ ymid: String(userId) });
+              displayed = true;
+            }
+          } catch {
+            // fallback failed
+          }
+        } else if (provider === "monetag" && hasAdsgram) {
+          try {
+            const controller = window.Adsgram!.init({
+              blockId: adsgramBlockId,
+              userId: String(userId),
+            });
+            const res = await controller.show();
+            displayed = Boolean(res?.done);
+          } catch {
+            // fallback failed
+          }
+        }
+      }
+
+      resolve(displayed);
+    } catch (err) {
+      console.warn("[AdManager] Interstitial error:", err);
+      resolve(false);
+    }
+  });
+
+  const timeoutPromise = new Promise<boolean>((resolve) => {
+    setTimeout(() => {
+      console.log(`[AdManager] Interstitial timeout (${timeoutMs}ms) elapsed`);
+      resolve(false);
+    }, timeoutMs);
+  });
+
+  return await Promise.race([showPromise, timeoutPromise]);
+}
+
 export function useAdManager(
   userId: number | string,
   onRewardClaimed?: (rewardData: any) => void
 ) {
-  const lastInterstitialRef = useRef<number>(0);
   const ADSGRAM_BLOCK_ID =
     (import.meta as any).env?.VITE_ADSGRAM_BLOCK_ID || "49696";
 
@@ -126,55 +246,57 @@ export function useAdManager(
     }
   }, [userId, MONETAG_SDK_FN, monetagHandler]);
 
-  // 3. Interstitial Trigger (Throttled to max 1 ad every 45 seconds)
+  // 3. Interstitial Trigger (Guarded against playing while game is active, no recurring timers)
   const triggerInterstitial = useCallback(
-    (reason: "nav" | "start" | "withdraw") => {
-      const now = Date.now();
-      if (now - lastInterstitialRef.current < 45000) return; // 45s cooldown
-
-      lastInterstitialRef.current = now;
-
-      // Alternate between Adsgram and Monetag
-      const provider = Math.random() < 0.5 ? "adsgram" : "monetag";
-      console.log(`[Ad Trigger] Interstitial displayed (${reason}) via ${provider}`);
-
-      if (provider === "adsgram" && window.Adsgram) {
-        const controller = window.Adsgram.init({ blockId: ADSGRAM_BLOCK_ID });
-        controller.show().catch(() => {});
-      } else {
-        const globalSdkFn = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
-        if (typeof globalSdkFn === "function") {
-          globalSdkFn({
-            type: "inApp",
-            inAppSettings: {
-              frequency: 2,
-              capping: 0.25,
-              interval: 45,
-              timeout: 5,
-            },
-          }).catch(() => {});
-        } else if (monetagHandler) {
-          monetagHandler({
-            type: "inApp",
-            inAppSettings: {
-              frequency: 2,
-              capping: 0.25,
-              interval: 45,
-              timeout: 5,
-            },
-          }).catch(() => {});
-        } else if (window.showMonetagInterstitial) {
-          window.showMonetagInterstitial().catch(() => {});
-        }
+    async (
+      reason: "nav" | "start" | "withdraw" | "game_start" | "game_end"
+    ): Promise<boolean> => {
+      // CRITICAL: Block any interstitial ad if a game is actively playing!
+      if (isGameActiveGlobal && reason !== "game_start" && reason !== "game_end") {
+        console.log(`[AdManager] Interstitial blocked: Gameplay active (${reason})`);
+        return false;
       }
+
+      const now = Date.now();
+      const minCooldown =
+        reason === "game_start" || reason === "game_end" ? 8000 : 30000;
+      if (now - globalLastInterstitialTime < minCooldown) {
+        console.log(`[AdManager] Interstitial throttled (${reason})`);
+        return false;
+      }
+
+      globalLastInterstitialTime = now;
+
+      const provider = Math.random() < 0.5 ? "adsgram" : "monetag";
+      console.log(`[Ad Trigger] Showing interstitial (${reason}) via ${provider}`);
+
+      return await executeInterstitial(provider, userId, ADSGRAM_BLOCK_ID);
     },
-    [ADSGRAM_BLOCK_ID, MONETAG_SDK_FN, monetagHandler]
+    [userId, ADSGRAM_BLOCK_ID]
   );
+
+  // 4. Pre-Game Interstitial (Before gameplay begins)
+  const showPreGameAd = useCallback(async (): Promise<boolean> => {
+    console.log("[AdManager] Triggering pre-game ad...");
+    setGameActiveState(false);
+    return await triggerInterstitial("game_start");
+  }, [triggerInterstitial]);
+
+  // 5. Post-Game Interstitial (After gameplay ends)
+  const showPostGameAd = useCallback(async (): Promise<boolean> => {
+    console.log("[AdManager] Triggering post-game ad...");
+    setGameActiveState(false);
+    return await triggerInterstitial("game_end");
+  }, [triggerInterstitial]);
 
   return {
     showAdsgramRewarded,
     showMonetagRewarded,
     triggerInterstitial,
+    showPreGameAd,
+    showPostGameAd,
+    setGameActiveState,
+    isGameActive,
   };
 }
 

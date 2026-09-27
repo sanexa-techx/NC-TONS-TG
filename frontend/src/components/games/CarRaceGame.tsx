@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../services/api.js';
 import { useTelegram } from '../../hooks/useTelegram.js';
+import { useAdManager, setGameActiveState } from '../../hooks/useAdManager.js';
 import { ArrowLeft, Clock, RotateCcw, Award, CheckCircle2, AlertCircle, Loader2, ArrowBigLeft, ArrowBigRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { TonIcon, NcIcon } from '../icons/index.js';
@@ -8,6 +9,7 @@ import { TonIcon, NcIcon } from '../icons/index.js';
 interface CarRaceGameProps {
   onBack: () => void;
   onFinished: (ncAwarded: number, tonAwarded: string) => void;
+  userId?: number | string;
 }
 
 interface Obstacle {
@@ -21,8 +23,9 @@ interface Obstacle {
 const TOTAL_LANES = 3;
 const GAME_DURATION_SEC = 30;
 
-export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) => {
+export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished, userId }) => {
   const { haptic } = useTelegram();
+  const { showPreGameAd, showPostGameAd } = useAdManager(userId || '');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [playerLane, setPlayerLane] = useState<number>(1); // Middle lane
@@ -33,6 +36,23 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
   const [gameState, setGameState] = useState<'loading' | 'playing' | 'survived' | 'crashed' | 'submitting'>('loading');
   const [rewardClaim, setRewardClaim] = useState<{ nc: number; ton: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Sync game active state so ads are NEVER shown during active play
+  useEffect(() => {
+    if (gameState === 'playing') {
+      setGameActiveState(true);
+    } else {
+      setGameActiveState(false);
+    }
+  }, [gameState]);
+
+  useEffect(() => {
+    return () => {
+      setGameActiveState(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+    };
+  }, []);
 
   // Refs for requestAnimationFrame loop
   const playerLaneRef = useRef<number>(1);
@@ -90,6 +110,7 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
   const initGame = useCallback(async () => {
     try {
       setGameState('loading');
+      setGameActiveState(false);
       setErrorMsg(null);
       setRewardClaim(null);
       setPlayerLane(1);
@@ -149,13 +170,19 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
 
       setRewardClaim({ nc, ton });
       setGameState('survived');
+      setGameActiveState(false);
       onFinished(nc, ton);
+      // Trigger ad AFTER game end
+      showPostGameAd().catch(() => {});
     } catch (err) {
       setErrorMsg((err as Error).message || 'Verification rejected');
       setGameState('crashed');
+      setGameActiveState(false);
       haptic('error');
+      // Trigger ad AFTER game end
+      showPostGameAd().catch(() => {});
     }
-  }, [sessionId, onFinished, haptic]);
+  }, [sessionId, onFinished, haptic, showPostGameAd]);
 
   // Countdown timer
   useEffect(() => {
@@ -300,6 +327,8 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
             if (fuelRef.current <= 0) {
               isRunning = false;
               setGameState('crashed');
+              setGameActiveState(false);
+              showPostGameAd().catch(() => {});
               return;
             }
           } else {
@@ -359,12 +388,23 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
     };
   }, [gameState, haptic]);
 
+  const handlePlayAgain = async () => {
+    // Show ad BEFORE game restart
+    await showPreGameAd();
+    initGame();
+  };
+
+  const handleExit = () => {
+    setGameActiveState(false);
+    onBack();
+  };
+
   return (
     <div className="w-full flex flex-col items-center select-none">
       {/* Top Bar: Back Button, Timer, Stats */}
       <div className="w-full flex items-center justify-between py-2 mb-2">
         <button
-          onClick={onBack}
+          onClick={handleExit}
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyber-card border border-cyber-border text-xs text-slate-300 hover:text-white transition-all active:scale-95"
         >
           <ArrowLeft size={14} />
@@ -481,14 +521,14 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
 
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={initGame}
+                    onClick={handlePlayAgain}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-card border border-cyber-border text-xs font-bold text-white hover:border-cyber-gold flex items-center justify-center space-x-1.5 transition-all"
                   >
                     <RotateCcw size={14} />
                     <span>RACE AGAIN</span>
                   </button>
                   <button
-                    onClick={onBack}
+                    onClick={handleExit}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-gold text-slate-950 text-xs font-bold flex items-center justify-center space-x-1.5 shadow-glow-gold transition-all"
                   >
                     <Award size={14} />
@@ -513,14 +553,14 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished }) 
 
                 <div className="flex items-center space-x-2 mt-4">
                   <button
-                    onClick={initGame}
+                    onClick={handlePlayAgain}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-card border border-cyber-border text-xs font-bold text-white hover:border-cyber-cyan flex items-center justify-center space-x-1.5 transition-all"
                   >
                     <RotateCcw size={14} />
                     <span>TRY AGAIN</span>
                   </button>
                   <button
-                    onClick={onBack}
+                    onClick={handleExit}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-bg border border-cyber-border text-xs font-bold text-slate-300 hover:text-white transition-all"
                   >
                     <span>RETURN TO HUB</span>

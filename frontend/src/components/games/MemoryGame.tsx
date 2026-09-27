@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../services/api.js';
 import { useTelegram } from '../../hooks/useTelegram.js';
+import { useAdManager, setGameActiveState } from '../../hooks/useAdManager.js';
 import { ArrowLeft, Clock, RotateCcw, Award, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { TonIcon, NcIcon } from '../icons/index.js';
@@ -8,6 +9,7 @@ import { TonIcon, NcIcon } from '../icons/index.js';
 interface MemoryGameProps {
   onBack: () => void;
   onFinished: (ncAwarded: number, tonAwarded: string) => void;
+  userId?: number | string;
 }
 
 interface CardItem {
@@ -34,8 +36,10 @@ function generateDeck(): CardItem[] {
   return deck;
 }
 
-export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) => {
+export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished, userId }) => {
   const { haptic } = useTelegram();
+  const { showPreGameAd, showPostGameAd } = useAdManager(userId || '');
+
   const [cards, setCards] = useState<CardItem[]>([]);
   const [flippedIndices, setFlippedIndices] = useState<number[]>([]);
   const [moves, setMoves] = useState<number>(0);
@@ -50,10 +54,27 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
   const timerRef = useRef<any>(null);
   const isLockedRef = useRef<boolean>(false);
 
+  // Sync game active state to protect gameplay from any ad interruptions
+  useEffect(() => {
+    if (gameState === 'playing') {
+      setGameActiveState(true);
+    } else {
+      setGameActiveState(false);
+    }
+  }, [gameState]);
+
+  useEffect(() => {
+    return () => {
+      setGameActiveState(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
   // Initialize session and deck
   const initGame = useCallback(async () => {
     try {
       setGameState('loading');
+      setGameActiveState(false);
       setErrorMsg(null);
       setRewardClaim(null);
       setCards(generateDeck());
@@ -89,7 +110,10 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
         if (prev <= 1) {
           if (timerRef.current) clearInterval(timerRef.current);
           setGameState('lost');
+          setGameActiveState(false);
           haptic('error');
+          // Trigger ad AFTER game end
+          showPostGameAd().catch(() => {});
           return 0;
         }
         return prev - 1;
@@ -99,12 +123,13 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState, haptic]);
+  }, [gameState, haptic, showPostGameAd]);
 
   // Handle Win Submission
   const handleWin = useCallback(async () => {
     if (!sessionId) return;
     setGameState('submitting');
+    setGameActiveState(false);
     haptic('success');
 
     try {
@@ -132,12 +157,16 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
       setRewardClaim({ nc, ton });
       setGameState('won');
       onFinished(nc, ton);
+      // Trigger ad AFTER game end
+      showPostGameAd().catch(() => {});
     } catch (err) {
       setErrorMsg((err as Error).message || 'Validation failed');
       setGameState('lost');
       haptic('error');
+      // Trigger ad AFTER game end
+      showPostGameAd().catch(() => {});
     }
-  }, [sessionId, timeLeft, moves, onFinished, haptic]);
+  }, [sessionId, timeLeft, moves, onFinished, haptic, showPostGameAd]);
 
   // Check if all pairs matched
   useEffect(() => {
@@ -200,12 +229,23 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
     }
   };
 
+  const handlePlayAgain = async () => {
+    // Show ad BEFORE game start
+    await showPreGameAd();
+    initGame();
+  };
+
+  const handleExit = () => {
+    setGameActiveState(false);
+    onBack();
+  };
+
   return (
     <div className="w-full flex flex-col items-center">
       {/* Top Bar: Back Button, Title, Stats */}
       <div className="w-full flex items-center justify-between py-2 mb-3">
         <button
-          onClick={onBack}
+          onClick={handleExit}
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyber-card border border-cyber-border text-xs text-slate-300 hover:text-white transition-all active:scale-95"
         >
           <ArrowLeft size={14} />
@@ -310,14 +350,14 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
 
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={initGame}
+                  onClick={handlePlayAgain}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-card border border-cyber-border text-xs font-bold text-white hover:border-cyber-cyan flex items-center justify-center space-x-1.5 transition-all"
                 >
                   <RotateCcw size={14} />
                   <span>PLAY AGAIN</span>
                 </button>
                 <button
-                  onClick={onBack}
+                  onClick={handleExit}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-cyan text-slate-950 text-xs font-bold flex items-center justify-center space-x-1.5 shadow-glow-cyan transition-all"
                 >
                   <Award size={14} />
@@ -342,14 +382,14 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished }) =>
 
               <div className="flex items-center space-x-2 mt-4">
                 <button
-                  onClick={initGame}
+                  onClick={handlePlayAgain}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-card border border-cyber-border text-xs font-bold text-white hover:border-cyber-cyan flex items-center justify-center space-x-1.5 transition-all"
                 >
                   <RotateCcw size={14} />
                   <span>RETRY ROUND</span>
                 </button>
                 <button
-                  onClick={onBack}
+                  onClick={handleExit}
                   className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-bg border border-cyber-border text-xs font-bold text-slate-300 hover:text-white transition-all"
                 >
                   <span>RETURN TO HUB</span>

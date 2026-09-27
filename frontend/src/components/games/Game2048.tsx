@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../services/api.js';
 import { useTelegram } from '../../hooks/useTelegram.js';
+import { useAdManager, setGameActiveState } from '../../hooks/useAdManager.js';
 import { ArrowLeft, RotateCcw, Award, CheckCircle2, AlertCircle, Loader2, Sparkles, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { TonIcon, NcIcon } from '../icons/index.js';
@@ -8,6 +9,7 @@ import { TonIcon, NcIcon } from '../icons/index.js';
 interface Game2048Props {
   onBack: () => void;
   onFinished: (ncAwarded: number, tonAwarded: string) => void;
+  userId?: number | string;
 }
 
 type Board = number[][];
@@ -111,8 +113,9 @@ function getTileStyle(val: number): { bg: string; text: string; shadow: string }
   }
 }
 
-export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
+export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished, userId }) => {
   const { haptic } = useTelegram();
+  const { showPreGameAd, showPostGameAd } = useAdManager(userId || '');
   const [board, setBoard] = useState<Board>(createEmptyBoard);
   const [score, setScore] = useState<number>(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -125,10 +128,27 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const timerRef = useRef<any>(null);
 
+  // Sync game active state so ads are NEVER shown during active play
+  useEffect(() => {
+    if (gameState === 'playing') {
+      setGameActiveState(true);
+    } else {
+      setGameActiveState(false);
+    }
+  }, [gameState]);
+
+  useEffect(() => {
+    return () => {
+      setGameActiveState(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
   // Initialize Game Session
   const initGame = useCallback(async () => {
     try {
       setGameState('loading');
+      setGameActiveState(false);
       setErrorMsg(null);
       setRewardClaim(null);
       setScore(0);
@@ -196,13 +216,19 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
 
       setRewardClaim({ nc, ton });
       setGameState('claimed');
+      setGameActiveState(false);
       onFinished(nc, ton);
+      // Trigger ad AFTER game end
+      showPostGameAd().catch(() => {});
     } catch (err) {
       setErrorMsg((err as Error).message || 'Session verification failed');
       setGameState('gameover');
+      setGameActiveState(false);
       haptic('error');
+      // Trigger ad AFTER game end
+      showPostGameAd().catch(() => {});
     }
-  }, [sessionId, score, gameState, onFinished, haptic]);
+  }, [sessionId, score, gameState, onFinished, haptic, showPostGameAd]);
 
   // Check 1000 score threshold auto-claim trigger
   useEffect(() => {
@@ -259,10 +285,13 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
         if (!hasMovesLeft(boardWithSpawn)) {
           haptic('warning');
           setGameState('gameover');
+          setGameActiveState(false);
+          // Trigger ad AFTER game end
+          showPostGameAd().catch(() => {});
         }
       }
     },
-    [board, gameState, haptic]
+    [board, gameState, haptic, showPostGameAd]
   );
 
   // Keyboard controls for desktop & dev preview testing
@@ -318,12 +347,23 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
     }
   };
 
+  const handlePlayAgain = async () => {
+    // Show ad BEFORE game restart
+    await showPreGameAd();
+    initGame();
+  };
+
+  const handleExit = () => {
+    setGameActiveState(false);
+    onBack();
+  };
+
   return (
     <div className="w-full flex flex-col items-center select-none">
       {/* Top Bar: Navigation & Score Display */}
       <div className="w-full flex items-center justify-between py-2 mb-3">
         <button
-          onClick={onBack}
+          onClick={handleExit}
           className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyber-card border border-cyber-border text-xs text-slate-300 hover:text-white transition-all active:scale-95"
         >
           <ArrowLeft size={14} />
@@ -472,14 +512,14 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
 
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={initGame}
+                    onClick={handlePlayAgain}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-card border border-cyber-border text-xs font-bold text-white hover:border-purple-400 flex items-center justify-center space-x-1.5 transition-all"
                   >
                     <RotateCcw size={14} />
                     <span>PLAY AGAIN</span>
                   </button>
                   <button
-                    onClick={onBack}
+                    onClick={handleExit}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold flex items-center justify-center space-x-1.5 shadow-md transition-all"
                   >
                     <Award size={14} />
@@ -513,7 +553,7 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
                     </button>
                   ) : (
                     <button
-                      onClick={initGame}
+                      onClick={handlePlayAgain}
                       className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-card border border-cyber-border text-xs font-bold text-white hover:border-cyber-cyan flex items-center justify-center space-x-1.5 transition-all"
                     >
                       <RotateCcw size={14} />
@@ -521,7 +561,7 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished }) => {
                     </button>
                   )}
                   <button
-                    onClick={onBack}
+                    onClick={handleExit}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-cyber-bg border border-cyber-border text-xs font-bold text-slate-300 hover:text-white transition-all"
                   >
                     <span>RETURN TO HUB</span>
