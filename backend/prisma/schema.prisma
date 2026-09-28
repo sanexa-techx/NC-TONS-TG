@@ -30,6 +30,8 @@ model User {
   daily_streak           Int              @default(0)
   last_daily_claim_date  DateTime?        @db.Date
   total_daily_claims     Int              @default(0)
+  mining_reminder_sent    Boolean          @default(false)
+  last_mining_reminder_at DateTime?
   created_at             DateTime         @default(now())
   claims                 MissionClaim[]
   withdrawals            Withdrawal[]

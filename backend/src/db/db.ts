@@ -305,6 +305,8 @@ const mockPrisma = {
         daily_streak: data.daily_streak || 0,
         last_daily_claim_date: data.last_daily_claim_date || null,
         total_daily_claims: data.total_daily_claims || 0,
+        mining_reminder_sent: data.mining_reminder_sent ?? false,
+        last_mining_reminder_at: data.last_mining_reminder_at || null,
         created_at: new Date(),
       };
       memoryStore.users.set(data.id.toString(), newUser);
@@ -317,6 +319,8 @@ const mockPrisma = {
       if (data.daily_streak !== undefined) existing.daily_streak = data.daily_streak;
       if (data.last_daily_claim_date !== undefined) existing.last_daily_claim_date = data.last_daily_claim_date;
       if (data.total_daily_claims !== undefined) existing.total_daily_claims = data.total_daily_claims;
+      if (data.mining_reminder_sent !== undefined) existing.mining_reminder_sent = Boolean(data.mining_reminder_sent);
+      if (data.last_mining_reminder_at !== undefined) existing.last_mining_reminder_at = data.last_mining_reminder_at;
 
       if (data.ton_balance?.increment) {
         existing.ton_balance = existing.ton_balance.plus(data.ton_balance.increment);
@@ -1264,6 +1268,45 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     return { rows: [{ cnt: approved.length, sum }], rowCount: 1 };
   }
 
+  // 17c. Mining reminder query: find users whose mining period ended and reminder not sent
+  if (normalized.includes('FROM users') && normalized.includes('mining_reminder_sent')) {
+    const now = Date.now();
+    const rows: any[] = [];
+    for (const u of memoryStore.users.values()) {
+      if (!u.mining_reminder_sent) {
+        const power = u.power_percentage ?? 100;
+        const capacityHours = u.power_capacity_hours || 8;
+        const lastSync = u.last_sync_at ? new Date(u.last_sync_at).getTime() : now;
+        const secondsUntilDepleted = (power / 100) * (capacityHours * 3600);
+        const depletionTime = lastSync + secondsUntilDepleted * 1000;
+        if (power === 0 || now >= depletionTime) {
+          rows.push({
+            id: u.id.toString(),
+            first_name: u.first_name,
+            username: u.username || null,
+            power_percentage: u.power_percentage ?? 0,
+            power_capacity_hours: u.power_capacity_hours || 8,
+            last_sync_at: u.last_sync_at,
+            ton_hashrate_per_sec: u.ton_hashrate_per_sec?.toString() || '0.00000100',
+            ton_balance: u.ton_balance?.toString() || '0.000000',
+          });
+        }
+      }
+    }
+    return { rows, rowCount: rows.length };
+  }
+
+  // 17d. Update mining reminder status
+  if (normalized.startsWith('UPDATE users SET mining_reminder_sent = TRUE')) {
+    const rawId = params[0]?.toString() || '';
+    const user = memoryStore.users.get(rawId);
+    if (user) {
+      user.mining_reminder_sent = true;
+      user.last_mining_reminder_at = new Date();
+    }
+    return { rows: [], rowCount: user ? 1 : 0 };
+  }
+
   // 18. Transaction control (BEGIN, COMMIT, ROLLBACK)
   if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized.toUpperCase())) {
     return { rows: [], rowCount: 0 };
@@ -1301,6 +1344,19 @@ export async function connectDB() {
     await realPrisma.$connect();
     isPostgresConnected = true;
     console.log('✅ Connected to PostgreSQL database');
+
+    if (realPool) {
+      try {
+        await realPool.query(`
+          ALTER TABLE users 
+          ADD COLUMN IF NOT EXISTS mining_reminder_sent BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS last_mining_reminder_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+        `);
+      } catch (colErr: any) {
+        console.warn('⚠️ Auto-migration check warning for users table:', colErr.message);
+      }
+    }
+
     return true;
   } catch (error) {
     isPostgresConnected = false;

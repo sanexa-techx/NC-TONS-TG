@@ -124,3 +124,56 @@ export async function notifyUserRewardCredited(
     console.warn(`Could not send reward notification to ${userId.toString()}:`, (err as Error).message);
   }
 }
+
+export async function notifyUserMiningPeriodEnded(
+  userId: bigint | string,
+  firstName: string,
+  tonAccrued?: string,
+  currentTonBalance?: string
+): Promise<boolean> {
+  if (!bot) {
+    console.log(`[DEV/MOCK BOT] Mining period reminder for user ${userId.toString()} (${firstName})`);
+    return false;
+  }
+
+  const WEBAPP_URL = process.env.WEBAPP_URL || ENV.WEBAPP_URL;
+  const launchUrl = `${WEBAPP_URL}?userId=${userId.toString()}`;
+
+  let message =
+    `🔋 <b>Mining Period Ended!</b> ⚠️\n\n` +
+    `Hello <b>${firstName}</b>, your NC TONs mining rig has exhausted its power battery and mining has stopped.\n\n`;
+
+  if (tonAccrued && parseFloat(tonAccrued) > 0) {
+    message += `💰 <b>Session Minted:</b> ${TON_EMOJI_TAG} <b>+${parseFloat(tonAccrued).toFixed(6)} TON</b>\n`;
+  }
+  if (currentTonBalance) {
+    message += `💎 <b>Total TON Balance:</b> <b>${parseFloat(currentTonBalance).toFixed(6)} TON</b>\n`;
+  }
+
+  message +=
+    `\n⚡ <i>Don't leave your rig idle!</i>\n` +
+    `Recharge your power grid back to 100% using NC Coins or a quick sponsored video to continue accumulating TON!`;
+
+  const inlineKeyboard = [];
+  if (launchUrl && launchUrl.startsWith('https://')) {
+    inlineKeyboard.push([{ text: '⚡ Recharge Power & Resume Mining 🚀', web_app: { url: launchUrl } }]);
+  } else if (launchUrl && launchUrl.startsWith('http')) {
+    inlineKeyboard.push([{ text: '⚡ Recharge Power & Resume Mining 🚀', url: launchUrl }]);
+  }
+
+  try {
+    await bot.telegram.sendMessage(userId.toString(), message, {
+      parse_mode: 'HTML',
+      reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined,
+    });
+    return true;
+  } catch (err: any) {
+    const errMsg = err?.message || '';
+    if (err?.response?.error_code === 403 || errMsg.includes('blocked')) {
+      console.warn(`[Mining Reminder] User ${userId.toString()} has blocked the bot or chat is unavailable.`);
+    } else {
+      console.warn(`[Mining Reminder] Could not send reminder to ${userId.toString()}:`, errMsg);
+    }
+    return false;
+  }
+}

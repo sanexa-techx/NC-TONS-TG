@@ -119,9 +119,22 @@ app.post('/api/admin/promos', authMiddleware, adminMiddleware, createAdminPromo)
 app.put('/api/admin/promos/:id/toggle', authMiddleware, adminMiddleware, toggleAdminPromo);
 app.delete('/api/admin/promos/:id', authMiddleware, adminMiddleware, deleteAdminPromo);
 
+// Mining Reminder Service & Admin Route
+import { MiningReminderService } from './services/miningReminderService.js';
+app.get('/api/admin/mining-reminders', authMiddleware, adminMiddleware, (req, res) => {
+  return res.json(MiningReminderService.getStats());
+});
+app.post('/api/admin/mining-reminders/trigger', authMiddleware, adminMiddleware, async (req, res) => {
+  const sent = await MiningReminderService.checkAndSendMiningReminders();
+  return res.json({ success: true, sentCount: sent, stats: MiningReminderService.getStats() });
+});
+
 // Initialize DB and Bot
 async function startServer() {
   await connectDB();
+
+  // Start Mining Reminder Background Worker (polls every 60s)
+  MiningReminderService.startMiningReminderWorker(60000);
 
   if (bot) {
     try {
@@ -145,8 +158,14 @@ async function startServer() {
       });
 
     // Graceful stop
-    process.once('SIGINT', () => bot?.stop('SIGINT'));
-    process.once('SIGTERM', () => bot?.stop('SIGTERM'));
+    process.once('SIGINT', () => {
+      MiningReminderService.stopMiningReminderWorker();
+      bot?.stop('SIGINT');
+    });
+    process.once('SIGTERM', () => {
+      MiningReminderService.stopMiningReminderWorker();
+      bot?.stop('SIGTERM');
+    });
   }
 
   app.listen(ENV.PORT, () => {
@@ -155,3 +174,4 @@ async function startServer() {
 }
 
 startServer();
+

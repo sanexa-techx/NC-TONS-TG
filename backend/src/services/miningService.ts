@@ -107,6 +107,7 @@ export class MiningService {
           nc_balance: { decrement: RECHARGE_NC_COST },
           power_percentage: 100,
           last_sync_at: new Date(),
+          mining_reminder_sent: false,
         },
       });
     } else {
@@ -116,6 +117,7 @@ export class MiningService {
         data: {
           power_percentage: 100,
           last_sync_at: new Date(),
+          mining_reminder_sent: false,
         },
       });
     }

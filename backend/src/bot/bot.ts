@@ -1,6 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
 import { pool } from '../db/index.js';
 import { ENV, isAdmin, getAdminIds } from '../config/env.js';
+import { MiningReminderService } from '../services/miningReminderService.js';
 
 let botInstance: Telegraf | null = null;
 
@@ -129,6 +130,7 @@ export async function setupBotCommands(b: Telegraf) {
             { command: 'admin', description: '🛡️ Admin Command Center' },
             { command: 'broadcast', description: '📢 Global broadcast' },
             { command: 'stats_global', description: '🌐 Global platform metrics' },
+            { command: 'check_reminders', description: '🔋 Sweep mining reminders' },
           ],
           { scope: { type: 'chat', chat_id: numId } }
         );
@@ -469,12 +471,16 @@ export function registerMasterBotHandlers(b: Telegraf) {
         `• <code>/broadcast &lt;text&gt;</code>: Dispatch announcement to all miners and channels\n` +
         `• <i>Reply to any photo/video with</i> <code>/broadcast</code>: Rich media replication\n` +
         `• <code>/stats_global</code>: Live platform economics & miner telemetry\n` +
+        `• <code>/check_reminders</code>: Sweep expired mining sessions & dispatch reminder DMs\n` +
         `• Review incoming payouts & social proofs directly in the Admin Channel`,
       {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.webApp('Open WebApp Admin Panel ⚡', `${WEBAPP_URL}?userId=${ctx.from.id}`)],
-          [Markup.button.callback('📊 Global Telemetry', 'admin_cmd:stats_global')],
+          [
+            Markup.button.callback('📊 Global Telemetry', 'admin_cmd:stats_global'),
+            Markup.button.callback('🔋 Sweep Reminders', 'admin_cmd:check_reminders'),
+          ],
           [
             Markup.button.url(
               'Private Review Channel 🔒',
@@ -516,12 +522,15 @@ export function registerMasterBotHandlers(b: Telegraf) {
       const pendingProofs = proofsPendingRes.rows[0]?.cnt || 0;
       const trackedChats = chatsCountRes.rows[0]?.cnt || 0;
 
+      const reminderStats = MiningReminderService.getStats();
+
       const message =
         `🌐 <b>NC TONs — Global Platform Telemetry</b>\n\n` +
         `👥 <b>Total Miners:</b> <code>${totalUsers}</code>\n` +
         `📢 <b>Tracked Channels/Groups:</b> <code>${trackedChats}</code>\n` +
         `💎 <b>Total User TON:</b> <code>${totalTon} TON</code>\n` +
         `🪙 <b>Total User NC:</b> <code>${totalNc} NC</code>\n\n` +
+        `🔋 <b>Mining Reminders Sent:</b> <code>${reminderStats.totalRemindersSent}</code> (Worker: ${reminderStats.workerActive ? 'Active 🟢' : 'Off 🔴'})\n` +
         `🏦 <b>Pending Withdrawals:</b> <code>${pendingWdCount}</code> (${pendingWdSum} TON)\n` +
         `✅ <b>Paid Withdrawals:</b> <code>${approvedWdCount}</code> (${approvedWdSum} TON)\n` +
         `📸 <b>Pending Screenshot Proofs:</b> <code>${pendingProofs}</code>\n\n` +
@@ -540,6 +549,33 @@ export function registerMasterBotHandlers(b: Telegraf) {
 
   b.command('stats_global', handleStatsGlobal);
   b.action('admin_cmd:stats_global', handleStatsGlobal);
+
+  const handleCheckReminders = async (ctx: any) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      if (ctx.answerCbQuery) return ctx.answerCbQuery('⛔ Unauthorized action.', { show_alert: true });
+      return ctx.reply('⛔ Unauthorized: Administrator permissions required.');
+    }
+
+    if (ctx.answerCbQuery) await ctx.answerCbQuery('⏳ Scanning miners...');
+    const statusMsg = await ctx.reply('⏳ Scanning database for expired mining sessions...');
+    const sent = await MiningReminderService.checkAndSendMiningReminders();
+    const stats = MiningReminderService.getStats();
+
+    return ctx.telegram.editMessageText(
+      ctx.chat.id,
+      statusMsg.message_id,
+      undefined,
+      `✅ <b>Mining Reminder Sweep Complete</b>\n\n` +
+        `📨 <b>Reminders Sent This Sweep:</b> <code>${sent}</code>\n` +
+        `📈 <b>Cumulative Sent:</b> <code>${stats.totalRemindersSent}</code>\n` +
+        `⏱️ <b>Worker Status:</b> ${stats.workerActive ? 'Polling every 60s 🟢' : 'Inactive 🔴'}\n` +
+        `⏰ <i>Sweep executed at ${new Date().toISOString().replace('T', ' ').slice(0, 19)} UTC</i>`,
+      { parse_mode: 'HTML' }
+    );
+  };
+
+  b.command('check_reminders', handleCheckReminders);
+  b.action('admin_cmd:check_reminders', handleCheckReminders);
 
   // ============================================================================
   // 5. WITHDRAWAL APPROVAL & REJECTION CALLBACKS

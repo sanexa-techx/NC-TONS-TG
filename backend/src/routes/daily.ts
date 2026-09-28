@@ -123,7 +123,8 @@ router.post("/claim", async (req, res) => {
            daily_streak = $4,
            last_daily_claim_date = CURRENT_DATE,
            total_daily_claims = total_daily_claims + 1,
-           last_sync_at = NOW()
+           last_sync_at = NOW(),
+           mining_reminder_sent = CASE WHEN $3 > 0 THEN FALSE ELSE mining_reminder_sent END
        WHERE id = $5
        RETURNING nc_balance, ton_balance, power_percentage, daily_streak`,
       [

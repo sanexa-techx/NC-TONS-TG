@@ -268,5 +268,10 @@ CREATE TABLE IF NOT EXISTS user_milestone_claims (
     CONSTRAINT unique_user_milestone UNIQUE (user_id, target_count)
 );
 
+-- Mining Period Ended Notifications & Reminders
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS mining_reminder_sent BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS last_mining_reminder_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+
 
 
