@@ -13,20 +13,29 @@ interface FriendsViewProps {
 
 export default function FriendsView({
   userId,
-  botUsername = 'NCTONs_bot',
+  botUsername,
   onBalanceUpdated,
 }: FriendsViewProps) {
   const [stats, setStats] = useState<any>(null);
   const [friends, setFriends] = useState<any[]>([]);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [rates, setRates] = useState<any>(null);
-  const [effectiveBot, setEffectiveBot] = useState<string>(botUsername);
+  const [effectiveBot, setEffectiveBot] = useState<string>(() => {
+    return (botUsername || (import.meta as any).env?.VITE_BOT_USERNAME || '').replace('@', '').trim();
+  });
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [claimingMilestone, setClaimingMilestone] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const inviteLink = `https://t.me/${effectiveBot}?start=ref_${userId}`;
+  // Sync if prop arrives from auth verification
+  useEffect(() => {
+    if (botUsername && (!effectiveBot || effectiveBot === 'NCTONs_bot')) {
+      setEffectiveBot(botUsername.replace('@', '').trim());
+    }
+  }, [botUsername]);
+
+  const inviteLink = effectiveBot ? `https://t.me/${effectiveBot}?start=ref_${userId}` : '';
 
   const fetchReferrals = async () => {
     try {
@@ -56,6 +65,7 @@ export default function FriendsView({
   }, [userId]);
 
   const handleCopyLink = () => {
+    if (!inviteLink) return;
     try {
       navigator.clipboard.writeText(inviteLink);
       setCopied(true);
@@ -69,6 +79,7 @@ export default function FriendsView({
   };
 
   const handleShareLink = () => {
+    if (!inviteLink) return;
     const text = '⚡ Mine real TON & NC Coins on NC TONs! Get a special bonus when you join with my link:';
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(text)}`;
     if (WebApp?.openTelegramLink) {
@@ -213,20 +224,41 @@ export default function FriendsView({
       )}
 
       {/* Share / Invite Action Buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={handleShareLink}
-          className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-98 transition"
-        >
-          <Share2 className="w-4 h-4" /> Invite Friends
-        </button>
-        <button
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <button
+            onClick={handleShareLink}
+            disabled={!effectiveBot}
+            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-98 transition disabled:opacity-50"
+          >
+            <Share2 className="w-4 h-4" /> Invite Friends
+          </button>
+          <button
+            onClick={handleCopyLink}
+            disabled={!effectiveBot}
+            title="Copy personal invite link"
+            className="p-3 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-2xl flex items-center justify-center text-neutral-300 active:scale-95 transition disabled:opacity-50"
+          >
+            {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
+          </button>
+        </div>
+
+        {/* Display Verified Referral Link */}
+        <div
           onClick={handleCopyLink}
-          title="Copy personal invite link"
-          className="p-3 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-2xl flex items-center justify-center text-neutral-300 active:scale-95 transition"
+          className="bg-neutral-900/80 border border-neutral-800/80 rounded-xl px-3 py-2 flex items-center justify-between gap-2 cursor-pointer hover:border-neutral-700 transition"
         >
-          {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Copy className="w-5 h-5" />}
-        </button>
+          <div className="font-mono text-[11px] text-neutral-300 truncate select-all">
+            {effectiveBot ? (
+              inviteLink
+            ) : (
+              <span className="text-neutral-500 animate-pulse">Detecting your bot link...</span>
+            )}
+          </div>
+          <span className="text-[10px] font-mono text-cyan-400 font-semibold shrink-0">
+            {copied ? 'COPIED!' : 'TAP TO COPY'}
+          </span>
+        </div>
       </div>
 
       {/* Squad Referral Milestones (1, 3, 7, 10 Referrals) */}

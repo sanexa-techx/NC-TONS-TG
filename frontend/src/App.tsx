@@ -44,6 +44,7 @@ export const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [dailyStatus, setDailyStatus] = useState<DailyStreakStatusResponse | null>(null);
   const [dailyModalOpen, setDailyModalOpen] = useState<boolean>(false);
+  const [botUsername, setBotUsername] = useState<string>('');
 
   const {
     mining,
@@ -74,6 +75,9 @@ export const App: React.FC = () => {
         localStorage.setItem('nctons_photo_url', finalPhoto);
       }
       setMiningState(res.mining);
+      if (res.botUsername) {
+        setBotUsername(res.botUsername);
+      }
 
       // Fetch daily streak status and auto-popup if ready
       try {
@@ -179,6 +183,7 @@ export const App: React.FC = () => {
           {activeTab === 'friends' && (
             <FriendsView
               userId={user?.id || ''}
+              botUsername={botUsername}
               onBalanceUpdated={() => sync()}
             />
           )}

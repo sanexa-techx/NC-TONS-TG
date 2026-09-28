@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../db/db.js';
 import { MiningService } from '../services/miningService.js';
 import { isAdmin } from '../config/env.js';
-import { bot } from '../bot/telegrafInstance.js';
+import { bot, getOrFetchBotUsername } from '../bot/bot.js';
 
 export async function verifyAuth(req: Request, res: Response) {
   try {
@@ -67,6 +67,8 @@ export async function verifyAuth(req: Request, res: Response) {
 
     const activePhoto = user.photo_url || incomingPhotoUrl || null;
 
+    const botUsername = (await getOrFetchBotUsername()).replace('@', '');
+
     return res.json({
       user: {
         id: user.id.toString(),
@@ -77,6 +79,7 @@ export async function verifyAuth(req: Request, res: Response) {
         isAdmin: isAdmin(userId),
       },
       mining: miningState,
+      botUsername,
     });
   } catch (err) {
     console.error('Error in auth verify:', err);

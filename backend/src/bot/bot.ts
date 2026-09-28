@@ -17,6 +17,49 @@ if (ENV.BOT_TOKEN && ENV.BOT_TOKEN !== 'YOUR_BOT_TOKEN_HERE') {
 
 export const bot = botInstance;
 
+let cachedBotUsername: string | null = null;
+
+/**
+ * Automatically detects and returns the Telegram Bot's real username from Telegram API via BOT_TOKEN
+ */
+export async function getOrFetchBotUsername(): Promise<string> {
+  const current = cachedBotUsername;
+  if (current) {
+    return current;
+  }
+
+  // 1. Check if process.env.BOT_USERNAME or ENV.BOT_USERNAME is explicitly configured
+  const envUsername = (process.env.BOT_USERNAME || (ENV as any).BOT_USERNAME || '').replace('@', '').trim();
+  if (envUsername) {
+    cachedBotUsername = envUsername;
+    return envUsername;
+  }
+
+  // 2. Automatically query Telegram API with the bot token
+  if (botInstance) {
+    try {
+      if (botInstance.botInfo?.username) {
+        const u = botInstance.botInfo.username.replace('@', '').trim();
+        cachedBotUsername = u;
+        return u;
+      }
+
+      const me = await botInstance.telegram.getMe();
+      if (me && me.username) {
+        const u = me.username.replace('@', '').trim();
+        cachedBotUsername = u;
+        botInstance.botInfo = me;
+        console.log(`🤖 Automatically detected Telegram Bot username from token: @${u}`);
+        return u;
+      }
+    } catch (err: any) {
+      console.warn('⚠️ Could not automatically fetch bot username from Telegram API:', err.message);
+    }
+  }
+
+  return '';
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function maskAddress(addr: string): string {
@@ -274,8 +317,10 @@ export function registerMasterBotHandlers(b: Telegraf) {
     try {
       const from = ctx.from;
       if (!from) return;
-      const botUsername = ctx.botInfo?.username || 'NCTons_Bot';
-      const refLink = `https://t.me/${botUsername}?start=ref_${from.id}`;
+      const botUsername = ctx.botInfo?.username || (await getOrFetchBotUsername());
+      const refLink = botUsername
+        ? `https://t.me/${botUsername}?start=ref_${from.id}`
+        : `${WEBAPP_URL}?ref=${from.id}`;
       const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Mine real TON coins with me on NC TONs! ⛏️💎')}`;
       const launchUrl = `${WEBAPP_URL}?userId=${from.id}`;
 
@@ -579,7 +624,7 @@ export function registerMasterBotHandlers(b: Telegraf) {
         let publicProofError = '';
 
         if (PUBLIC_PAYOUT_CHANNEL_ID) {
-          const botUsername = ctx.botInfo?.username || b.botInfo?.username || 'NCTons_Bot';
+          const botUsername = ctx.botInfo?.username || b.botInfo?.username || (await getOrFetchBotUsername());
           try {
             await b.telegram.sendMessage(
               PUBLIC_PAYOUT_CHANNEL_ID,

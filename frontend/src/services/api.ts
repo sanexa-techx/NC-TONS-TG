@@ -131,7 +131,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const api = {
   // Auth
-  async verifyAuth(): Promise<{ user: UserProfile; mining: MiningState }> {
+  async verifyAuth(): Promise<{ user: UserProfile; mining: MiningState; botUsername?: string }> {
     const tgWebApp = (window as any).Telegram?.WebApp;
     const initData = tgWebApp?.initData || '';
     const user = getDetectedUser();

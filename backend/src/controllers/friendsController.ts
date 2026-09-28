@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../db/db.js';
 import { Decimal } from '@prisma/client/runtime/library';
+import { getOrFetchBotUsername } from '../bot/bot.js';
 
 /**
  * GET /api/friends/stats
@@ -79,6 +80,8 @@ export async function getFriendStats(req: Request, res: Response) {
       username: r.referee?.username || null,
     }));
 
+    const detectedBot = await getOrFetchBotUsername();
+
     return res.json({
       stats: {
         referral_count: user.referral_count || 0,
@@ -99,7 +102,7 @@ export async function getFriendStats(req: Request, res: Response) {
           ton: premCfg?.ton_reward ? (premCfg.ton_reward instanceof Decimal ? premCfg.ton_reward.toFixed(6) : Number(premCfg.ton_reward).toFixed(6)) : '0.000200',
         },
       },
-      botUsername: (process.env.BOT_USERNAME || 'NCTONs_bot').replace('@', ''),
+      botUsername: detectedBot.replace('@', ''),
     });
   } catch (err: any) {
     console.error('Error fetching referral stats:', err);

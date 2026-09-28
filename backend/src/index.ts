@@ -37,7 +37,7 @@ import proofTasksRouter from './routes/proofTasks.js';
 import adsRouter from './routes/ads.js';
 
 // Telegraf Bot
-import { bot, registerMasterBotHandlers, setupBotCommands } from './bot/bot.js';
+import { bot, registerMasterBotHandlers, setupBotCommands, getOrFetchBotUsername } from './bot/bot.js';
 
 const app = express();
 
@@ -124,6 +124,15 @@ async function startServer() {
   await connectDB();
 
   if (bot) {
+    try {
+      const detected = await getOrFetchBotUsername();
+      if (detected) {
+        console.log(`🤖 Telegram Bot username verified from token: @${detected}`);
+      }
+    } catch (e: any) {
+      console.warn('⚠️ Bot auto-detection warning:', e.message);
+    }
+
     registerMasterBotHandlers(bot);
     await setupBotCommands(bot);
 
