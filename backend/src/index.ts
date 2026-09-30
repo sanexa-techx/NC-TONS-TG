@@ -36,21 +36,66 @@ import dailyRouter from './routes/daily.js';
 import proofTasksRouter from './routes/proofTasks.js';
 import adsRouter from './routes/ads.js';
 
-// Telegraf Bot
-import { bot, registerMasterBotHandlers, setupBotCommands, getOrFetchBotUsername } from './bot/bot.js';
+// Telegraf Bot Lifecycle & Keep-Alive Service
+import { initBotEngine, stopBotEngine, getBotState } from './bot/botLifecycle.js';
+import { KeepAliveService } from './services/keepAliveService.js';
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// 24/7 Keep-Alive & Ping Endpoints (Compatible with @Roboxyzbot, Telegram ping bots, UptimeRobot)
+app.all(['/', '/ping', '/api/ping', '/pong'], (req, res) => {
+  const userAgent = req.headers['user-agent'] || 'Unknown Agent';
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+
+  // Log ping activity so user can verify ping bot in Render service logs
+  console.log(`[Ping Bot] 📡 Ping received on '${req.path}' from ${userAgent} (${ip}) -> 200 OK`);
+
+  const botState = getBotState();
+
+  // Support plain text response if requested by certain ping bots
+  if (req.headers.accept?.includes('text/plain') || req.query.format === 'text') {
+    return res.status(200).send('PONG');
+  }
+
+  res.status(200).json({
+    status: 'ok',
+    alive: true,
+    service: 'NC TONs Backend',
+    uptimeSeconds: Math.floor(process.uptime()),
+    botMode: botState.mode,
+    botUsername: botState.botUsername,
+    timestamp: new Date().toISOString(),
+    message: 'Backend is awake and active. Render sleep averted.',
+  });
+});
+
 // Health Check
 app.get('/api/health', (req, res) => {
-  res.json({
+  const botState = getBotState();
+  res.status(200).json({
     status: 'ok',
     service: 'NC TONs Backend',
+    uptimeSeconds: Math.floor(process.uptime()),
+    environment: ENV.NODE_ENV,
+    botState,
     timestamp: new Date().toISOString(),
   });
+});
+
+// Keep-Alive Service telemetry & manual trigger
+app.get('/api/keep-alive/stats', (req, res) => {
+  res.json({
+    keepAlive: KeepAliveService.getStats(),
+    botState: getBotState(),
+  });
+});
+
+app.post('/api/keep-alive/ping', async (req, res) => {
+  const result = await KeepAliveService.pingNow();
+  res.json(result);
 });
 
 // Authentication & Profile
@@ -136,37 +181,23 @@ async function startServer() {
   // Start Mining Reminder Background Worker (polls every 60s)
   MiningReminderService.startMiningReminderWorker(60000);
 
-  if (bot) {
-    try {
-      const detected = await getOrFetchBotUsername();
-      if (detected) {
-        console.log(`🤖 Telegram Bot username verified from token: @${detected}`);
-      }
-    } catch (e: any) {
-      console.warn('⚠️ Bot auto-detection warning:', e.message);
-    }
+  // Initialize Telegram Bot Engine (Registers webhook on Render or starts polling for dev)
+  await initBotEngine(app);
 
-    registerMasterBotHandlers(bot);
-    await setupBotCommands(bot);
+  // Start Keep-Alive Worker (Self-pings public URL every 10 min to keep Render alive)
+  KeepAliveService.startKeepAliveWorker();
 
-    bot.launch({ dropPendingUpdates: true })
-      .then(() => {
-        console.log('🤖 Telegram Bot polling started successfully');
-      })
-      .catch((err) => {
-        console.warn('⚠️ Telegram Bot could not start polling:', err.message);
-      });
-
-    // Graceful stop
-    process.once('SIGINT', () => {
-      MiningReminderService.stopMiningReminderWorker();
-      bot?.stop('SIGINT');
-    });
-    process.once('SIGTERM', () => {
-      MiningReminderService.stopMiningReminderWorker();
-      bot?.stop('SIGTERM');
-    });
-  }
+  // Graceful stop
+  process.once('SIGINT', () => {
+    MiningReminderService.stopMiningReminderWorker();
+    KeepAliveService.stopKeepAliveWorker();
+    stopBotEngine('SIGINT');
+  });
+  process.once('SIGTERM', () => {
+    MiningReminderService.stopMiningReminderWorker();
+    KeepAliveService.stopKeepAliveWorker();
+    stopBotEngine('SIGTERM');
+  });
 
   app.listen(ENV.PORT, () => {
     console.log(`🚀 NC TONs Server listening on port ${ENV.PORT} [${ENV.NODE_ENV}]`);

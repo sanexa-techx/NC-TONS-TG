@@ -277,4 +277,84 @@ If configuring manually as a **Web Service**:
 - **Health Check Path**: `/api/health`
 
 ### Netlify Frontend Proxy Integration
-The Netlify frontend at [nctons-tg.netlify.app](https://nctons-tg.netlify.app) includes a proxy rule in `netlify.toml` forwarding `/api/*` requests directly to `https://nc-tons-backend.onrender.com/api/:splat`.
+The Netlify frontend at [nctons-tg.netlify.app](https://nctons-tg.netlify.app) includes a proxy rule in `netlify.toml` forwarding `/api/*` requests directly to `https://nctons-backend.onrender.com/api/:splat`.
+
+---
+
+## 16. TELEGRAM WEBHOOK & 24/7 RENDER KEEP-ALIVE GUIDE ⚡🤖
+
+### Why does Render Free Service sleep?
+On the **Render Free Tier**, web services automatically spin down ("go to sleep") after **15 minutes of zero incoming HTTP traffic**.
+- In standard **Polling mode** (`bot.launch()`), the bot maintains outbound HTTP long-polls to Telegram. Render's network proxy **does not count outbound traffic as incoming activity**, causing Render to sleep after 15 minutes.
+- Once asleep, long-polling completely halts, leaving the bot unresponsive until manually restarted or pinged.
+
+### The Solution: Webhook + 24/7 Ping Bot
+
+#### 1. Automatic Webhook Architecture
+The backend now features an intelligent **dual-mode bot lifecycle engine**:
+- **On Render (Production)**: Render automatically provides `RENDER_EXTERNAL_URL`. The bot detects this domain and registers its webhook with Telegram via `setWebhook`:
+  ```
+  Webhook URL: https://<your-service-name>.onrender.com/api/bot/webhook
+  ```
+- **Incoming Updates as HTTP Traffic**: Every user message, command, or button press on Telegram is delivered as an HTTPS POST request to your Render service. This incoming HTTP activity immediately wakes up the service or resets Render's 15-minute inactivity timer.
+- **Local Development**: When running locally without a public domain, the engine automatically falls back to clean **Polling mode** (automatically clearing old webhooks to prevent Telegram 409 Conflict errors).
+
+#### 2. 24/7 Keep-Alive Ping Endpoints
+The backend provides dedicated, lightweight 200 OK ping endpoints:
+- `GET /ping` — Ultra-fast, minimal JSON payload designed for ping bots and uptime monitors:
+  ```json
+  {
+    "status": "ok",
+    "alive": true,
+    "service": "NC TONs Backend",
+    "uptimeSeconds": 1420,
+    "botMode": "webhook",
+    "botUsername": "NCTONs_Bot",
+    "timestamp": "2026-09-30T17:30:00.000Z",
+    "message": "Backend is awake and active. Render sleep averted."
+  }
+  ```
+- `GET /api/ping` — Same lightweight keep-alive response under the `/api` namespace.
+- `GET /api/health` — Full health check including DB and bot state telemetry.
+
+#### 3. Setting Up a Free Ping Bot (Keeps Render Awake All Time)
+To guarantee your backend never sleeps, set up a ping monitor that sends an HTTP request every **5 to 10 minutes** (safely below Render's 15-minute limit):
+
+1. **Option 1: Telegram Ping Bot — [@Roboxyzbot](https://t.me/Roboxyzbot) (Recommended)**
+   - Open [@Roboxyzbot](https://t.me/Roboxyzbot) in Telegram.
+   - Send `/start` and select **Add Monitor / New Ping**.
+   - Enter your Render service URL (any of these work):
+     - `https://<your-service-name>.onrender.com/ping`
+     - Or root: `https://<your-service-name>.onrender.com/`
+     - Or API: `https://<your-service-name>.onrender.com/api/ping`
+   - Set the ping interval (e.g., **5 minutes** or **10 minutes**).
+   - Once activated, `@Roboxyzbot` will ping your server regularly. You can verify it working live in your Render dashboard logs:
+     ```
+     [Ping Bot] 📡 Ping received on '/ping' from RoboxyzBot ... -> 200 OK
+     ```
+
+2. **Option 2: UptimeRobot (Free Web Monitor)**
+   - Go to [UptimeRobot.com](https://uptimerobot.com) and create a free account.
+   - Click **Add New Monitor**:
+     - **Monitor Type**: `HTTP(s)`
+     - **Friendly Name**: `NC TONs Backend Keep-Alive`
+     - **URL (or IP)**: `https://<your-service-name>.onrender.com/ping`
+     - **Monitoring Interval**: `5 minutes` or `10 minutes`
+   - Click **Create Monitor**. Your Render service will now stay awake 24/7!
+
+3. **Option 3: Cron-job.org (Free Cron Service)**
+   - Go to [cron-job.org](https://cron-job.org) and register.
+   - Click **Create Cronjob**:
+     - **Title**: `NC TONs Render Ping`
+     - **Address**: `https://<your-service-name>.onrender.com/ping`
+     - **Schedule**: `Every 10 minutes`
+   - Save the job.
+
+4. **Option 4: Built-in Self-Ping Worker (`KeepAliveService`)**
+   - The backend includes an internal worker that automatically self-pings `https://<your-service-name>.onrender.com/ping` every 10 minutes when `RENDER_EXTERNAL_URL` is detected (controlled via `ENABLE_SELF_PING=true`).
+
+#### 4. Webhook Diagnostics & Verification
+You can inspect the live webhook and keep-alive health directly in your browser:
+- **Webhook Status**: `https://<your-service-name>.onrender.com/api/bot/webhook`
+- **Telegram API Webhook Info**: `https://<your-service-name>.onrender.com/api/bot/webhook-info` (shows pending update count, last error, and registered URL directly from Telegram API)
+- **Keep-Alive Telemetry**: `https://<your-service-name>.onrender.com/api/keep-alive/stats`

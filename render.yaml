@@ -37,3 +37,13 @@ services:
         sync: false
       - key: NOTION_TASKS_DATABASE_ID
         sync: false
+      - key: BOT_MODE
+        value: auto
+      - key: BOT_WEBHOOK_PATH
+        value: /api/bot/webhook
+      - key: BOT_WEBHOOK_URL
+        sync: false
+      - key: BOT_WEBHOOK_SECRET
+        sync: false
+      - key: ENABLE_SELF_PING
+        value: "true"
