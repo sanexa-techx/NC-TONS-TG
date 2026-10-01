@@ -90,8 +90,8 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
               </span>
             </h5>
             <p className="text-[10.5px] opacity-90 mt-0.5">
-              Adsgram: <span className="font-bold font-mono">{adStatus.adsgram.watched}/8</span> • Monetag:{" "}
-              <span className="font-bold font-mono">{adStatus.monetag.watched}/4</span> required
+              Monetag (Primary): <span className="font-bold font-mono">{adStatus.monetag.watched}/4</span> • Adsgram (Secondary):{" "}
+              <span className="font-bold font-mono">{adStatus.adsgram.watched}/8</span> required
             </p>
           </div>
         </div>
@@ -105,49 +105,19 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
         </div>
       </div>
 
-      {/* 1. Adsgram Mission Card */}
-      <div className="bg-neutral-900/90 border border-neutral-800 hover:border-yellow-500/30 rounded-2xl p-3.5 flex items-center justify-between text-white transition-all">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-lg bg-yellow-500/20 text-yellow-400 flex items-center justify-center">
-              <Video className="w-3.5 h-3.5" />
-            </div>
-            <h4 className="font-bold text-xs">Watch Adsgram Video</h4>
-            <span className="text-[10px] font-mono text-neutral-400">
-              ({adStatus.adsgram.watched}/{adStatus.adsgram.max})
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-xs font-mono pl-7.5">
-            <span className="text-yellow-400 font-bold flex items-center gap-1">
-              <NcIcon className="w-3.5 h-3.5" /> +200 NC
-            </span>
-            <span className="text-blue-400 font-bold flex items-center gap-1">
-              <TonIcon className="w-3.5 h-3.5" /> +0.00030 TON
-            </span>
-          </div>
-        </div>
-
-        <button
-          onClick={handleWatchAdsgram}
-          disabled={adStatus.adsgram.watched >= adStatus.adsgram.max || loading || adCooldown > 0}
-          className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-xl transition shadow-md shadow-yellow-500/10 active:scale-95 min-w-[85px] text-center"
-        >
-          {adStatus.adsgram.watched >= adStatus.adsgram.max
-            ? "Maxed"
-            : adCooldown > 0
-            ? `Wait (${adCooldown}s)`
-            : "Watch"}
-        </button>
-      </div>
-
-      {/* 2. Monetag Mission Card */}
+      {/* 1. Monetag Mission Card (Main Provider) */}
       <div className="bg-neutral-900/90 border border-neutral-800 hover:border-blue-500/30 rounded-2xl p-3.5 flex items-center justify-between text-white transition-all">
         <div className="space-y-1">
           <div className="flex items-center gap-1.5">
             <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5" />
             </div>
-            <h4 className="font-bold text-xs">Watch Monetag Ad</h4>
+            <div className="flex items-center gap-1.5">
+              <h4 className="font-bold text-xs">Watch Monetag Ad</h4>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                Primary
+              </span>
+            </div>
             <span className="text-[10px] font-mono text-neutral-400">
               ({adStatus.monetag.watched}/{adStatus.monetag.max})
             </span>
@@ -168,6 +138,46 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
           className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-500/10 active:scale-95 min-w-[85px] text-center"
         >
           {adStatus.monetag.watched >= adStatus.monetag.max
+            ? "Maxed"
+            : adCooldown > 0
+            ? `Wait (${adCooldown}s)`
+            : "Watch"}
+        </button>
+      </div>
+
+      {/* 2. Adsgram Mission Card (Secondary Provider - Missions Exclusive) */}
+      <div className="bg-neutral-900/90 border border-neutral-800 hover:border-yellow-500/30 rounded-2xl p-3.5 flex items-center justify-between text-white transition-all">
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-lg bg-yellow-500/20 text-yellow-400 flex items-center justify-center">
+              <Video className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <h4 className="font-bold text-xs">Watch Adsgram Video</h4>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                Missions
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-neutral-400">
+              ({adStatus.adsgram.watched}/{adStatus.adsgram.max})
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs font-mono pl-7.5">
+            <span className="text-yellow-400 font-bold flex items-center gap-1">
+              <NcIcon className="w-3.5 h-3.5" /> +200 NC
+            </span>
+            <span className="text-blue-400 font-bold flex items-center gap-1">
+              <TonIcon className="w-3.5 h-3.5" /> +0.00030 TON
+            </span>
+          </div>
+        </div>
+
+        <button
+          onClick={handleWatchAdsgram}
+          disabled={adStatus.adsgram.watched >= adStatus.adsgram.max || loading || adCooldown > 0}
+          className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-xl transition shadow-md shadow-yellow-500/10 active:scale-95 min-w-[85px] text-center"
+        >
+          {adStatus.adsgram.watched >= adStatus.adsgram.max
             ? "Maxed"
             : adCooldown > 0
             ? `Wait (${adCooldown}s)`

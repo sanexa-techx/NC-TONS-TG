@@ -209,8 +209,8 @@ NC TONS TG/
   - `user_daily_ads`: `user_id` (BIGINT), `ad_date` (DATE default CURRENT_DATE), `adsgram_count` (INT default 0), `monetag_count` (INT default 0), `last_ad_at` (TIMESTAMP), `PRIMARY KEY(user_id, ad_date)`.
   - `reward_configs`: seed `ad_adsgram` (200 NC, 0.000300 TON) and `ad_monetag` (200 NC, 0.000200 TON).
 - **Ad Provider Limits & Rewards**:
-  - **Adsgram**: Max 25 ads/day. Each view awards +200 NC and +0.000300 TON.
-  - **Monetag**: Max 15 ads/day. Each view awards +200 NC and +0.000200 TON.
+  - **Adsgram**: Max 50 ads/day. Each view awards +200 NC and +0.000300 TON.
+  - **Monetag**: Max 50 ads/day. Each view awards +200 NC and +0.000200 TON.
 - **Mandatory Daily Withdrawal Gatekeeper**:
   - In `POST /api/withdraw/request`, verify that the user's `user_daily_ads` record for `CURRENT_DATE` has:
     - `adsgram_count >= 8`

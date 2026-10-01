@@ -1,9 +1,9 @@
 import { bot } from './telegrafInstance.js';
 import { ENV } from '../config/env.js';
 
-// Define custom emoji IDs (from Telegram Sticker/Emoji pack or Telegram defaults)
-export const TON_EMOJI_TAG = `<tg-emoji emoji-id="5429447472099304169">💎</tg-emoji>`;
-export const NC_EMOJI_TAG = `<tg-emoji emoji-id="5373142416954200000">🪙</tg-emoji>`;
+// Standard Telegram-compatible emoji icons
+export const TON_EMOJI_TAG = '💎';
+export const NC_EMOJI_TAG = '🪙';
 
 export async function sendWithdrawalApprovalCard(
   withdrawalId: number,

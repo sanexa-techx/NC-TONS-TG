@@ -129,6 +129,7 @@ export async function setupBotCommands(b: Telegraf) {
           [
             { command: 'admin', description: '🛡️ Admin Command Center' },
             { command: 'broadcast', description: '📢 Global broadcast' },
+            { command: 'stop_broadcast', description: '🛑 Stop active broadcast' },
             { command: 'stats_global', description: '🌐 Global platform metrics' },
             { command: 'check_reminders', description: '🔋 Sweep mining reminders' },
           ],
@@ -469,6 +470,7 @@ export function registerMasterBotHandlers(b: Telegraf) {
         `Welcome, <b>${adminName}</b>! You have verified system administrator rights.\n\n` +
         `<b>Available Operations:</b>\n` +
         `• <code>/broadcast &lt;text&gt;</code>: Dispatch announcement to all miners and channels\n` +
+        `• <code>/stop_broadcast</code>: Immediately halt an active broadcast in progress\n` +
         `• <i>Reply to any photo/video with</i> <code>/broadcast</code>: Rich media replication\n` +
         `• <code>/stats_global</code>: Live platform economics & miner telemetry\n` +
         `• <code>/check_reminders</code>: Sweep expired mining sessions & dispatch reminder DMs\n` +
@@ -480,6 +482,9 @@ export function registerMasterBotHandlers(b: Telegraf) {
           [
             Markup.button.callback('📊 Global Telemetry', 'admin_cmd:stats_global'),
             Markup.button.callback('🔋 Sweep Reminders', 'admin_cmd:check_reminders'),
+          ],
+          [
+            Markup.button.callback('🛑 Stop Running Broadcast', 'admin_stop_broadcast'),
           ],
           [
             Markup.button.url(
@@ -580,6 +585,78 @@ export function registerMasterBotHandlers(b: Telegraf) {
   // ============================================================================
   // 5. WITHDRAWAL APPROVAL & REJECTION CALLBACKS
   // ============================================================================
+
+  function escapeHtml(text: string | null | undefined): string {
+    if (!text) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  async function resolveWithdrawalTargetChatId(): Promise<string> {
+    const fromEnv = (
+      process.env.WITHDRAWAL_GROUP_ID ||
+      process.env.WITHDRAWAL_CHANNEL_ID ||
+      process.env.PUBLIC_PAYOUT_CHANNEL_ID ||
+      process.env.PAYOUT_GROUP_ID ||
+      process.env.PAYOUT_CHANNEL_ID ||
+      process.env.WITHDRAWAL_PROOF_CHANNEL_ID ||
+      process.env.PROOF_CHANNEL_ID ||
+      (ENV as any).WITHDRAWAL_GROUP_ID ||
+      (ENV as any).WITHDRAWAL_CHANNEL_ID ||
+      ENV.PUBLIC_PAYOUT_CHANNEL_ID ||
+      ''
+    ).trim();
+
+    if (fromEnv) return fromEnv;
+
+    // Automatic fallback: detect payout channel or withdrawal group from bot_chats
+    try {
+      const res = await pool.query(
+        `SELECT chat_id, title FROM bot_chats 
+         WHERE title ILIKE '%payout%' OR title ILIKE '%withdraw%' OR title ILIKE '%payment%'
+         ORDER BY created_at DESC LIMIT 1`
+      );
+      if (res.rows.length > 0 && res.rows[0].chat_id) {
+        console.log(`📡 [Withdrawal Channel] Auto-detected from bot_chats: "${res.rows[0].title}" (${res.rows[0].chat_id})`);
+        return res.rows[0].chat_id.toString().trim();
+      }
+    } catch (err: any) {
+      console.warn('⚠️ [Withdrawal Channel] Auto-detection query failed:', err.message);
+    }
+
+    return '';
+  }
+
+  async function sendSafeTelegramMessage(
+    telegram: any,
+    targetChatId: string | number,
+    htmlMessage: string,
+    plainMessage: string,
+    options?: any
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await telegram.sendMessage(targetChatId, htmlMessage, {
+        parse_mode: 'HTML',
+        ...options,
+      });
+      return { success: true };
+    } catch (err: any) {
+      console.warn(`[SafeMessage] HTML delivery to ${targetChatId} failed (${err.message}). Retrying with plain text...`);
+      try {
+        const cleanOptions = { ...options };
+        delete cleanOptions.parse_mode;
+        await telegram.sendMessage(targetChatId, plainMessage, cleanOptions);
+        return { success: true };
+      } catch (fallbackErr: any) {
+        const errMsg = fallbackErr.message || err.message;
+        console.error(`[SafeMessage] Delivery failure to ${targetChatId}:`, errMsg);
+        return { success: false, error: errMsg };
+      }
+    }
+  }
+
   b.action(/^wd_(approve|reject):(\d+)$/, async (ctx) => {
     const action = ctx.match[1];
     const withdrawalId = parseInt(ctx.match[2], 10);
@@ -628,77 +705,144 @@ export function registerMasterBotHandlers(b: Telegraf) {
           );
         }
 
-        // Edit Private Admin Card
-        await ctx
-          .editMessageText(
-            `✅ <b>WITHDRAWAL APPROVED & PAID</b>\n\n` +
-              `🆔 <b>User ID:</b> <code>${wd.user_id}</code>\n` +
-              `👤 <b>User:</b> ${wd.first_name} ${wd.username ? `(@${wd.username})` : ''}\n` +
-              `💰 <b>Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b>\n` +
-              `🏦 <b>Wallet:</b> <code>${wd.ton_address}</code>\n` +
-              `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n` +
-              `👮 <b>Approved By:</b> ${adminName}`,
-            { parse_mode: 'HTML' }
-          )
-          .catch(() => {});
+        const safeFirstName = escapeHtml(wd.first_name || 'Miner');
+        const safeAdminName = escapeHtml(adminName);
+        const safeUsername = wd.username ? `(@${escapeHtml(wd.username)})` : '';
+        const tonAmount = parseFloat(wd.ton_amount).toFixed(4);
+        const walletAddress = wd.ton_address || '';
+        const maskedAddr = maskAddress(walletAddress);
+        const maskedUser = maskUserId(wd.user_id);
 
-        // DM to User
-        await b.telegram
-          .sendMessage(
-            wd.user_id.toString(),
-            `🎉 <b>Withdrawal Processed!</b>\n\n` +
-              `Your withdrawal of <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b> has been approved and paid.\n\n` +
-              `🏦 <b>Wallet:</b> <code>${wd.ton_address}</code>\n` +
-              `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n\n` +
-              `⚡ <i>Check your wallet balance. Thanks for mining with NC TONs!</i>`,
-            { parse_mode: 'HTML' }
-          )
-          .catch(() => {});
+        // 1. Edit Admin Message in Admin Channel
+        const adminCardHtml =
+          `✅ <b>WITHDRAWAL APPROVED & PAID</b>\n\n` +
+          `🆔 <b>User ID:</b> <code>${wd.user_id}</code>\n` +
+          `👤 <b>User:</b> ${safeFirstName} ${safeUsername}\n` +
+          `💰 <b>Amount:</b> <b>${tonAmount} TON</b>\n` +
+          `🏦 <b>Wallet:</b> <code>${walletAddress}</code>\n` +
+          `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n` +
+          `👮 <b>Approved By:</b> ${safeAdminName}`;
 
-        // Public Proof Broadcast
-        let publicProofSent = false;
-        let publicProofError = '';
+        const adminCardPlain =
+          `✅ WITHDRAWAL APPROVED & PAID\n\n` +
+          `User ID: ${wd.user_id}\n` +
+          `User: ${wd.first_name} ${wd.username ? `(@${wd.username})` : ''}\n` +
+          `Amount: ${tonAmount} TON\n` +
+          `Wallet: ${walletAddress}\n` +
+          `Time: ${resolvedTime}\n` +
+          `Approved By: ${adminName}`;
 
-        if (PUBLIC_PAYOUT_CHANNEL_ID) {
+        try {
+          await ctx.editMessageText(adminCardHtml, { parse_mode: 'HTML' });
+        } catch {
+          await ctx.editMessageText(adminCardPlain).catch(() => {});
+        }
+
+        // 2. Private Message (DM to User)
+        const userDmHtml =
+          `🎉 <b>Withdrawal Processed!</b>\n\n` +
+          `Your withdrawal request #${withdrawalId} of <b>${tonAmount} TON</b> has been approved and paid.\n\n` +
+          `🏦 <b>Wallet:</b> <code>${walletAddress}</code>\n` +
+          `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n\n` +
+          `⚡ <i>Check your wallet balance. Thanks for mining with NC TONs!</i>`;
+
+        const userDmPlain =
+          `🎉 Withdrawal Processed!\n\n` +
+          `Your withdrawal request #${withdrawalId} of ${tonAmount} TON has been approved and paid.\n\n` +
+          `Wallet: ${walletAddress}\n` +
+          `Time: ${resolvedTime}\n\n` +
+          `Check your wallet balance. Thanks for mining with NC TONs!`;
+
+        const dmResult = await sendSafeTelegramMessage(
+          ctx.telegram,
+          wd.user_id.toString(),
+          userDmHtml,
+          userDmPlain
+        );
+
+        if (dmResult.success) {
+          console.log(`✅ [Withdrawal Approval] DM successfully delivered to user ${wd.user_id}`);
+        } else {
+          console.warn(`⚠️ [Withdrawal Approval] DM delivery failed for user ${wd.user_id}: ${dmResult.error}`);
+        }
+
+        // 3. Post to Withdrawal Group / Channel
+        let groupSent = false;
+        let groupError = '';
+        const targetGroupId = await resolveWithdrawalTargetChatId();
+
+        if (targetGroupId) {
           const botUsername = ctx.botInfo?.username || b.botInfo?.username || (await getOrFetchBotUsername());
-          try {
-            await b.telegram.sendMessage(
-              PUBLIC_PAYOUT_CHANNEL_ID,
-              `💎 <b>NEW WITHDRAWAL SENT!</b>\n\n` +
-                `💰 <b>Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b>\n` +
-                `👤 <b>Miner:</b> <code>${maskUserId(wd.user_id)}</code> (${wd.first_name})\n` +
-                `🏦 <b>Wallet:</b> <code>${maskAddress(wd.ton_address)}</code>\n` +
-                `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n` +
-                `✅ <b>Status:</b> Confirmed & Paid\n\n` +
-                `🚀 <i>Mine real TON with @${botUsername}!</i>`,
-              {
-                parse_mode: 'HTML',
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      { text: '⛏️ Start Mining TON', url: `https://t.me/${botUsername}` },
-                      { text: '🔍 View on Tonviewer', url: `https://tonviewer.com/${wd.ton_address}` },
-                    ],
-                  ],
-                },
-              }
-            );
-            publicProofSent = true;
-          } catch (err: any) {
-            publicProofError = err?.message || 'Failed to deliver';
-            console.error('Public proof broadcast error:', err);
+
+          const groupHtml =
+            `💎 <b>NEW WITHDRAWAL SENT!</b>\n\n` +
+            `💰 <b>Amount:</b> <b>${tonAmount} TON</b>\n` +
+            `👤 <b>Miner:</b> <code>${maskedUser}</code> (${safeFirstName})\n` +
+            `🏦 <b>Wallet:</b> <code>${maskedAddr}</code>\n` +
+            `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n` +
+            `✅ <b>Status:</b> Confirmed & Paid\n\n` +
+            (botUsername ? `🚀 <i>Mine real TON with @${botUsername}!</i>` : `🚀 <i>Mine real TON with NC TONs!</i>`);
+
+          const groupPlain =
+            `💎 NEW WITHDRAWAL SENT!\n\n` +
+            `Amount: ${tonAmount} TON\n` +
+            `Miner: ${maskedUser} (${wd.first_name || 'Miner'})\n` +
+            `Wallet: ${maskedAddr}\n` +
+            `Time: ${resolvedTime}\n` +
+            `Status: Confirmed & Paid\n\n` +
+            (botUsername ? `Mine real TON with @${botUsername}!` : `Mine real TON with NC TONs!`);
+
+          // Safe inline buttons: only include valid URLs
+          const buttons: any[] = [];
+          if (botUsername && botUsername.trim().length > 0) {
+            buttons.push({ text: '⛏️ Start Mining TON', url: `https://t.me/${botUsername.trim()}` });
+          } else if (WEBAPP_URL && WEBAPP_URL.startsWith('http')) {
+            buttons.push({ text: '⛏️ Launch NC TONs', url: WEBAPP_URL });
           }
+          if (walletAddress && walletAddress.length > 10) {
+            buttons.push({ text: '🔍 View on Tonviewer', url: `https://tonviewer.com/${walletAddress}` });
+          }
+
+          const groupOptions = buttons.length > 0 ? {
+            reply_markup: {
+              inline_keyboard: [buttons]
+            }
+          } : undefined;
+
+          const groupResult = await sendSafeTelegramMessage(
+            ctx.telegram,
+            targetGroupId,
+            groupHtml,
+            groupPlain,
+            groupOptions
+          );
+
+          if (groupResult.success) {
+            groupSent = true;
+            console.log(`✅ [Withdrawal Approval] Posted payout proof to group/channel ${targetGroupId}`);
+          } else {
+            groupError = groupResult.error || 'Delivery failed';
+            console.error(`❌ [Withdrawal Approval] Failed to post to group ${targetGroupId}:`, groupError);
+          }
+        } else {
+          console.warn('⚠️ [Withdrawal Approval] No withdrawal group or channel configured.');
         }
 
         await client.query('COMMIT');
 
-        if (publicProofSent) {
-          return ctx.answerCbQuery('✅ Approved & posted to Public Proof channel!');
-        } else if (!PUBLIC_PAYOUT_CHANNEL_ID) {
-          return ctx.answerCbQuery('✅ Approved & paid! (Note: PUBLIC_PAYOUT_CHANNEL_ID not set in .env/Render)', { show_alert: true });
+        let alertMsg = '✅ Withdrawal approved and paid!';
+        if (groupSent && dmResult.success) {
+          alertMsg = '✅ Approved! Delivered to Withdrawal Group and user DM.';
+        } else if (groupSent && !dmResult.success) {
+          alertMsg = `✅ Approved & posted to Withdrawal Group!\n(User DM notice: ${dmResult.error?.includes('blocked') ? 'Bot blocked by user' : 'User hasn\'t started bot DM'})`;
+        } else if (!groupSent && dmResult.success) {
+          alertMsg = targetGroupId
+            ? `✅ Approved & DM sent!\n(⚠️ Group post issue: ${groupError})`
+            : '✅ Approved & DM sent!\n(⚠️ Note: Set WITHDRAWAL_GROUP_ID in .env/Render)';
         } else {
-          return ctx.answerCbQuery(`✅ Approved! (⚠️ Channel post issue: ${publicProofError})`, { show_alert: true });
+          alertMsg = `✅ Approved in DB!\n(⚠️ Group: ${groupError || 'Not configured'}, DM: ${dmResult.error || 'Chat not found'})`;
         }
+        return ctx.answerCbQuery(alertMsg, { show_alert: true });
       }
 
       if (action === 'reject') {
@@ -721,33 +865,62 @@ export function registerMasterBotHandlers(b: Telegraf) {
           wd.user_id,
         ]);
 
+        const safeFirstName = escapeHtml(wd.first_name || 'Miner');
+        const safeAdminName = escapeHtml(adminName);
+        const safeUsername = wd.username ? `(@${escapeHtml(wd.username)})` : '';
+        const tonAmount = parseFloat(wd.ton_amount).toFixed(4);
+        const walletAddress = wd.ton_address || '';
+
         // Edit Private Admin Card
-        await ctx
-          .editMessageText(
-            `❌ <b>WITHDRAWAL REJECTED & REFUNDED</b>\n\n` +
-              `🆔 <b>User ID:</b> <code>${wd.user_id}</code>\n` +
-              `👤 <b>User:</b> ${wd.first_name} ${wd.username ? `(@${wd.username})` : ''}\n` +
-              `💰 <b>Refunded Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b>\n` +
-              `🏦 <b>Wallet:</b> <code>${wd.ton_address}</code>\n` +
-              `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n` +
-              `👮 <b>Rejected By:</b> ${adminName}`,
-            { parse_mode: 'HTML' }
-          )
-          .catch(() => {});
+        const rejectAdminHtml =
+          `❌ <b>WITHDRAWAL REJECTED & REFUNDED</b>\n\n` +
+          `🆔 <b>User ID:</b> <code>${wd.user_id}</code>\n` +
+          `👤 <b>User:</b> ${safeFirstName} ${safeUsername}\n` +
+          `💰 <b>Refunded Amount:</b> <b>${tonAmount} TON</b>\n` +
+          `🏦 <b>Wallet:</b> <code>${walletAddress}</code>\n` +
+          `🕒 <b>Time:</b> <code>${resolvedTime}</code>\n` +
+          `👮 <b>Rejected By:</b> ${safeAdminName}`;
+
+        const rejectAdminPlain =
+          `❌ WITHDRAWAL REJECTED & REFUNDED\n\n` +
+          `User ID: ${wd.user_id}\n` +
+          `User: ${wd.first_name}\n` +
+          `Refunded Amount: ${tonAmount} TON\n` +
+          `Wallet: ${walletAddress}\n` +
+          `Time: ${resolvedTime}\n` +
+          `Rejected By: ${adminName}`;
+
+        try {
+          await ctx.editMessageText(rejectAdminHtml, { parse_mode: 'HTML' });
+        } catch {
+          await ctx.editMessageText(rejectAdminPlain).catch(() => {});
+        }
 
         // DM to User
-        await b.telegram
-          .sendMessage(
-            wd.user_id.toString(),
-            `⚠️ <b>Withdrawal Request Rejected</b>\n\n` +
-              `Your withdrawal of <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b> was rejected.\n` +
-              `🔄 <b>Funds have been refunded to your in-game balance.</b> Please verify your wallet address and try again.`,
-            { parse_mode: 'HTML' }
-          )
-          .catch(() => {});
+        const rejectDmHtml =
+          `⚠️ <b>Withdrawal Request Rejected</b>\n\n` +
+          `Your withdrawal request #${withdrawalId} of <b>${tonAmount} TON</b> was rejected.\n\n` +
+          `🔄 <b>Funds have been refunded to your in-game balance.</b> Please verify your wallet address and try again.`;
+
+        const rejectDmPlain =
+          `⚠️ Withdrawal Request Rejected\n\n` +
+          `Your withdrawal request #${withdrawalId} of ${tonAmount} TON was rejected.\n\n` +
+          `Funds have been refunded to your in-game balance. Please verify your wallet address and try again.`;
+
+        const dmRejectResult = await sendSafeTelegramMessage(
+          ctx.telegram,
+          wd.user_id.toString(),
+          rejectDmHtml,
+          rejectDmPlain
+        );
 
         await client.query('COMMIT');
-        return ctx.answerCbQuery('Withdrawal rejected and balance refunded.');
+        return ctx.answerCbQuery(
+          dmRejectResult.success
+            ? '❌ Withdrawal rejected, refunded, and user notified.'
+            : '❌ Withdrawal rejected and refunded in database.',
+          { show_alert: true }
+        );
       }
     } catch (err: any) {
       await client.query('ROLLBACK');
@@ -885,114 +1058,393 @@ export function registerMasterBotHandlers(b: Telegraf) {
   });
 
   // ============================================================================
-  // 7. ADMIN BROADCAST ENGINE (/broadcast)
+  // 7. ADMIN BROADCAST ENGINE (/broadcast & /stop_broadcast)
   // ============================================================================
-  b.command('broadcast', async (ctx) => {
+
+  interface ActiveBroadcastSession {
+    abort: boolean;
+    adminId: number;
+    adminName: string;
+    total: number;
+    delivered: number;
+    blocked: number;
+    failed: number;
+    startTime: number;
+    statusMsgId?: number;
+    statusChatId?: number | string;
+  }
+
+  let activeBroadcast: ActiveBroadcastSession | null = null;
+
+  async function safeBroadcastSendMessage(
+    telegram: any,
+    targetId: string,
+    text: string
+  ): Promise<void> {
+    try {
+      await telegram.sendMessage(targetId, text, { parse_mode: 'HTML' });
+    } catch (err: any) {
+      const isEntityError =
+        err.response?.error_code === 400 &&
+        (err.description?.toLowerCase().includes('entity') ||
+          err.description?.toLowerCase().includes('parse') ||
+          err.message?.toLowerCase().includes('entity') ||
+          err.message?.toLowerCase().includes('parse'));
+      if (isEntityError) {
+        await telegram.sendMessage(targetId, text);
+        return;
+      }
+      throw err;
+    }
+  }
+
+  async function safeBroadcastCopyMessage(
+    telegram: any,
+    targetId: string,
+    fromChatId: number | string,
+    messageId: number,
+    caption?: string
+  ): Promise<void> {
+    if (caption && caption.length > 0) {
+      try {
+        await telegram.copyMessage(targetId, fromChatId, messageId, {
+          caption,
+          parse_mode: 'HTML',
+        });
+      } catch (err: any) {
+        const isEntityError =
+          err.response?.error_code === 400 &&
+          (err.description?.toLowerCase().includes('entity') ||
+            err.description?.toLowerCase().includes('parse') ||
+            err.message?.toLowerCase().includes('entity') ||
+            err.message?.toLowerCase().includes('parse'));
+        if (isEntityError) {
+          await telegram.copyMessage(targetId, fromChatId, messageId, {
+            caption,
+          });
+          return;
+        }
+        throw err;
+      }
+    } else {
+      await telegram.copyMessage(targetId, fromChatId, messageId);
+    }
+  }
+
+  const handleStopBroadcast = async (ctx: any) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) {
+      if (ctx.answerCbQuery) return ctx.answerCbQuery('⛔ Unauthorized action.', { show_alert: true });
+      return ctx.reply('⛔ Unauthorized: Administrator permissions required.');
+    }
+
+    if (!activeBroadcast) {
+      if (ctx.answerCbQuery) return ctx.answerCbQuery('ℹ️ No broadcast is currently active.', { show_alert: true });
+      return ctx.reply('ℹ️ <b>No broadcast is currently running.</b>', { parse_mode: 'HTML' });
+    }
+
+    if (activeBroadcast.abort) {
+      if (ctx.answerCbQuery) return ctx.answerCbQuery('🛑 Broadcast is already stopping...', { show_alert: true });
+      return ctx.reply('⏳ <b>Broadcast stop in progress...</b> Final statistics will be posted momentarily.', {
+        parse_mode: 'HTML',
+      });
+    }
+
+    activeBroadcast.abort = true;
+
+    if (ctx.answerCbQuery) {
+      await ctx.answerCbQuery('🛑 Stopping broadcast...', { show_alert: true });
+    }
+
+    return ctx.reply(
+      `🛑 <b>Broadcast Cancellation Triggered!</b>\n\n` +
+        `Admin <b>${ctx.from.first_name || 'Admin'}</b> requested to halt the active broadcast.\n` +
+        `Stopping remaining dispatches immediately...`,
+      { parse_mode: 'HTML' }
+    );
+  };
+
+  b.command(['stop_broadcast', 'stopbroadcast', 'cancel_broadcast', 'broadcast_stop'], handleStopBroadcast);
+  b.action('admin_stop_broadcast', handleStopBroadcast);
+
+  const executeBroadcast = async (ctx: any) => {
     if (!ctx.from || !isAdmin(ctx.from.id)) {
       return ctx.reply('⛔ Unauthorized: Admin access required.');
     }
 
-    const replyMessage = ctx.message && 'reply_to_message' in ctx.message ? ctx.message.reply_to_message : undefined;
-    const rawText = ctx.message && 'text' in ctx.message ? ctx.message.text.replace('/broadcast', '').trim() : '';
+    if (activeBroadcast) {
+      const processed = activeBroadcast.delivered + activeBroadcast.blocked + activeBroadcast.failed;
+      return ctx.reply(
+        `⚠️ <b>A broadcast is already in progress!</b>\n\n` +
+          `👤 <b>Started by:</b> ${activeBroadcast.adminName}\n` +
+          `📊 <b>Progress:</b> ${processed} / ${activeBroadcast.total}\n` +
+          `✅ <b>Delivered:</b> ${activeBroadcast.delivered}\n` +
+          `🚫 <b>Blocked:</b> ${activeBroadcast.blocked}\n` +
+          `⚠️ <b>Failed:</b> ${activeBroadcast.failed}\n\n` +
+          `To cancel the current dispatch, send <code>/stop_broadcast</code> or tap below:`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('🛑 Stop Current Broadcast', 'admin_stop_broadcast')],
+          ]),
+        }
+      );
+    }
 
-    if (!replyMessage && !rawText) {
+    const message = ctx.message;
+    const replyMessage = message && 'reply_to_message' in message ? message.reply_to_message : undefined;
+
+    const textContent = message && 'text' in message ? message.text : '';
+    const captionContent = message && 'caption' in message ? message.caption : '';
+    const sourceString = textContent || captionContent || '';
+
+    // Strip /broadcast or /broadcast@botname
+    const rawText = sourceString.replace(/^\/broadcast(?:@\w+)?\s*/i, '').trim();
+
+    // Check if current message is direct media with /broadcast caption
+    const isDirectMedia =
+      !replyMessage &&
+      Boolean(
+        captionContent &&
+          ('photo' in message || 'video' in message || 'document' in message || 'animation' in message)
+      );
+
+    if (!replyMessage && !rawText && !isDirectMedia) {
       return ctx.reply(
         'ℹ️ <b>How to Broadcast:</b>\n\n' +
           '1. <b>Direct Text:</b> <code>/broadcast Your message text here</code>\n' +
-          '2. <b>Rich Media:</b> Reply to any photo, video, or formatted card with <code>/broadcast</code>',
+          '2. <b>Rich Media:</b> Reply to any photo, video, or formatted card with <code>/broadcast [optional new caption]</code>\n' +
+          '3. <b>Direct Photo/Video:</b> Send any photo or video with caption <code>/broadcast [your text]</code>\n' +
+          '4. <b>Stop Broadcast:</b> Use <code>/stop_broadcast</code> or tap the Stop button to cancel an active broadcast at any time.',
         { parse_mode: 'HTML' }
       );
     }
 
-    const statusMsg = await ctx.reply('⏳ Fetching target lists from database...');
+    const statusMsg = await ctx.reply('⏳ <b>Fetching target lists from database...</b>', { parse_mode: 'HTML' });
 
     try {
-      const usersResult = await pool.query('SELECT id FROM users');
-      const userIds: string[] = usersResult.rows.map((r: any) => r.id.toString());
+      // 1. Fetch user IDs
+      let userIds: string[] = [];
+      try {
+        const usersResult = await pool.query('SELECT id FROM users');
+        userIds = usersResult.rows.map((r: any) => r.id.toString());
+      } catch (uErr: any) {
+        console.error('Error fetching users for broadcast:', uErr.message);
+      }
 
-      const chatsResult = await pool.query('SELECT chat_id FROM bot_chats');
-      const groupIds: string[] = chatsResult.rows.map((r: any) => r.chat_id.toString());
+      // 2. Fetch group/channel chat IDs safely
+      let groupIds: string[] = [];
+      try {
+        const chatsResult = await pool.query('SELECT chat_id FROM bot_chats');
+        groupIds = chatsResult.rows.map((r: any) => r.chat_id.toString());
+      } catch (cErr: any) {
+        console.warn('⚠️ Warning: bot_chats query failed or table not initialized, skipping groups:', cErr.message);
+      }
 
+      // 3. Clean and deduplicate target IDs
       const targets = Array.from(
         new Set([
           ...userIds,
           ...groupIds,
           ...(PUBLIC_PAYOUT_CHANNEL_ID ? [PUBLIC_PAYOUT_CHANNEL_ID] : []),
         ])
-      );
+      ).filter((id) => id && id !== '0' && id !== 'undefined' && id !== 'null' && id.trim() !== '');
 
       const total = targets.length;
+
+      if (total === 0) {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          statusMsg.message_id,
+          undefined,
+          '⚠️ <b>No targets found!</b>\n\nNo registered users or groups found in the database.',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      activeBroadcast = {
+        abort: false,
+        adminId: ctx.from.id,
+        adminName: ctx.from.first_name || 'Admin',
+        total,
+        delivered: 0,
+        blocked: 0,
+        failed: 0,
+        startTime: Date.now(),
+        statusMsgId: statusMsg.message_id,
+        statusChatId: ctx.chat.id,
+      };
+
       await ctx.telegram.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
         undefined,
-        `🚀 <b>Broadcasting started...</b>\nTotal Targets: <b>${total}</b>`,
-        { parse_mode: 'HTML' }
+        `🚀 <b>Broadcasting started...</b>\n\n` +
+          `🎯 Total Targets: <b>${total}</b>\n` +
+          `⚡ Dispatch rate: ~25 msgs/sec\n\n` +
+          `<i>Tap below or send /stop_broadcast at any time to cancel.</i>`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('🛑 Stop Broadcast', 'admin_stop_broadcast')],
+          ]),
+        }
       );
 
-      let delivered = 0;
-      let blocked = 0;
-      let failed = 0;
-      const startTime = Date.now();
+      let lastEditTime = Date.now();
 
       for (let i = 0; i < total; i++) {
-        const targetId = targets[i];
+        // Abort check
+        if (activeBroadcast.abort) {
+          console.log(`[Broadcast] Aborted by admin at target ${i + 1}/${total}`);
+          break;
+        }
 
-        try {
-          if (replyMessage) {
-            await ctx.telegram.copyMessage(targetId, ctx.chat.id, replyMessage.message_id);
-          } else {
-            await ctx.telegram.sendMessage(targetId, rawText, { parse_mode: 'HTML' });
-          }
-          delivered++;
-        } catch (err: any) {
-          if (err.response?.error_code === 403) {
-            blocked++;
-          } else if (err.response?.error_code === 429) {
-            const waitSec = err.response?.parameters?.retry_after || 5;
-            await sleep(waitSec * 1000);
-            i--;
-            continue;
-          } else {
-            failed++;
+        const targetId = targets[i];
+        let retryCount = 0;
+        let success = false;
+
+        while (retryCount < 3 && !success && !activeBroadcast.abort) {
+          try {
+            if (isDirectMedia) {
+              await safeBroadcastCopyMessage(
+                ctx.telegram,
+                targetId,
+                ctx.chat.id,
+                message.message_id,
+                rawText || undefined
+              );
+            } else if (replyMessage) {
+              await safeBroadcastCopyMessage(
+                ctx.telegram,
+                targetId,
+                ctx.chat.id,
+                replyMessage.message_id,
+                rawText || undefined
+              );
+            } else {
+              await safeBroadcastSendMessage(ctx.telegram, targetId, rawText);
+            }
+            activeBroadcast.delivered++;
+            success = true;
+          } catch (err: any) {
+            const errCode = err.response?.error_code;
+            if (errCode === 403) {
+              // Blocked by user or kicked from chat
+              activeBroadcast.blocked++;
+              success = true;
+            } else if (errCode === 429) {
+              // Rate limited by Telegram
+              retryCount++;
+              if (retryCount >= 3) {
+                activeBroadcast.failed++;
+                success = true;
+                break;
+              }
+              const waitSec = Math.min(err.response?.parameters?.retry_after || 3, 10);
+              await sleep(waitSec * 1000);
+            } else {
+              // Other errors (e.g. 400 chat not found)
+              activeBroadcast.failed++;
+              success = true;
+            }
           }
         }
 
-        await sleep(35); // 35ms pacing ~ 28 msgs/sec
+        // Pacing delay to adhere to Telegram's 30 msgs/sec broadcast limit
+        await sleep(40);
 
-        if ((i + 1) % 100 === 0 || i === total - 1) {
-          const percent = Math.round(((i + 1) / total) * 100);
+        // Update progress UI (throttled to avoid Telegram editMessageText rate limit)
+        const isLast = i === total - 1;
+        const now = Date.now();
+        const timeSinceLastEdit = now - lastEditTime;
+
+        if (isLast || activeBroadcast.abort || (i + 1) % 25 === 0 || timeSinceLastEdit > 3000) {
+          lastEditTime = now;
+          const processed = i + 1;
+          const percent = Math.round((processed / total) * 100);
           await ctx.telegram
             .editMessageText(
               ctx.chat.id,
               statusMsg.message_id,
               undefined,
-              `📡 <b>Broadcasting in progress...</b>\n` +
-                `Progress: <b>${percent}%</b> (${i + 1}/${total})\n` +
-                `✅ Delivered: <code>${delivered}</code>\n` +
-                `🚫 Blocked: <code>${blocked}</code>\n` +
-                `⚠️ Failed: <code>${failed}</code>`,
-              { parse_mode: 'HTML' }
+              `📡 <b>Broadcasting in progress...</b>\n\n` +
+                `⏳ Progress: <b>${percent}%</b> (${processed}/${total})\n` +
+                `✅ Delivered: <code>${activeBroadcast.delivered}</code>\n` +
+                `🚫 Blocked: <code>${activeBroadcast.blocked}</code>\n` +
+                `⚠️ Failed: <code>${activeBroadcast.failed}</code>\n\n` +
+                `<i>Tap below or send /stop_broadcast to abort.</i>`,
+              {
+                parse_mode: 'HTML',
+                ...Markup.inlineKeyboard([
+                  [Markup.button.callback('🛑 Stop Broadcast', 'admin_stop_broadcast')],
+                ]),
+              }
             )
             .catch(() => {});
         }
       }
 
-      const duration = Math.round((Date.now() - startTime) / 1000);
-      await ctx.telegram.sendMessage(
-        ctx.chat.id,
-        `🎉 <b>Broadcast Complete!</b>\n\n` +
-          `⏱️ <b>Time:</b> ${duration}s\n` +
-          `🎯 <b>Total Targets:</b> ${total}\n` +
-          `✅ <b>Delivered:</b> ${delivered}\n` +
-          `🚫 <b>Blocked:</b> ${blocked}\n` +
-          `❌ <b>Failed:</b> ${failed}`,
-        { parse_mode: 'HTML' }
-      );
-    } catch (err) {
+      const duration = Math.round((Date.now() - activeBroadcast.startTime) / 1000);
+      const wasAborted = activeBroadcast.abort;
+      const totalProcessed = activeBroadcast.delivered + activeBroadcast.blocked + activeBroadcast.failed;
+
+      if (wasAborted) {
+        await ctx.telegram
+          .editMessageText(
+            ctx.chat.id,
+            statusMsg.message_id,
+            undefined,
+            `🛑 <b>Broadcast Stopped by Admin!</b>\n\n` +
+              `⏱️ <b>Duration:</b> ${duration}s\n` +
+              `🎯 <b>Total Targets:</b> ${total}\n` +
+              `📊 <b>Processed Before Stop:</b> ${totalProcessed}/${total}\n` +
+              `✅ <b>Delivered:</b> ${activeBroadcast.delivered}\n` +
+              `🚫 <b>Blocked / Left:</b> ${activeBroadcast.blocked}\n` +
+              `❌ <b>Failed:</b> ${activeBroadcast.failed}`,
+            { parse_mode: 'HTML' }
+          )
+          .catch(() => {});
+
+        await ctx.reply(
+          `🛑 <b>Broadcast successfully halted.</b> ${activeBroadcast.delivered} messages delivered before termination.`,
+          { parse_mode: 'HTML' }
+        );
+      } else {
+        await ctx.telegram
+          .editMessageText(
+            ctx.chat.id,
+            statusMsg.message_id,
+            undefined,
+            `🎉 <b>Broadcast Complete!</b>\n\n` +
+              `⏱️ <b>Duration:</b> ${duration}s\n` +
+              `🎯 <b>Total Targets:</b> ${total}\n` +
+              `✅ <b>Delivered:</b> ${activeBroadcast.delivered}\n` +
+              `🚫 <b>Blocked:</b> ${activeBroadcast.blocked}\n` +
+              `❌ <b>Failed:</b> ${activeBroadcast.failed}`,
+            { parse_mode: 'HTML' }
+          )
+          .catch(() => {});
+      }
+    } catch (err: any) {
       console.error('Broadcast failed:', err);
-      await ctx.reply('❌ Error occurred during broadcast.');
+      await ctx.reply(`❌ <b>Broadcast Error:</b> ${err?.message || 'Unknown error occurred'}`, {
+        parse_mode: 'HTML',
+      });
+    } finally {
+      activeBroadcast = null;
     }
+  };
+
+  b.command('broadcast', executeBroadcast);
+
+  // Also support sending photo/video/media directly with caption starting with /broadcast
+  b.on(['photo', 'video', 'document', 'animation'] as any, async (ctx: any, next: () => Promise<void>) => {
+    const caption = ctx.message && 'caption' in ctx.message ? ctx.message.caption : '';
+    if (caption && /^\/broadcast(@\w+)?(\s|$)/i.test(caption)) {
+      return executeBroadcast(ctx);
+    }
+    return next();
   });
 
   // ============================================================================

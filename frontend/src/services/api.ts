@@ -13,6 +13,8 @@ import {
   DailyStreakStatusResponse,
   DailyStreakClaimResponse,
   DailyAdStatusResponse,
+  LevelStatusResponse,
+  LevelUpgradeResponse,
 } from '../types/index.js';
 
 /**
@@ -185,7 +187,7 @@ export const api = {
 
   // Arcade Mini-Games
   async startGame(
-    gameType: 'game_memory' | 'game_2048' | 'game_carrace'
+    gameType: 'game_memory' | 'game_2048' | 'game_carrace' | 'game_tubesort'
   ): Promise<{ sessionId: string }> {
     const res = await fetch('/api/game/start', {
       method: 'POST',
@@ -197,12 +199,13 @@ export const api = {
 
   async finishGame(
     sessionId: string,
-    score: number
+    score: number,
+    movesCount?: number
   ): Promise<GameFinishResponse> {
     const res = await fetch('/api/game/finish', {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ sessionId, score }),
+      body: JSON.stringify({ sessionId, score, movesCount }),
     });
     return handleResponse(res);
   },
@@ -511,6 +514,26 @@ export const api = {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ provider, userId: id }),
+    });
+    return handleResponse(res);
+  },
+
+  // Level & Rig Upgrade System
+  async getLevelStatus(userId?: string | number): Promise<LevelStatusResponse> {
+    const id = userId || getDetectedUser()?.id;
+    const queryParam = id ? `?userId=${id}` : '';
+    const res = await fetch(`/api/level/status${queryParam}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async upgradeLevel(userId?: string | number): Promise<LevelUpgradeResponse> {
+    const id = userId || getDetectedUser()?.id;
+    const res = await fetch('/api/level/upgrade', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId: id }),
     });
     return handleResponse(res);
   },

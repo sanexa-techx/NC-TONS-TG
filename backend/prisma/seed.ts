@@ -35,6 +35,12 @@ async function main() {
       ton_reward: new Decimal('0.000025'),
     },
     {
+      action_type: 'game_tubesort',
+      display_name: 'Color Tube Sort',
+      nc_reward: 55,
+      ton_reward: new Decimal('0.000020'),
+    },
+    {
       action_type: 'watch_ad',
       display_name: 'Adsgram Rewarded Video',
       nc_reward: 250,

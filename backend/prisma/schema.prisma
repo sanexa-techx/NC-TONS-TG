@@ -16,7 +16,7 @@ model User {
   nc_balance           BigInt         @default(0)
   power_percentage     Int            @default(100)
   power_capacity_hours Int            @default(8)
-  ton_hashrate_per_sec Decimal        @default(0.00000100) @db.Decimal(12, 8)
+  ton_hashrate_per_sec Decimal        @default(0.00000020) @db.Decimal(12, 8)
   last_sync_at         DateTime       @default(now())
   referred_by            BigInt?
   referral_count         Int              @default(0)
@@ -27,6 +27,7 @@ model User {
   photo_url              String?          @db.Text
   photo_synced_at        DateTime?
   miner_level            Int              @default(1)
+  last_level_up_date     DateTime?        @db.Date
   daily_streak           Int              @default(0)
   last_daily_claim_date  DateTime?        @db.Date
   total_daily_claims     Int              @default(0)

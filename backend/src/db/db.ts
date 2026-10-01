@@ -61,6 +61,16 @@ const memoryStore = {
       },
     ],
     [
+      'game_tubesort',
+      {
+        action_type: 'game_tubesort',
+        display_name: 'Color Tube Sort',
+        nc_reward: 55,
+        ton_reward: new Decimal('0.000020'),
+        updated_at: new Date(),
+      },
+    ],
+    [
       'watch_ad',
       {
         action_type: 'watch_ad',
@@ -291,7 +301,7 @@ const mockPrisma = {
         id: BigInt(data.id),
         ton_balance: data.ton_balance instanceof Decimal ? data.ton_balance : new Decimal(data.ton_balance || 0),
         nc_balance: BigInt(data.nc_balance || 0),
-        ton_hashrate_per_sec: data.ton_hashrate_per_sec instanceof Decimal ? data.ton_hashrate_per_sec : new Decimal(data.ton_hashrate_per_sec || '0.00000100'),
+        ton_hashrate_per_sec: data.ton_hashrate_per_sec instanceof Decimal ? data.ton_hashrate_per_sec : new Decimal(data.ton_hashrate_per_sec || '0.00000020'),
         last_sync_at: data.last_sync_at || new Date(),
         referred_by: data.referred_by !== undefined ? (data.referred_by ? BigInt(data.referred_by) : null) : null,
         referral_count: data.referral_count || 0,
@@ -1287,7 +1297,7 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
             power_percentage: u.power_percentage ?? 0,
             power_capacity_hours: u.power_capacity_hours || 8,
             last_sync_at: u.last_sync_at,
-            ton_hashrate_per_sec: u.ton_hashrate_per_sec?.toString() || '0.00000100',
+            ton_hashrate_per_sec: u.ton_hashrate_per_sec?.toString() || '0.00000020',
             ton_balance: u.ton_balance?.toString() || '0.000000',
           });
         }
@@ -1305,6 +1315,82 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
       user.last_mining_reminder_at = new Date();
     }
     return { rows: [], rowCount: user ? 1 : 0 };
+  }
+
+  // 17e. Users query for broadcast and stats
+  if (normalized === 'SELECT id FROM users' || normalized === 'SELECT id FROM users;') {
+    const list = Array.from(memoryStore.users.values()).map((u) => ({
+      id: u.id.toString(),
+    }));
+    return { rows: list, rowCount: list.length };
+  }
+
+  if (normalized.includes('COUNT(*) as cnt FROM users')) {
+    return { rows: [{ cnt: memoryStore.users.size }], rowCount: 1 };
+  }
+
+  if (normalized.includes('SUM(ton_balance) as total_ton FROM users')) {
+    let sumTon = 0;
+    for (const u of memoryStore.users.values()) {
+      sumTon += parseFloat(u.ton_balance?.toString() || '0');
+    }
+    return { rows: [{ total_ton: sumTon.toFixed(6) }], rowCount: 1 };
+  }
+
+  if (normalized.includes('SUM(nc_balance) as total_nc FROM users')) {
+    let sumNc = 0;
+    for (const u of memoryStore.users.values()) {
+      sumNc += Number(u.nc_balance || 0);
+    }
+    return { rows: [{ total_nc: sumNc }], rowCount: 1 };
+  }
+
+  if (normalized.includes("COUNT(*) as cnt FROM task_proof_submissions WHERE status = 'PENDING_REVIEW'")) {
+    const count = memoryStore.taskProofSubmissions.filter((s) => s.status === 'PENDING_REVIEW').length;
+    return { rows: [{ cnt: count }], rowCount: 1 };
+  }
+
+  if (normalized.includes('COUNT(*) as cnt FROM bot_chats')) {
+    return { rows: [{ cnt: memoryStore.botChats.size }], rowCount: 1 };
+  }
+
+  // 17f. Game sessions raw SQL queries
+  if (normalized.startsWith('INSERT INTO game_sessions')) {
+    const uId = BigInt(params[0]);
+    const gType = params[1] || 'game_tubesort';
+    const sId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const started = new Date();
+    memoryStore.gameSessions.set(sId, {
+      id: sId,
+      user_id: uId,
+      game_type: gType,
+      status: 'ACTIVE',
+      started_at: started,
+      finished_at: null,
+      score: null,
+    });
+    return { rows: [{ id: sId, started_at: started }], rowCount: 1 };
+  }
+
+  if (normalized.startsWith('DELETE FROM game_sessions')) {
+    const sId = params[0];
+    const uId = BigInt(params[1]);
+    const gType = params[2] || 'game_tubesort';
+    const session = memoryStore.gameSessions.get(sId);
+    if (session && session.user_id === uId && session.game_type === gType) {
+      memoryStore.gameSessions.delete(sId);
+      return { rows: [{ started_at: session.started_at }], rowCount: 1 };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  if (normalized.includes('FROM reward_configs WHERE action_type =')) {
+    const actType = params[0] || 'game_tubesort';
+    const cfg = memoryStore.rewardConfigs.get(actType);
+    if (cfg) {
+      return { rows: [{ nc_reward: cfg.nc_reward, ton_reward: cfg.ton_reward.toString() }], rowCount: 1 };
+    }
+    return { rows: [{ nc_reward: 55, ton_reward: '0.000020' }], rowCount: 1 };
   }
 
   // 18. Transaction control (BEGIN, COMMIT, ROLLBACK)
@@ -1352,8 +1438,24 @@ export async function connectDB() {
           ADD COLUMN IF NOT EXISTS mining_reminder_sent BOOLEAN DEFAULT FALSE,
           ADD COLUMN IF NOT EXISTS last_mining_reminder_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
         `);
+        await realPool.query(`
+          CREATE TABLE IF NOT EXISTS bot_chats (
+            chat_id BIGINT PRIMARY KEY,
+            chat_type VARCHAR(32) NOT NULL,
+            title VARCHAR(255),
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+          );
+        `);
+        await realPool.query(`
+          INSERT INTO reward_configs (action_type, display_name, nc_reward, ton_reward)
+          VALUES ('game_tubesort', 'Color Tube Sort', 55, 0.000020)
+          ON CONFLICT (action_type) DO UPDATE 
+          SET nc_reward = EXCLUDED.nc_reward,
+              ton_reward = EXCLUDED.ton_reward,
+              display_name = EXCLUDED.display_name;
+        `);
       } catch (colErr: any) {
-        console.warn('⚠️ Auto-migration check warning for users table:', colErr.message);
+        console.warn('⚠️ Auto-migration check warning for database:', colErr.message);
       }
     }
 

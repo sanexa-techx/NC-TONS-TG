@@ -62,7 +62,7 @@ export interface RewardConfig {
   updatedAt?: string;
 }
 
-export type ActiveGameType = 'game_memory' | 'game_2048' | 'game_carrace';
+export type ActiveGameType = 'game_memory' | 'game_2048' | 'game_carrace' | 'game_tubesort';
 
 export interface GameStartResponse {
   sessionId: string;
@@ -215,5 +215,29 @@ export interface DailyAdStatusResponse {
   canWithdraw: boolean;
 }
 
+export interface LevelStatusResponse {
+  success: boolean;
+  currentLevel: number;
+  nextLevel: number;
+  currentHashrate: string;
+  nextHashrate: string;
+  adsWatchedToday: number;
+  adsgramWatched: number;
+  monetagWatched: number;
+  adsRequired: number;
+  adsRemaining: number;
+  progressPercent: number;
+  canLevelUp: boolean;
+  hasLeveledUpToday: boolean;
+  maxWithdrawTon: number | null;
+  canWithdrawOverHalfTon: boolean;
+}
 
-
+export interface LevelUpgradeResponse {
+  success: boolean;
+  message: string;
+  newLevel: number;
+  newHashrate: string;
+  bonusNc: number;
+  canWithdrawOverHalfTon: boolean;
+}

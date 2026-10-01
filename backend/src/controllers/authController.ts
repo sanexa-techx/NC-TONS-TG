@@ -29,7 +29,7 @@ export async function verifyAuth(req: Request, res: Response) {
           nc_balance: 100, // New user bonus
           power_percentage: 100,
           power_capacity_hours: 8,
-          ton_hashrate_per_sec: 0.00000100,
+          ton_hashrate_per_sec: 0.00000020,
           photo_url: incomingPhotoUrl,
           photo_synced_at: incomingPhotoUrl ? new Date() : null,
         },

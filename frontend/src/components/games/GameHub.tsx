@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActiveGameType } from '../../types/index.js';
-import { Brain, Grid2X2, Car, Sparkles, Trophy, ArrowRight, ShieldAlert, LucideIcon } from 'lucide-react';
+import { Brain, Grid2X2, Car, TestTubes, Sparkles, Trophy, ArrowRight, ShieldAlert, LucideIcon } from 'lucide-react';
 import { TonIcon, NcIcon } from '../icons/index.js';
 
 interface GameHubProps {
@@ -23,6 +23,20 @@ interface GameCardInfo {
 }
 
 const ARCADE_GAMES: GameCardInfo[] = [
+  {
+    type: 'game_tubesort',
+    title: 'Color Tube Sort',
+    badge: 'LOGIC SORT',
+    badgeColor: 'text-amber-400 bg-amber-500/15 border-amber-500/30',
+    description: 'Segregate mixed chemical isotopes into matching color flasks before the 1-minute countdown ends. Utilize buffer tubes and fluid pouring mechanics.',
+    icon: TestTubes,
+    accentColor: 'text-amber-400',
+    glowClass: 'shadow-amber-500/20',
+    borderClass: 'hover:border-amber-500/60 group-hover:shadow-amber-500/30',
+    ncReward: 55,
+    tonReward: '0.000020',
+    rules: ['6 Flasks Matrix', '60s Countdown', 'Min. 15s Anti-Cheat'],
+  },
   {
     type: 'game_memory',
     title: 'Memory Matrix',
@@ -86,7 +100,7 @@ export const GameHub: React.FC<GameHubProps> = ({ onSelectGame }) => {
 
         <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-cyber-card border border-cyber-border text-xs">
           <Sparkles size={13} className="text-cyber-gold" />
-          <span className="font-mono text-slate-300 font-bold">3 ACTIVE</span>
+          <span className="font-mono text-slate-300 font-bold">4 ACTIVE</span>
         </div>
       </div>
 

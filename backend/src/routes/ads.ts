@@ -4,8 +4,8 @@ import { pool } from "../db/db.js";
 const router = Router();
 
 export const AD_LIMITS = {
-  adsgram: { max: 25, minWithdraw: 8, nc: 200, ton: 0.000300 },
-  monetag: { max: 15, minWithdraw: 4, nc: 200, ton: 0.000200 },
+  adsgram: { max: 50, minWithdraw: 8, nc: 200, ton: 0.000300 },
+  monetag: { max: 50, minWithdraw: 4, nc: 200, ton: 0.000200 },
 };
 
 // 1. Get User Daily Ad Status

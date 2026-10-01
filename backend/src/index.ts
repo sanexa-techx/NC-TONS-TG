@@ -35,6 +35,8 @@ import { getUserProfile, getAvatarProxy } from './controllers/profileController.
 import dailyRouter from './routes/daily.js';
 import proofTasksRouter from './routes/proofTasks.js';
 import adsRouter from './routes/ads.js';
+import gamesRouter from './routes/games.js';
+import levelRouter from './routes/level.js';
 
 // Telegraf Bot Lifecycle & Keep-Alive Service
 import { initBotEngine, stopBotEngine, getBotState } from './bot/botLifecycle.js';
@@ -108,9 +110,9 @@ app.get('/api/user/avatar/:userId', getAvatarProxy);
 app.post('/api/mining/sync', authMiddleware, syncMining);
 app.post('/api/mining/recharge', authMiddleware, rechargeMining);
 
-// Mini-Game
-app.post('/api/game/start', authMiddleware, startGame);
-app.post('/api/game/finish', authMiddleware, finishGame);
+// Mini-Game (Supports both /api/game and /api/games)
+app.use('/api/games', gamesRouter);
+app.use('/api/game', gamesRouter);
 
 // Missions Marketplace
 app.get('/api/missions/available', authMiddleware, getAvailableMissions);
@@ -138,6 +140,9 @@ app.use('/api/proof', proofTasksRouter);
 
 // Dual Ad Networks (Adsgram & Monetag)
 app.use('/api/ads', adsRouter);
+
+// Level & Rig Upgrade System
+app.use('/api/level', levelRouter);
 
 // Notion Workspace Integration
 import notionRouter from './routes/notion.js';

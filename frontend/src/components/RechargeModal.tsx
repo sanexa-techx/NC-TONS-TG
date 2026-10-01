@@ -165,7 +165,7 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({
                   <Tv size={20} />
                 </div>
                 <div>
-                  <div className="font-bold text-sm text-white">Watch Video Ad (Adsgram)</div>
+                  <div className="font-bold text-sm text-white">Watch Sponsored Ad (Monetag)</div>
                   <div className="text-[11px] text-slate-400 flex items-center space-x-1.5 mt-0.5">
                     <span>Free full recharge</span>
                     <span>•</span>

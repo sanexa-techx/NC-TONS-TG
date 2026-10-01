@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     nc_balance BIGINT DEFAULT 0 NOT NULL,
     power_percentage INT DEFAULT 100 NOT NULL,
     power_capacity_hours INT DEFAULT 8 NOT NULL,
-    ton_hashrate_per_sec NUMERIC(12, 8) DEFAULT 0.00000100 NOT NULL,
+    ton_hashrate_per_sec NUMERIC(12, 8) DEFAULT 0.00000020 NOT NULL,
     last_sync_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     referrer_id BIGINT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
@@ -149,7 +149,8 @@ CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 ALTER TABLE users 
 ADD COLUMN IF NOT EXISTS photo_url TEXT DEFAULT NULL,
 ADD COLUMN IF NOT EXISTS photo_synced_at TIMESTAMP DEFAULT NULL,
-ADD COLUMN IF NOT EXISTS miner_level INT DEFAULT 1;
+ADD COLUMN IF NOT EXISTS miner_level INT DEFAULT 1,
+ADD COLUMN IF NOT EXISTS last_level_up_date DATE DEFAULT NULL;
 
 -- Daily Streak & Reward System (NC TONs)
 -- 1. Extend Users Table
@@ -234,7 +235,8 @@ VALUES
   ('ad_adsgram', 'Adsgram Rewarded Video', 200, 0.000300),
   ('ad_monetag', 'Monetag Rewarded Ad', 200, 0.000200),
   ('referral_standard', 'Standard Referral Bonus', 1000, 0.000080),
-  ('referral_premium', 'Telegram Premium Referral Bonus', 2500, 0.000200)
+  ('referral_premium', 'Telegram Premium Referral Bonus', 2500, 0.000200),
+  ('game_tubesort', 'Color Tube Sort', 55, 0.000020)
 ON CONFLICT (action_type) DO UPDATE 
 SET nc_reward = EXCLUDED.nc_reward,
     ton_reward = EXCLUDED.ton_reward,
@@ -273,5 +275,10 @@ ALTER TABLE users
 ADD COLUMN IF NOT EXISTS mining_reminder_sent BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS last_mining_reminder_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
 
-
-
+-- Bot Chats Table (For tracking groups & channels for broadcasts)
+CREATE TABLE IF NOT EXISTS bot_chats (
+    chat_id BIGINT PRIMARY KEY,
+    chat_type VARCHAR(32) NOT NULL,
+    title VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);

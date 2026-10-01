@@ -2,21 +2,23 @@ import crypto from 'crypto';
 import { prisma } from '../db/db.js';
 import { Decimal } from '@prisma/client/runtime/library';
 
-export type ValidGameType = 'game_memory' | 'game_2048' | 'game_carrace';
+export type ValidGameType = 'game_memory' | 'game_2048' | 'game_carrace' | 'game_tubesort';
 
-export const VALID_GAME_TYPES: ValidGameType[] = ['game_memory', 'game_2048', 'game_carrace'];
+export const VALID_GAME_TYPES: ValidGameType[] = ['game_memory', 'game_2048', 'game_carrace', 'game_tubesort'];
 
 // Anti-cheat minimum time threshold in seconds
 export const TIMING_THRESHOLDS: Record<ValidGameType, number> = {
   game_memory: 10,   // Minimum 10 seconds
   game_carrace: 28,  // Minimum 28 seconds (rounds last 30s)
   game_2048: 20,     // Minimum 20 seconds
+  game_tubesort: 15, // Minimum 15 seconds
 };
 
 const DEFAULT_REWARDS: Record<ValidGameType, { nc: number; ton: Decimal }> = {
   game_memory: { nc: 45, ton: new Decimal('0.000015') },
   game_2048: { nc: 60, ton: new Decimal('0.000020') },
   game_carrace: { nc: 50, ton: new Decimal('0.000025') },
+  game_tubesort: { nc: 55, ton: new Decimal('0.000020') },
 };
 
 export class GameService {
@@ -53,11 +55,12 @@ export class GameService {
   static async finishSession(
     userId: bigint,
     sessionId: string,
-    score: number
+    score: number,
+    movesCount?: number
   ): Promise<{
     success: boolean;
     reward: { nc: number; ton: string };
-    newBalances: { nc: string; ton: string };
+    newBalances: { nc: string; ton: string; nc_balance?: string; ton_balance?: string };
     ncAwarded: number;
     tonAwarded: string;
     newNcBalance: string;
@@ -102,6 +105,15 @@ export class GameService {
       );
     }
 
+    if (gameType === 'game_tubesort') {
+      const effectiveMoves = movesCount !== undefined ? movesCount : score;
+      if (effectiveMoves < 8) {
+        throw new Error(
+          `Insufficient moves count (${effectiveMoves} < 8). Anti-cheat triggered.`
+        );
+      }
+    }
+
     // Query current rates from reward_configs for this specific game type
     const config = await prisma.rewardConfig.findUnique({
       where: { action_type: gameType },
@@ -137,6 +149,8 @@ export class GameService {
       newBalances: {
         nc: newNcBal,
         ton: newTonBal,
+        nc_balance: newNcBal,
+        ton_balance: newTonBal,
       },
       ncAwarded: ncReward,
       tonAwarded: tonRewardStr,

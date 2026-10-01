@@ -58,6 +58,21 @@ export async function requestWithdrawal(req: Request, res: Response) {
       });
     }
 
+    // Level restriction: Must be Level 2+ to withdraw more than 0.5 TON
+    const userLevel = user.miner_level || 1;
+    if (userLevel < 2 && amountNum > 0.5) {
+      return res.status(403).json({
+        error: 'Level 2 required to withdraw more than 0.5 TON.',
+        details: {
+          currentLevel: userLevel,
+          requiredLevel: 2,
+          maxWithdrawForLevel: 0.5,
+          requestedAmount: amountNum,
+          message: 'Level 1 miners can withdraw up to 0.50 TON. Upgrade your rig to Level 2 by watching 50 ads in one day to unlock payouts above 0.5 TON!',
+        },
+      });
+    }
+
     // Freezes funds immediately and records pending withdrawal
     const withdrawal = await prisma.$transaction(async (tx) => {
       await tx.user.update({

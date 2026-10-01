@@ -70,7 +70,7 @@ export class MiningService {
       ncBalance: updatedUser.nc_balance.toString(),
       powerPercentage: updatedUser.power_percentage,
       powerCapacityHours: updatedUser.power_capacity_hours,
-      tonHashratePerSec: updatedUser.ton_hashrate_per_sec.toString(),
+      tonHashratePerSec: Number(updatedUser.ton_hashrate_per_sec).toFixed(8),
       accruedTon: accruedTonDecimal.toFixed(6),
       elapsedSeconds: Math.round(elapsedSeconds),
       activeSeconds: Math.round(activeSeconds),

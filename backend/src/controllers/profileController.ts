@@ -59,7 +59,7 @@ export async function getUserProfile(req: Request, res: Response) {
             nc_balance: 100,
             power_percentage: 100,
             power_capacity_hours: 8,
-            ton_hashrate_per_sec: 0.00000100,
+            ton_hashrate_per_sec: 0.00000020,
             photo_url: null,
             photo_synced_at: null,
             miner_level: 1,

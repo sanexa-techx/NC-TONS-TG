@@ -4,6 +4,7 @@ import { GameHub } from '../components/games/GameHub.js';
 import { MemoryGame } from '../components/games/MemoryGame.js';
 import { Game2048 } from '../components/games/Game2048.js';
 import { CarRaceGame } from '../components/games/CarRaceGame.js';
+import { ColorTubeSort } from '../components/games/ColorTubeSort.js';
 import { useAdManager, setGameActiveState } from '../hooks/useAdManager.js';
 import { Loader2 } from 'lucide-react';
 
@@ -76,6 +77,16 @@ export const GamePage: React.FC<GamePageProps> = ({ onGameFinished, userId }) =>
         <CarRaceGame
           onBack={handleBackToHub}
           onFinished={onGameFinished}
+          userId={userId}
+        />
+      )}
+
+      {/* Color Tube Sort */}
+      {activeGame === 'game_tubesort' && (
+        <ColorTubeSort
+          onBack={handleBackToHub}
+          onFinished={onGameFinished}
+          onGameComplete={onGameFinished ? () => onGameFinished(55, '0.000020') : undefined}
           userId={userId}
         />
       )}

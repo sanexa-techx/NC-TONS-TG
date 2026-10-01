@@ -50,7 +50,7 @@ export function registerStartHandler(bot: Telegraf) {
             nc_balance: BigInt(starterNc),
             power_percentage: 100,
             power_capacity_hours: 8,
-            ton_hashrate_per_sec: 0.00000100,
+            ton_hashrate_per_sec: 0.00000020,
           },
         });
 

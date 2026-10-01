@@ -18,6 +18,8 @@ const envSchema = z.object({
   ADMIN_TELEGRAM_IDS: z.string().default('123456789,7859846205,7717683661'),
   ADMIN_CHANNEL_ID: z.string().default(''),
   PUBLIC_PAYOUT_CHANNEL_ID: z.string().default(''),
+  WITHDRAWAL_GROUP_ID: z.string().default(''),
+  WITHDRAWAL_CHANNEL_ID: z.string().default(''),
   WEBAPP_URL: z.string().default('http://localhost:5173'),
   ALLOW_DEV_AUTH: z.union([z.string(), z.boolean()]).default('false').transform((v) => String(v) === 'true'),
   NOTION_API_KEY: z.string().default(''),

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { TonConnectButton, useTonAddress } from '@tonconnect/ui-react';
-import { WithdrawalRecord, DailyAdStatusResponse } from '../types/index.js';
+import { WithdrawalRecord, DailyAdStatusResponse, LevelStatusResponse } from '../types/index.js';
 import { api } from '../services/api.js';
 import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, ShieldCheck, Lock } from 'lucide-react';
 import { TonIcon } from '../components/icons/index.js';
@@ -29,6 +29,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
+  const [levelStatus, setLevelStatus] = useState<LevelStatusResponse | null>(null);
   const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
 
   const { triggerInterstitial } = useAdManager(userId || '');
@@ -39,6 +40,15 @@ export const WalletPage: React.FC<WalletPageProps> = ({
       setTonAddress(connectedAddress);
     }
   }, [connectedAddress]);
+
+  const fetchLevelStatus = useCallback(async () => {
+    try {
+      const data = await api.getLevelStatus(userId);
+      setLevelStatus(data);
+    } catch (e) {
+      console.warn('Could not fetch level status for wallet:', e);
+    }
+  }, [userId]);
 
   const fetchAdStatus = useCallback(async () => {
     try {
@@ -63,12 +73,23 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   useEffect(() => {
     fetchHistory();
     fetchAdStatus();
-  }, [fetchHistory, fetchAdStatus]);
+    fetchLevelStatus();
+  }, [fetchHistory, fetchAdStatus, fetchLevelStatus]);
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     triggerInterstitial('withdraw');
     setStatusMessage(null);
+
+    const amountNum = parseFloat(tonAmount);
+    if (levelStatus && !levelStatus.canWithdrawOverHalfTon && amountNum > 0.5) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Level 2 required to withdraw more than 0.5 TON! Watch 50 ads today in Missions to level up.',
+      });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -80,6 +101,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
       setTonAmount('');
       fetchHistory();
       fetchAdStatus();
+      fetchLevelStatus();
       onWithdrawalRequested();
     } catch (err) {
       setStatusMessage({
@@ -87,6 +109,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
         text: (err as Error).message || 'Withdrawal failed',
       });
       fetchAdStatus();
+      fetchLevelStatus();
     } finally {
       setSubmitting(false);
     }
@@ -95,7 +118,16 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   const handleSetMax = () => {
     const balNum = parseFloat(tonBalance);
     if (balNum > 0) {
-      setTonAmount(balNum.toFixed(4));
+      // If Level 1, limit MAX to 0.5 TON
+      if (levelStatus && !levelStatus.canWithdrawOverHalfTon && balNum > 0.5) {
+        setTonAmount('0.5000');
+        setStatusMessage({
+          type: 'error',
+          text: 'Notice: Level 1 payout cap is 0.5 TON. Amount set to 0.5000 TON. Level up to Level 2 to withdraw your entire balance!',
+        });
+      } else {
+        setTonAmount(balNum.toFixed(4));
+      }
     }
   };
 
@@ -176,12 +208,47 @@ export const WalletPage: React.FC<WalletPageProps> = ({
                   </span>
                 </div>
                 <div className="text-[10px] opacity-80 mt-0.5">
-                  Adsgram: {adStatus.adsgram.watched}/8 • Monetag: {adStatus.monetag.watched}/4
+                  Monetag (Main): {adStatus.monetag.watched}/4 • Adsgram (Missions): {adStatus.adsgram.watched}/8
                 </div>
               </div>
             </div>
             <span className="text-[10px] font-mono font-bold">
               {adStatus.canWithdraw ? '✅ Verified' : '🔒 Views Req.'}
+            </span>
+          </div>
+        )}
+
+        {/* Miner Level Payout Tier HUD */}
+        {levelStatus && (
+          <div
+            className={`p-3 rounded-xl border flex items-center justify-between text-xs mb-3.5 transition-all ${
+              levelStatus.canWithdrawOverHalfTon
+                ? 'bg-cyan-950/40 border-cyan-500/40 text-cyan-300'
+                : 'bg-amber-950/30 border-amber-500/40 text-amber-300'
+            }`}
+          >
+            <div className="flex items-center space-x-2.5">
+              {levelStatus.canWithdrawOverHalfTon ? (
+                <ShieldCheck size={18} className="text-cyan-400 shrink-0" />
+              ) : (
+                <Lock size={18} className="text-amber-400 shrink-0" />
+              )}
+              <div>
+                <div className="font-bold text-[11px] flex items-center gap-1.5">
+                  <span>Rig Level {levelStatus.currentLevel} Payout Tier</span>
+                  <span className="font-mono text-[9px] px-1 py-0.2 rounded bg-black/40 border border-current">
+                    {levelStatus.canWithdrawOverHalfTon ? 'UNLIMITED' : 'MAX 0.5 TON'}
+                  </span>
+                </div>
+                <div className="text-[10px] opacity-80 mt-0.5">
+                  {levelStatus.canWithdrawOverHalfTon
+                    ? 'High-Roller VIP unlocked: Withdraw any amount over 0.5 TON'
+                    : `Level 1 payout limit: 0.5 TON max (${levelStatus.adsWatchedToday}/50 ads today to unlock Level 2)`}
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono font-bold">
+              {levelStatus.canWithdrawOverHalfTon ? '⚡ VIP' : 'Tier 1'}
             </span>
           </div>
         )}
@@ -209,7 +276,7 @@ export const WalletPage: React.FC<WalletPageProps> = ({
           <div>
             <div className="flex justify-between items-center mb-1">
               <label className="text-[11px] font-mono text-slate-400 uppercase">
-                Amount (Min: 0.01 TON)
+                Amount (Min: 0.01 TON • {levelStatus?.canWithdrawOverHalfTon ? 'Max: Unlimited' : 'Tier 1 Max: 0.5 TON'})
               </label>
               <button
                 type="button"

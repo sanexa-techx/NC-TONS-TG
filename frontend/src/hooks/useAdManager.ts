@@ -38,109 +38,69 @@ export const setGameActiveState = (active: boolean) => {
 
 export const isGameActive = () => isGameActiveGlobal;
 
-// Internal executor for single on-demand interstitial display with safety timeout
-async function executeInterstitial(
-  provider: "adsgram" | "monetag",
-  userId: number | string,
-  adsgramBlockId: string
+// Primary ad network: Monetag (Main Provider for all interstitials and rewarded tasks)
+// Secondary ad network: Adsgram (Reserved strictly for rewarded Missions only)
+
+// Internal executor for Monetag on-demand interstitial display with safety timeout
+// STRICT REQUIREMENT: Only Monetag is shown for interstitials. Adsgram is strictly reserved for missions.
+async function executeMonetagInterstitial(
+  userId: number | string
 ): Promise<boolean> {
   const timeoutMs = 6000;
 
   const showPromise = new Promise<boolean>(async (resolve) => {
     try {
-      const hasAdsgram = typeof window !== "undefined" && Boolean(window.Adsgram);
       const globalMonetag = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
       const hasMonetag =
         Boolean(globalMonetag) ||
         Boolean(monetagHandler) ||
         (typeof window !== "undefined" && Boolean(window.showMonetagInterstitial));
 
-      // In dev mode without loaded ad networks, resolve cleanly
-      if (!hasAdsgram && !hasMonetag) {
-        console.log(`[AdManager Dev] Simulating interstitial ad (${provider})`);
+      // In dev mode without loaded Monetag SDK, resolve cleanly
+      if (!hasMonetag) {
+        console.log("[AdManager Dev] Simulating Monetag interstitial ad");
         setTimeout(() => resolve(true), 350);
         return;
       }
 
       let displayed = false;
 
-      // 1. Try selected provider
-      if (provider === "adsgram" && hasAdsgram) {
-        try {
-          const controller = window.Adsgram!.init({
-            blockId: adsgramBlockId,
-            userId: String(userId),
-          });
-          const res = await controller.show();
-          displayed = Boolean(res?.done);
-        } catch (e) {
-          console.warn("[AdManager] Adsgram interstitial error:", e);
+      // Execute Monetag interstitial
+      try {
+        if (typeof globalMonetag === "function") {
+          await globalMonetag({ ymid: String(userId) });
+          displayed = true;
+        } else if (monetagHandler) {
+          await monetagHandler({ ymid: String(userId) });
+          displayed = true;
+        } else if (window.showMonetagInterstitial) {
+          displayed = await window.showMonetagInterstitial();
         }
-      } else if (hasMonetag) {
+      } catch (mErr) {
+        console.warn("[AdManager] Monetag standard interstitial failed, trying pop format:", mErr);
         try {
           if (typeof globalMonetag === "function") {
-            await globalMonetag({ ymid: String(userId) });
+            await globalMonetag("pop");
             displayed = true;
           } else if (monetagHandler) {
-            await monetagHandler({ ymid: String(userId) });
+            await monetagHandler("pop");
             displayed = true;
-          } else if (window.showMonetagInterstitial) {
-            displayed = await window.showMonetagInterstitial();
           }
-        } catch (mErr) {
-          console.warn("[AdManager] Monetag standard interstitial failed, trying pop format:", mErr);
-          try {
-            if (typeof globalMonetag === "function") {
-              await globalMonetag("pop");
-              displayed = true;
-            } else if (monetagHandler) {
-              await monetagHandler("pop");
-              displayed = true;
-            }
-          } catch (popErr) {
-            console.warn("[AdManager] Monetag pop error:", popErr);
-          }
-        }
-      }
-
-      // 2. Fallback to alternative provider if initial failed
-      if (!displayed) {
-        if (provider === "adsgram" && hasMonetag) {
-          try {
-            if (typeof globalMonetag === "function") {
-              await globalMonetag({ ymid: String(userId) });
-              displayed = true;
-            } else if (monetagHandler) {
-              await monetagHandler({ ymid: String(userId) });
-              displayed = true;
-            }
-          } catch {
-            // fallback failed
-          }
-        } else if (provider === "monetag" && hasAdsgram) {
-          try {
-            const controller = window.Adsgram!.init({
-              blockId: adsgramBlockId,
-              userId: String(userId),
-            });
-            const res = await controller.show();
-            displayed = Boolean(res?.done);
-          } catch {
-            // fallback failed
-          }
+        } catch (popErr) {
+          console.warn("[AdManager] Monetag pop error:", popErr);
         }
       }
 
       resolve(displayed);
     } catch (err) {
-      console.warn("[AdManager] Interstitial error:", err);
+      console.warn("[AdManager] Monetag Interstitial error:", err);
       resolve(false);
     }
   });
 
   const timeoutPromise = new Promise<boolean>((resolve) => {
     setTimeout(() => {
-      console.log(`[AdManager] Interstitial timeout (${timeoutMs}ms) elapsed`);
+      console.log(`[AdManager] Monetag interstitial timeout (${timeoutMs}ms) elapsed`);
       resolve(false);
     }, timeoutMs);
   });
@@ -247,6 +207,7 @@ export function useAdManager(
   }, [userId, MONETAG_SDK_FN, monetagHandler]);
 
   // 3. Interstitial Trigger (Guarded against playing while game is active, no recurring timers)
+  // STRICT REQUIREMENT: Interstitial ads ONLY show Monetag. Adsgram is reserved exclusively for Missions.
   const triggerInterstitial = useCallback(
     async (
       reason: "nav" | "start" | "withdraw" | "game_start" | "game_end"
@@ -267,12 +228,11 @@ export function useAdManager(
 
       globalLastInterstitialTime = now;
 
-      const provider = Math.random() < 0.5 ? "adsgram" : "monetag";
-      console.log(`[Ad Trigger] Showing interstitial (${reason}) via ${provider}`);
+      console.log(`[Ad Trigger] Showing Monetag interstitial (${reason})`);
 
-      return await executeInterstitial(provider, userId, ADSGRAM_BLOCK_ID);
+      return await executeMonetagInterstitial(userId);
     },
-    [userId, ADSGRAM_BLOCK_ID]
+    [userId]
   );
 
   // 4. Pre-Game Interstitial (Before gameplay begins)
