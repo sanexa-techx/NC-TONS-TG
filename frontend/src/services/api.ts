@@ -279,6 +279,29 @@ export const api = {
     return handleResponse(res);
   },
 
+  async getWithdrawalLimits(userId?: string | number): Promise<any> {
+    const id = userId || getDetectedUser()?.id;
+    const queryParam = id ? `?userId=${id}` : '';
+    const res = await fetch(`/api/withdraw/limits${queryParam}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async watchBreakLimitAd(target: 'daily' | 'weekly', userId?: string | number): Promise<{
+    success: boolean;
+    message: string;
+    extraSlots: number;
+  }> {
+    const id = userId || getDetectedUser()?.id;
+    const res = await fetch('/api/withdraw/break-limit/watch-ad', {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: id?.toString(), target }),
+    });
+    return handleResponse(res);
+  },
+
   async watchWithdrawalLimitAd(userId?: string | number): Promise<{
     success: boolean;
     message: string;

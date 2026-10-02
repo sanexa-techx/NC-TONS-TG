@@ -42,6 +42,7 @@ model User {
   referred_in            Referral?              @relation("Referee")
   proof_submissions      TaskProofSubmission[]
   daily_ads              UserDailyAd[]
+  withdrawal_limits      UserWithdrawalLimit?
 
   @@map("users")
 }
@@ -230,5 +231,21 @@ model UserMilestoneClaim {
   @@unique([user_id, target_count], name: "unique_user_milestone")
   @@map("user_milestone_claims")
 }
+
+model UserWithdrawalLimit {
+  user_id            BigInt    @id
+  tracked_date       DateTime  @default(now()) @db.Date
+  daily_extra_slots  Int       @default(0)
+  daily_break_ads    Int       @default(0)
+  tracked_week       DateTime  @default(now()) @db.Date
+  weekly_extra_slots Int       @default(0)
+  weekly_break_ads   Int       @default(0)
+  updated_at         DateTime? @default(now()) @updatedAt
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, tracked_date], name: "idx_user_wd_limits_date")
+  @@map("user_withdrawal_limits")
+}
+
 
 

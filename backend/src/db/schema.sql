@@ -285,3 +285,25 @@ CREATE TABLE IF NOT EXISTS bot_chats (
     title VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+-- ----------------------------------------------------------------------------
+-- WITHDRAWAL LIMITS & BREAK-LIMIT AD TRACKER
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_withdrawal_limits (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Daily Tracker (Resets at 00:00:00 UTC)
+    tracked_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    daily_extra_slots INT DEFAULT 0,
+    daily_break_ads INT DEFAULT 0, -- Progress toward 30 ads
+    
+    -- Weekly Tracker (Resets on Monday 00:00:00 UTC)
+    tracked_week DATE NOT NULL DEFAULT DATE_TRUNC('week', CURRENT_DATE)::DATE,
+    weekly_extra_slots INT DEFAULT 0,
+    weekly_break_ads INT DEFAULT 0, -- Progress toward 150 ads
+    
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_wd_limits_date ON user_withdrawal_limits(user_id, tracked_date);
+

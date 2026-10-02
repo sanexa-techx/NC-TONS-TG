@@ -285,6 +285,16 @@ const memoryStore = {
   }>,
   userMilestoneClaims: [] as Array<{ id: number; user_id: bigint; target_count: number; claimed_at: Date }>,
   userMilestoneClaimIdSeq: 1,
+  userWithdrawalLimits: new Map<string, {
+    user_id: bigint;
+    tracked_date: string;
+    daily_extra_slots: number;
+    daily_break_ads: number;
+    tracked_week: string;
+    weekly_extra_slots: number;
+    weekly_break_ads: number;
+    updated_at: Date;
+  }>(),
 };
 
 
@@ -1207,6 +1217,117 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     }
   }
 
+  // 14d. user_withdrawal_limits queries
+  if (normalized.startsWith('INSERT INTO user_withdrawal_limits')) {
+    const rawId = params[0]?.toString() || '';
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const day = now.getUTCDay();
+    const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
+    const mondayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff)).toISOString().slice(0, 10);
+    if (!memoryStore.userWithdrawalLimits.has(rawId)) {
+      memoryStore.userWithdrawalLimits.set(rawId, {
+        user_id: BigInt(rawId || '0'),
+        tracked_date: todayStr,
+        daily_extra_slots: 0,
+        daily_break_ads: 0,
+        tracked_week: mondayStr,
+        weekly_extra_slots: 0,
+        weekly_break_ads: 0,
+        updated_at: new Date(),
+      });
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
+  if (normalized.includes('FROM user_withdrawal_limits')) {
+    const rawId = params[0]?.toString() || '';
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const day = now.getUTCDay();
+    const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
+    const mondayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff)).toISOString().slice(0, 10);
+    let tracker = memoryStore.userWithdrawalLimits.get(rawId);
+    if (!tracker) {
+      tracker = {
+        user_id: BigInt(rawId || '0'),
+        tracked_date: todayStr,
+        daily_extra_slots: 0,
+        daily_break_ads: 0,
+        tracked_week: mondayStr,
+        weekly_extra_slots: 0,
+        weekly_break_ads: 0,
+        updated_at: new Date(),
+      };
+      memoryStore.userWithdrawalLimits.set(rawId, tracker);
+    }
+    return {
+      rows: [
+        {
+          ...tracker,
+          today_utc: todayStr,
+          this_week_utc: mondayStr,
+        },
+      ],
+      rowCount: 1,
+    };
+  }
+
+  if (normalized.startsWith('UPDATE user_withdrawal_limits SET')) {
+    let rawId = '';
+    const userMatch = normalized.match(/WHERE\s+user_id\s*=\s*\$(\d+)/i);
+    if (userMatch) {
+      const idx = Number(userMatch[1]) - 1;
+      rawId = params[idx]?.toString() || '';
+    } else {
+      rawId = params[params.length - 1]?.toString() || '';
+    }
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const day = now.getUTCDay();
+    const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
+    const mondayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff)).toISOString().slice(0, 10);
+    let tracker = memoryStore.userWithdrawalLimits.get(rawId);
+    if (!tracker) {
+      tracker = {
+        user_id: BigInt(rawId || '0'),
+        tracked_date: todayStr,
+        daily_extra_slots: 0,
+        daily_break_ads: 0,
+        tracked_week: mondayStr,
+        weekly_extra_slots: 0,
+        weekly_break_ads: 0,
+        updated_at: new Date(),
+      };
+      memoryStore.userWithdrawalLimits.set(rawId, tracker);
+    }
+
+    if (normalized.includes('daily_extra_slots = $1, daily_break_ads = $2')) {
+      tracker.tracked_date = todayStr;
+      tracker.daily_extra_slots = Number(params[0] || 0);
+      tracker.daily_break_ads = Number(params[1] || 0);
+      tracker.tracked_week = mondayStr;
+      tracker.weekly_extra_slots = Number(params[2] || 0);
+      tracker.weekly_break_ads = Number(params[3] || 0);
+    } else {
+      if (normalized.includes('daily_break_ads = 0, daily_extra_slots = $1')) {
+        tracker.daily_break_ads = 0;
+        tracker.daily_extra_slots = Number(params[0] || 0);
+      } else if (normalized.includes('daily_break_ads = $1')) {
+        tracker.daily_break_ads = Number(params[0] || 0);
+      }
+
+      if (normalized.includes('weekly_break_ads = 0, weekly_extra_slots = $1')) {
+        tracker.weekly_break_ads = 0;
+        tracker.weekly_extra_slots = Number(params[0] || 0);
+      } else if (normalized.includes('weekly_break_ads = $1')) {
+        tracker.weekly_break_ads = Number(params[0] || 0);
+      }
+    }
+    tracker.updated_at = new Date();
+    return { rows: [{ ...tracker }], rowCount: 1 };
+  }
+
   // 15. INSERT INTO user_daily_ads ... ON CONFLICT (user_id, ad_date) DO NOTHING
   if (normalized.startsWith('INSERT INTO user_daily_ads')) {
     const rawId = params[0]?.toString() || '';
@@ -1529,6 +1650,19 @@ export async function connectDB() {
           SET nc_reward = EXCLUDED.nc_reward,
               ton_reward = EXCLUDED.ton_reward,
               display_name = EXCLUDED.display_name;
+        `);
+        await realPool.query(`
+          CREATE TABLE IF NOT EXISTS user_withdrawal_limits (
+            user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            tracked_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            daily_extra_slots INT DEFAULT 0,
+            daily_break_ads INT DEFAULT 0,
+            tracked_week DATE NOT NULL DEFAULT DATE_TRUNC('week', CURRENT_DATE)::DATE,
+            weekly_extra_slots INT DEFAULT 0,
+            weekly_break_ads INT DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_user_wd_limits_date ON user_withdrawal_limits(user_id, tracked_date);
         `);
       } catch (colErr: any) {
         console.warn('⚠️ Auto-migration check warning for database:', colErr.message);

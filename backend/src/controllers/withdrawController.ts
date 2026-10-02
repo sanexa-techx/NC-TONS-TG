@@ -3,95 +3,101 @@ import { prisma, pool } from '../db/db.js';
 import { Decimal } from '@prisma/client/runtime/library';
 import { sendWithdrawalApprovalCard } from '../bot/notifications.js';
 import { syncWithdrawalToNotion } from '../services/notionService.js';
+import { getOrCreateLimitTracker } from '../routes/withdraw.js';
 
 export const DAILY_WITHDRAWAL_LIMIT = 1;
 export const WEEKLY_WITHDRAWAL_LIMIT = 5;
-export const DAILY_ADS_REQUIRED_FOR_WITHDRAW = 30;
-export const WEEKLY_ADS_REQUIRED_FOR_WITHDRAW = 100;
+export const DAILY_BREAK_ADS_REQUIRED = 30;
+export const WEEKLY_BREAK_ADS_REQUIRED = 150;
 
 export const GATE_ADSGRAM_REQUIRED = 8;
 export const GATE_MONETAG_REQUIRED = 4;
 
 export async function getUserWithdrawalLimits(userId: bigint | number | string) {
-  // 1. Check Gatekeeper (min 8 Adsgram & 4 Monetag)
-  const adCheck = await pool.query(
-    `SELECT adsgram_count, monetag_count, limit_ads_count, last_ad_at 
-     FROM user_daily_ads 
-     WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
-    [userId]
-  );
-  const counts = adCheck.rows[0] || { adsgram_count: 0, monetag_count: 0, limit_ads_count: 0 };
-  const adsgramCount = Number(counts.adsgram_count || 0);
-  const monetagCount = Number(counts.monetag_count || 0);
-  const dailyLimitAds = Number(counts.limit_ads_count || 0);
+  const uid = userId.toString();
+  const client = await pool.connect();
+  try {
+    const tracker = await getOrCreateLimitTracker(client, uid);
 
-  // Gate satisfies either 8 adsgram + 4 monetag or 8 monetag + 4 adsgram
-  const isGateUnlocked =
-    (adsgramCount >= GATE_ADSGRAM_REQUIRED && monetagCount >= GATE_MONETAG_REQUIRED) ||
-    (adsgramCount >= GATE_MONETAG_REQUIRED && monetagCount >= GATE_ADSGRAM_REQUIRED);
+    // 1. Check Gatekeeper (min 8 Adsgram & 4 Monetag)
+    const adCheck = await client.query(
+      `SELECT adsgram_count, monetag_count, last_ad_at 
+       FROM user_daily_ads 
+       WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
+      [uid]
+    );
+    const counts = adCheck.rows[0] || { adsgram_count: 0, monetag_count: 0 };
+    const adsgramCount = Number(counts.adsgram_count || 0);
+    const monetagCount = Number(counts.monetag_count || 0);
+    const isGateUnlocked =
+      (adsgramCount >= GATE_ADSGRAM_REQUIRED && monetagCount >= GATE_MONETAG_REQUIRED) ||
+      (adsgramCount >= GATE_MONETAG_REQUIRED && monetagCount >= GATE_ADSGRAM_REQUIRED);
 
-  // 2. Sum weekly limit ads (from Monday UTC of current week)
-  const weeklyAdsRes = await pool.query(
-    `SELECT COALESCE(SUM(limit_ads_count), 0) as weekly_limit_ads 
-     FROM user_daily_ads 
-     WHERE user_id = $1 AND ad_date >= date_trunc('week', CURRENT_DATE)`,
-    [userId]
-  );
-  const weeklyLimitAds = Number(weeklyAdsRes.rows[0]?.weekly_limit_ads || 0);
+    // 2. Count withdrawals today
+    const dailyCountRes = await client.query(
+      `SELECT COUNT(*)::INT as count FROM withdrawals 
+       WHERE user_id = $1 
+         AND DATE(created_at) = CURRENT_DATE 
+         AND status != 'REJECTED'`,
+      [uid]
+    );
+    const todayUsed = Number(dailyCountRes.rows[0]?.count || 0);
 
-  // 3. Count withdrawals today (created_at >= CURRENT_DATE UTC, status != 'REJECTED')
-  const todayWdRes = await pool.query(
-    `SELECT COUNT(*) as count 
-     FROM withdrawals 
-     WHERE user_id = $1 AND created_at >= CURRENT_DATE AND status != 'REJECTED'`,
-    [userId]
-  );
-  const todayWithdrawals = Number(todayWdRes.rows[0]?.count || 0);
+    // 3. Count withdrawals this week
+    const weeklyCountRes = await client.query(
+      `SELECT COUNT(*)::INT as count FROM withdrawals 
+       WHERE user_id = $1 
+         AND created_at >= DATE_TRUNC('week', CURRENT_DATE) 
+         AND status != 'REJECTED'`,
+      [uid]
+    );
+    const weekUsed = Number(weeklyCountRes.rows[0]?.count || 0);
 
-  // 4. Count withdrawals this week (created_at >= date_trunc('week', CURRENT_DATE), status != 'REJECTED')
-  const weeklyWdRes = await pool.query(
-    `SELECT COUNT(*) as count 
-     FROM withdrawals 
-     WHERE user_id = $1 AND created_at >= date_trunc('week', CURRENT_DATE) AND status != 'REJECTED'`,
-    [userId]
-  );
-  const weeklyWithdrawals = Number(weeklyWdRes.rows[0]?.count || 0);
+    const maxDailyAllowed = 1 + Number(tracker.daily_extra_slots || 0);
+    const maxWeeklyAllowed = 5 + Number(tracker.weekly_extra_slots || 0);
 
-  const isDailyUnlocked = dailyLimitAds >= DAILY_ADS_REQUIRED_FOR_WITHDRAW;
-  const isWeeklyUnlocked = weeklyLimitAds >= WEEKLY_ADS_REQUIRED_FOR_WITHDRAW;
+    const canWithdraw = isGateUnlocked && todayUsed < maxDailyAllowed && weekUsed < maxWeeklyAllowed;
 
-  const canWithdrawDaily = todayWithdrawals < DAILY_WITHDRAWAL_LIMIT && isDailyUnlocked;
-  const canWithdrawWeekly = weeklyWithdrawals < WEEKLY_WITHDRAWAL_LIMIT && isWeeklyUnlocked;
-
-  const canWithdraw = isGateUnlocked && canWithdrawDaily && canWithdrawWeekly;
-
-  return {
-    daily: {
-      limit: DAILY_WITHDRAWAL_LIMIT,
-      used: todayWithdrawals,
-      remaining: Math.max(0, DAILY_WITHDRAWAL_LIMIT - todayWithdrawals),
-      adsWatched: dailyLimitAds,
-      adsRequired: DAILY_ADS_REQUIRED_FOR_WITHDRAW,
-      isUnlocked: isDailyUnlocked,
-    },
-    weekly: {
-      limit: WEEKLY_WITHDRAWAL_LIMIT,
-      used: weeklyWithdrawals,
-      remaining: Math.max(0, WEEKLY_WITHDRAWAL_LIMIT - weeklyWithdrawals),
-      adsWatched: weeklyLimitAds,
-      adsRequired: WEEKLY_ADS_REQUIRED_FOR_WITHDRAW,
-      isUnlocked: isWeeklyUnlocked,
-    },
-    gate: {
-      adsgramWatched: adsgramCount,
-      adsgramRequired: GATE_ADSGRAM_REQUIRED,
-      monetagWatched: monetagCount,
-      monetagRequired: GATE_MONETAG_REQUIRED,
-      isUnlocked: isGateUnlocked,
-    },
-    canWithdraw,
-    lastAdAt: counts.last_ad_at,
-  };
+    return {
+      daily: {
+        limit: maxDailyAllowed,
+        used: todayUsed,
+        allowed: maxDailyAllowed,
+        remaining: Math.max(0, maxDailyAllowed - todayUsed),
+        isLimitReached: todayUsed >= maxDailyAllowed,
+        breakAdsWatched: Number(tracker.daily_break_ads || 0),
+        breakAdsRequired: 30,
+        extraSlotsEarned: Number(tracker.daily_extra_slots || 0),
+        adsWatched: Number(tracker.daily_break_ads || 0),
+        adsRequired: 30,
+        isUnlocked: todayUsed < maxDailyAllowed,
+      },
+      weekly: {
+        limit: maxWeeklyAllowed,
+        used: weekUsed,
+        allowed: maxWeeklyAllowed,
+        remaining: Math.max(0, maxWeeklyAllowed - weekUsed),
+        isLimitReached: weekUsed >= maxWeeklyAllowed,
+        breakAdsWatched: Number(tracker.weekly_break_ads || 0),
+        breakAdsRequired: 150,
+        extraSlotsEarned: Number(tracker.weekly_extra_slots || 0),
+        adsWatched: Number(tracker.weekly_break_ads || 0),
+        adsRequired: 150,
+        isUnlocked: weekUsed < maxWeeklyAllowed,
+      },
+      gate: {
+        adsgramWatched: adsgramCount,
+        adsgramRequired: GATE_ADSGRAM_REQUIRED,
+        monetagWatched: monetagCount,
+        monetagRequired: GATE_MONETAG_REQUIRED,
+        isUnlocked: isGateUnlocked,
+      },
+      canWithdraw,
+      lastAdAt: counts.last_ad_at,
+    };
+  } finally {
+    client.release();
+  }
 }
 
 export async function getWithdrawalStatus(req: Request, res: Response) {

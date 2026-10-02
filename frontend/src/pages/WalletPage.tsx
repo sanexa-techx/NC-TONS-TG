@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { TonConnectButton, useTonAddress } from '@tonconnect/ui-react';
-import { WithdrawalRecord, DailyAdStatusResponse, LevelStatusResponse, WithdrawalStatusResponse } from '../types/index.js';
+import { WithdrawalRecord, DailyAdStatusResponse, LevelStatusResponse } from '../types/index.js';
 import { api } from '../services/api.js';
-import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, ShieldCheck, Lock, Sparkles, Play } from 'lucide-react';
+import { Wallet, ArrowDownRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, ShieldCheck, Lock } from 'lucide-react';
 import { TonIcon } from '../components/icons/index.js';
 import { PromoRedeemCard } from '../components/PromoRedeemCard.js';
 import { useAdManager } from '../hooks/useAdManager.js';
 import { LegalModal } from '../components/LegalModal.js';
+import WithdrawalLimitsCard from '../components/WithdrawalLimitsCard.js';
 
 interface WalletPageProps {
   tonBalance: string;
@@ -29,20 +30,13 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
-  const [withdrawalStatus, setWithdrawalStatus] = useState<WithdrawalStatusResponse | null>(null);
-  const [loadingLimitAd, setLoadingLimitAd] = useState<boolean>(false);
-  const [limitAdCooldown, setLimitAdCooldown] = useState<number>(0);
+  const [limitsRefreshKey, setLimitsRefreshKey] = useState<number>(0);
   const [levelStatus, setLevelStatus] = useState<LevelStatusResponse | null>(null);
   const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
 
-  const fetchWithdrawalStatus = useCallback(async () => {
-    try {
-      const data = await api.getWithdrawalStatus(userId);
-      setWithdrawalStatus(data);
-    } catch (e) {
-      console.warn('Could not fetch withdrawal limits status:', e);
-    }
-  }, [userId]);
+  const fetchWithdrawalStatus = useCallback(() => {
+    setLimitsRefreshKey((k) => k + 1);
+  }, []);
 
   const fetchAdStatus = useCallback(async () => {
     try {
@@ -53,12 +47,11 @@ export const WalletPage: React.FC<WalletPageProps> = ({
     }
   }, [userId]);
 
-  const { triggerInterstitial, showWithdrawalLimitAd } = useAdManager(
+  const { triggerInterstitial } = useAdManager(
     userId || '',
     () => {
       fetchWithdrawalStatus();
       fetchAdStatus();
-      setLimitAdCooldown(10);
     }
   );
 
@@ -68,14 +61,6 @@ export const WalletPage: React.FC<WalletPageProps> = ({
       setTonAddress(connectedAddress);
     }
   }, [connectedAddress]);
-
-  useEffect(() => {
-    if (limitAdCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setLimitAdCooldown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [limitAdCooldown]);
 
   const fetchLevelStatus = useCallback(async () => {
     try {
@@ -103,28 +88,6 @@ export const WalletPage: React.FC<WalletPageProps> = ({
     fetchWithdrawalStatus();
     fetchLevelStatus();
   }, [fetchHistory, fetchAdStatus, fetchWithdrawalStatus, fetchLevelStatus]);
-
-  const handleWatchLimitAd = async () => {
-    if (limitAdCooldown > 0 || loadingLimitAd) return;
-    setLoadingLimitAd(true);
-    setStatusMessage(null);
-    try {
-      const res = await showWithdrawalLimitAd();
-      if (res?.success) {
-        setStatusMessage({
-          type: 'success',
-          text: `Ad verified! +1 added to daily & weekly limit passes (+${res.reward?.nc || 200} NC, +${res.reward?.ton || '0.00025'} TON).`,
-        });
-        setLimitAdCooldown(10);
-        await fetchWithdrawalStatus();
-        await fetchAdStatus();
-      }
-    } catch (err: any) {
-      console.warn('Watch limit ad error:', err);
-    } finally {
-      setLoadingLimitAd(false);
-    }
-  };
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -270,149 +233,16 @@ export const WalletPage: React.FC<WalletPageProps> = ({
           </div>
         )}
 
-        {/* Withdrawal Quotas & Unlock Pass HUD (Daily 1 time / 30 ads & Weekly 5 times / 100 ads) */}
-        {withdrawalStatus && (
-          <div className="w-full glass-panel p-3.5 rounded-2xl border border-cyan-500/30 mb-3 bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-cyan-950/30 shadow-sm">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 rounded-lg bg-cyber-cyan/20 text-cyber-cyan flex items-center justify-center">
-                  <ShieldCheck size={14} />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <span>Withdrawal Quotas & Passes</span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyber-cyan/20 text-cyber-cyan border border-cyber-cyan/30">
-                      Separate from Gate
-                    </span>
-                  </h4>
-                  <p className="text-[10px] text-slate-400">
-                    Daily max 1 time (30 ads) • Weekly max 5 times (100 ads)
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Daily & Weekly Cards Grid */}
-            <div className="grid grid-cols-2 gap-2 mb-2.5">
-              {/* Daily Limit Card */}
-              <div className="p-2.5 rounded-xl bg-black/40 border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-mono font-bold text-slate-300">Daily Quota</span>
-                    <span
-                      className={`text-[8.5px] font-mono px-1.5 py-0.2 rounded font-bold ${
-                        withdrawalStatus.daily.isUnlocked
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}
-                    >
-                      {withdrawalStatus.daily.isUnlocked ? 'PASS ACTIVE ✅' : '30 ADS REQ 🔒'}
-                    </span>
-                  </div>
-                  <div className="text-xs font-bold font-mono text-white mb-0.5">
-                    {withdrawalStatus.daily.used} / {withdrawalStatus.daily.limit} Today
-                  </div>
-                  <div className="text-[9.5px] text-slate-400 font-mono mb-1.5 flex justify-between">
-                    <span>Ads: {withdrawalStatus.daily.adsWatched}/{withdrawalStatus.daily.adsRequired}</span>
-                    <span className="text-cyber-cyan font-bold">
-                      {Math.min(100, Math.round((withdrawalStatus.daily.adsWatched / withdrawalStatus.daily.adsRequired) * 100))}%
-                    </span>
-                  </div>
-                  {/* Progress Bar */}
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        withdrawalStatus.daily.isUnlocked ? 'bg-emerald-400' : 'bg-amber-400'
-                      }`}
-                      style={{
-                        width: `${Math.min(100, Math.round((withdrawalStatus.daily.adsWatched / withdrawalStatus.daily.adsRequired) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                <span className="text-[8.5px] text-slate-500 font-mono mt-1.5 block">
-                  Refreshes daily (00:00 UTC)
-                </span>
-              </div>
-
-              {/* Weekly Limit Card */}
-              <div className="p-2.5 rounded-xl bg-black/40 border border-slate-800 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-mono font-bold text-slate-300">Weekly Quota</span>
-                    <span
-                      className={`text-[8.5px] font-mono px-1.5 py-0.2 rounded font-bold ${
-                        withdrawalStatus.weekly.isUnlocked
-                          ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                          : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}
-                    >
-                      {withdrawalStatus.weekly.isUnlocked ? 'PASS ACTIVE ✅' : '100 ADS REQ 🔒'}
-                    </span>
-                  </div>
-                  <div className="text-xs font-bold font-mono text-white mb-0.5">
-                    {withdrawalStatus.weekly.used} / {withdrawalStatus.weekly.limit} This Week
-                  </div>
-                  <div className="text-[9.5px] text-slate-400 font-mono mb-1.5 flex justify-between">
-                    <span>Ads: {withdrawalStatus.weekly.adsWatched}/{withdrawalStatus.weekly.adsRequired}</span>
-                    <span className="text-cyan-400 font-bold">
-                      {Math.min(100, Math.round((withdrawalStatus.weekly.adsWatched / withdrawalStatus.weekly.adsRequired) * 100))}%
-                    </span>
-                  </div>
-                  {/* Progress Bar */}
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        withdrawalStatus.weekly.isUnlocked ? 'bg-cyan-400' : 'bg-amber-400'
-                      }`}
-                      style={{
-                        width: `${Math.min(100, Math.round((withdrawalStatus.weekly.adsWatched / withdrawalStatus.weekly.adsRequired) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                <span className="text-[8.5px] text-slate-500 font-mono mt-1.5 block">
-                  Resets every Monday (UTC)
-                </span>
-              </div>
-            </div>
-
-            {/* Interactive "Watch Ad" Action for Limit Pass */}
-            <div className="p-2.5 rounded-xl bg-neutral-900/90 border border-neutral-800 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
-                  <Sparkles size={13} className="text-cyber-cyan shrink-0" />
-                  <span className="truncate">Watch Ad to Unlock Limit</span>
-                </div>
-                <div className="text-[9.5px] text-slate-400 font-mono mt-0.5">
-                  +1 Daily & Weekly • <span className="text-yellow-400 font-bold">+200 NC</span> • <span className="text-blue-400 font-bold">+0.00025 TON</span>
-                </div>
-                <div className="text-[8.5px] text-amber-400/90 font-mono mt-0.5">
-                  * Does not count towards the 8 Adsgram / 4 Monetag gate
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleWatchLimitAd}
-                disabled={loadingLimitAd || limitAdCooldown > 0}
-                className="px-3 py-2 bg-gradient-to-r from-cyber-cyan to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-extrabold text-xs rounded-xl shadow-glow-cyan active:scale-95 transition flex items-center gap-1.5 shrink-0"
-              >
-                {loadingLimitAd ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" />
-                    <span>Loading...</span>
-                  </>
-                ) : limitAdCooldown > 0 ? (
-                  <span>Wait ({limitAdCooldown}s)</span>
-                ) : (
-                  <>
-                    <Play size={12} fill="currentColor" />
-                    <span>Watch Ad</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+        {/* Withdrawal Quotas & Limit Breaker Engine */}
+        {userId && (
+          <WithdrawalLimitsCard
+            key={limitsRefreshKey}
+            userId={userId}
+            onLimitUnlocked={() => {
+              fetchWithdrawalStatus();
+              fetchAdStatus();
+            }}
+          />
         )}
 
         {/* Miner Level Payout Tier HUD */}
