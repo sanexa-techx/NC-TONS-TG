@@ -223,9 +223,12 @@ CREATE TABLE IF NOT EXISTS user_daily_ads (
     ad_date DATE NOT NULL DEFAULT CURRENT_DATE,
     adsgram_count INT DEFAULT 0,
     monetag_count INT DEFAULT 0,
+    limit_ads_count INT DEFAULT 0,
     last_ad_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (user_id, ad_date)
 );
+
+ALTER TABLE user_daily_ads ADD COLUMN IF NOT EXISTS limit_ads_count INT DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_user_daily_ads ON user_daily_ads(user_id, ad_date);
 

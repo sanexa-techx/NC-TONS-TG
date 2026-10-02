@@ -213,6 +213,47 @@ export interface DailyAdStatusResponse {
   adsgram: AdNetworkStats;
   monetag: AdNetworkStats;
   canWithdraw: boolean;
+  withdrawalLimits?: {
+    daily: WithdrawalLimitTier;
+    weekly: WithdrawalLimitTier;
+    gate: {
+      adsgramWatched: number;
+      adsgramRequired: number;
+      monetagWatched: number;
+      monetagRequired: number;
+      isUnlocked: boolean;
+    };
+    canWithdraw: boolean;
+  };
+}
+
+export interface WithdrawalLimitTier {
+  limit: number;
+  used: number;
+  remaining: number;
+  adsWatched: number;
+  adsRequired: number;
+  isUnlocked: boolean;
+}
+
+export interface WithdrawalStatusResponse {
+  success: boolean;
+  daily: WithdrawalLimitTier;
+  weekly: WithdrawalLimitTier;
+  gate: {
+    adsgramWatched: number;
+    adsgramRequired: number;
+    monetagWatched: number;
+    monetagRequired: number;
+    isUnlocked: boolean;
+  };
+  level: {
+    currentLevel: number;
+    canWithdrawOverHalfTon: boolean;
+    maxWithdrawTon: number | null;
+  };
+  canWithdraw: boolean;
+  blockReason?: string | null;
 }
 
 export interface LevelStatusResponse {

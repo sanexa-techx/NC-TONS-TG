@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../db/db.js";
+import { getUserWithdrawalLimits, watchWithdrawalLimitAd } from "../controllers/withdrawController.js";
 
 const router = Router();
 
@@ -15,15 +16,17 @@ router.get("/status", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT adsgram_count, monetag_count 
+      `SELECT adsgram_count, monetag_count, limit_ads_count 
        FROM user_daily_ads 
        WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
       [userId]
     );
 
-    const counts = result.rows[0] || { adsgram_count: 0, monetag_count: 0 };
+    const counts = result.rows[0] || { adsgram_count: 0, monetag_count: 0, limit_ads_count: 0 };
     const adsgramWatched = Number(counts.adsgram_count || 0);
     const monetagWatched = Number(counts.monetag_count || 0);
+
+    const limits = await getUserWithdrawalLimits(userId);
 
     return res.json({
       adsgram: {
@@ -38,9 +41,8 @@ router.get("/status", async (req, res) => {
         requiredForWithdraw: AD_LIMITS.monetag.minWithdraw,
         isWithdrawUnlocked: monetagWatched >= AD_LIMITS.monetag.minWithdraw,
       },
-      canWithdraw:
-        adsgramWatched >= AD_LIMITS.adsgram.minWithdraw &&
-        monetagWatched >= AD_LIMITS.monetag.minWithdraw,
+      canWithdraw: limits.canWithdraw,
+      withdrawalLimits: limits,
     });
   } catch (err) {
     console.error("Ad status error:", err);
@@ -258,9 +260,12 @@ router.all(["/reward", "/adsgram-reward"], async (req, res) => {
   }
 });
 
-// 4. Dev / Test Helper to configure ad counts & test balance
+// 4. Withdrawal Limit Ad Claim (Independent of Gate Ads)
+router.post("/limit-claim", watchWithdrawalLimitAd);
+
+// 5. Dev / Test Helper to configure ad counts & test balance
 router.post("/dev-set", async (req, res) => {
-  const { userId, adsgram, monetag, addTon } = req.body;
+  const { userId, adsgram, monetag, limitAds, addTon } = req.body;
   if (!userId) return res.status(400).json({ error: "Missing userId" });
 
   const client = await pool.connect();
@@ -273,8 +278,8 @@ router.post("/dev-set", async (req, res) => {
     );
 
     await client.query(
-      `INSERT INTO user_daily_ads (user_id, ad_date, adsgram_count, monetag_count)
-       VALUES ($1, CURRENT_DATE, 0, 0)
+      `INSERT INTO user_daily_ads (user_id, ad_date, adsgram_count, monetag_count, limit_ads_count)
+       VALUES ($1, CURRENT_DATE, 0, 0, 0)
        ON CONFLICT (user_id, ad_date) DO NOTHING`,
       [userId]
     );
@@ -286,6 +291,15 @@ router.post("/dev-set", async (req, res) => {
       [Number(adsgram ?? 8), Number(monetag ?? 4), userId]
     );
 
+    if (limitAds !== undefined) {
+      await client.query(
+        `UPDATE user_daily_ads 
+         SET limit_ads_count = $1 
+         WHERE user_id = $2 AND ad_date = CURRENT_DATE`,
+        [Number(limitAds), userId]
+      );
+    }
+
     if (addTon) {
       await client.query(
         `UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2`,
@@ -293,7 +307,7 @@ router.post("/dev-set", async (req, res) => {
       );
     }
 
-    return res.json({ success: true, adsgram, monetag, addTon });
+    return res.json({ success: true, adsgram, monetag, limitAds, addTon });
   } catch (err) {
     return res.status(500).json({ error: "Failed to set counts" });
   } finally {

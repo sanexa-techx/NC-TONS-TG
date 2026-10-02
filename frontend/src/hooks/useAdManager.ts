@@ -249,9 +249,58 @@ export function useAdManager(
     return await triggerInterstitial("game_end");
   }, [triggerInterstitial]);
 
+  // 6. Withdrawal Limit Ad (Rewarded video/interstitial for 30 daily / 100 weekly limit pass)
+  const showWithdrawalLimitAd = useCallback(async (): Promise<any> => {
+    const claimLimitAd = async () => {
+      try {
+        const res = await fetch("/api/withdraw/watch-ad", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: userId.toString() }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const tg = (window as any).Telegram?.WebApp;
+          if (tg?.HapticFeedback) {
+            tg.HapticFeedback.notificationOccurred("success");
+          }
+          if (onRewardClaimed) onRewardClaimed(data);
+          return data;
+        } else {
+          alert(data.error || "Could not record limit ad");
+          return null;
+        }
+      } catch (e) {
+        console.error("Limit ad claim error:", e);
+        return null;
+      }
+    };
+
+    if (window.Adsgram) {
+      const controller = window.Adsgram.init({
+        blockId: ADSGRAM_BLOCK_ID,
+        userId: String(userId),
+      });
+      try {
+        const result = await controller.show();
+        if (result.done) {
+          return await claimLimitAd();
+        }
+      } catch (e) {
+        console.warn("Adsgram limit ad fallback to Monetag:", e);
+        await executeMonetagInterstitial(userId);
+        return await claimLimitAd();
+      }
+    } else {
+      await executeMonetagInterstitial(userId);
+      return await claimLimitAd();
+    }
+  }, [userId, ADSGRAM_BLOCK_ID, onRewardClaimed]);
+
   return {
     showAdsgramRewarded,
     showMonetagRewarded,
+    showWithdrawalLimitAd,
     triggerInterstitial,
     showPreGameAd,
     showPostGameAd,

@@ -13,6 +13,7 @@ import {
   DailyStreakStatusResponse,
   DailyStreakClaimResponse,
   DailyAdStatusResponse,
+  WithdrawalStatusResponse,
   LevelStatusResponse,
   LevelUpgradeResponse,
 } from '../types/index.js';
@@ -265,6 +266,30 @@ export const api = {
   async getWithdrawalHistory(): Promise<{ history: WithdrawalRecord[] }> {
     const res = await fetch('/api/withdraw/history', {
       headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async getWithdrawalStatus(userId?: string | number): Promise<WithdrawalStatusResponse> {
+    const id = userId || getDetectedUser()?.id;
+    const queryParam = id ? `?userId=${id}` : '';
+    const res = await fetch(`/api/withdraw/status${queryParam}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async watchWithdrawalLimitAd(userId?: string | number): Promise<{
+    success: boolean;
+    message: string;
+    reward: { nc: number; ton: number };
+    limits: any;
+  }> {
+    const id = userId || getDetectedUser()?.id;
+    const res = await fetch('/api/withdraw/watch-ad', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId: id }),
     });
     return handleResponse(res);
   },

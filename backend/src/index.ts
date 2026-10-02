@@ -10,7 +10,12 @@ import { verifyAuth } from './controllers/authController.js';
 import { syncMining, rechargeMining } from './controllers/miningController.js';
 import { startGame, finishGame } from './controllers/gameController.js';
 import { getAvailableMissions, startMission, claimMission, createMission } from './controllers/missionController.js';
-import { requestWithdrawal, getWithdrawalHistory } from './controllers/withdrawController.js';
+import {
+  requestWithdrawal,
+  getWithdrawalHistory,
+  getWithdrawalStatus,
+  watchWithdrawalLimitAd,
+} from './controllers/withdrawController.js';
 import {
   getRewardConfigs,
   updateRewardConfig,
@@ -123,6 +128,8 @@ app.post('/api/missions/create', authMiddleware, createMission);
 // Withdrawals
 app.post('/api/withdraw/request', authMiddleware, requestWithdrawal);
 app.get('/api/withdraw/history', authMiddleware, getWithdrawalHistory);
+app.get('/api/withdraw/status', authMiddleware, getWithdrawalStatus);
+app.post('/api/withdraw/watch-ad', authMiddleware, watchWithdrawalLimitAd);
 
 // Promo Codes
 app.post('/api/promos/redeem', authMiddleware, redeemPromo);

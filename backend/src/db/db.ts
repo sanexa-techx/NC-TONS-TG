@@ -262,6 +262,7 @@ const memoryStore = {
     ad_date: string;
     adsgram_count: number;
     monetag_count: number;
+    limit_ads_count: number;
     last_ad_at: Date;
   }>(),
   botChats: new Map<string, {
@@ -516,10 +517,22 @@ const mockPrisma = {
       return list;
     },
     async count({ where }: any = {}) {
-      if (where?.status) {
-        return memoryStore.withdrawals.filter((w) => w.status === where.status).length;
+      let filtered = memoryStore.withdrawals;
+      if (where?.user_id) {
+        filtered = filtered.filter((w) => w.user_id.toString() === where.user_id.toString());
       }
-      return memoryStore.withdrawals.length;
+      if (where?.status) {
+        if (typeof where.status === 'object' && where.status.not) {
+          filtered = filtered.filter((w) => w.status !== where.status.not);
+        } else {
+          filtered = filtered.filter((w) => w.status === where.status);
+        }
+      }
+      if (where?.created_at?.gte) {
+        const gteDate = new Date(where.created_at.gte);
+        filtered = filtered.filter((w) => new Date(w.created_at) >= gteDate);
+      }
+      return filtered.length;
     },
   },
 
@@ -1149,11 +1162,49 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
         {
           adsgram_count: record.adsgram_count,
           monetag_count: record.monetag_count,
+          limit_ads_count: record.limit_ads_count || 0,
           last_ad_at: record.last_ad_at,
         },
       ],
       rowCount: 1,
     };
+  }
+
+  // 14b. Sum weekly limit ads
+  if (normalized.includes('limit_ads_count') && normalized.includes('SUM') && normalized.includes('user_daily_ads')) {
+    const rawId = params[0]?.toString() || '';
+    const now = new Date();
+    const day = now.getUTCDay();
+    const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
+    const mondayStr = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff)).toISOString().slice(0, 10);
+    let sum = 0;
+    for (const [key, val] of memoryStore.dailyAds.entries()) {
+      if (key.startsWith(`${rawId}:`) && val.ad_date >= mondayStr) {
+        sum += Number(val.limit_ads_count || 0);
+      }
+    }
+    return { rows: [{ sum: sum.toString(), weekly_limit_ads: sum }], rowCount: 1 };
+  }
+
+  // 14c. Count daily/weekly withdrawals
+  if (normalized.includes('FROM withdrawals') && normalized.includes('COUNT(')) {
+    const rawId = params[0]?.toString() || '';
+    const now = new Date();
+    if (normalized.includes("date_trunc('week'") || normalized.includes("DATE_TRUNC('WEEK'")) {
+      const day = now.getUTCDay();
+      const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1);
+      const mondayDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff));
+      const count = memoryStore.withdrawals.filter(
+        (w: any) => w.user_id.toString() === rawId && new Date(w.created_at) >= mondayDate && w.status !== 'REJECTED'
+      ).length;
+      return { rows: [{ count: count.toString() }], rowCount: 1 };
+    } else if (normalized.includes('CURRENT_DATE') || normalized.includes('current_date')) {
+      const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const count = memoryStore.withdrawals.filter(
+        (w: any) => w.user_id.toString() === rawId && new Date(w.created_at) >= todayStart && w.status !== 'REJECTED'
+      ).length;
+      return { rows: [{ count: count.toString() }], rowCount: 1 };
+    }
   }
 
   // 15. INSERT INTO user_daily_ads ... ON CONFLICT (user_id, ad_date) DO NOTHING
@@ -1167,17 +1218,20 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
         ad_date: todayStr,
         adsgram_count: 0,
         monetag_count: 0,
+        limit_ads_count: 0,
         last_ad_at: new Date(Date.now() - 30000), // Default older than 20s cooldown
       });
     }
     return { rows: [], rowCount: 1 };
   }
 
-  // 16. UPDATE user_daily_ads SET adsgram_count / monetag_count
+  // 16. UPDATE user_daily_ads SET adsgram_count / monetag_count / limit_ads_count
   if (normalized.startsWith('UPDATE user_daily_ads SET')) {
     let rawId = '';
-    if (normalized.includes('adsgram_count = $1, monetag_count = $2')) {
-      rawId = params[2]?.toString() || '';
+    const userMatch = normalized.match(/WHERE\s+user_id\s*=\s*\$(\d+)/i);
+    if (userMatch) {
+      const idx = Number(userMatch[1]) - 1;
+      rawId = params[idx]?.toString() || '';
     } else {
       rawId = params[0]?.toString() || '';
     }
@@ -1186,10 +1240,11 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     let record = memoryStore.dailyAds.get(key);
     if (!record) {
       record = {
-        user_id: BigInt(rawId),
+        user_id: BigInt(rawId || 0),
         ad_date: todayStr,
         adsgram_count: 0,
         monetag_count: 0,
+        limit_ads_count: 0,
         last_ad_at: new Date(),
       };
       memoryStore.dailyAds.set(key, record);
@@ -1198,11 +1253,28 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
       record.adsgram_count = Number(params[0] ?? 8);
       record.monetag_count = Number(params[1] ?? 4);
     }
+    const adsgramLit = normalized.match(/adsgram_count\s*=\s*(\d+)/i);
+    if (adsgramLit) record.adsgram_count = Number(adsgramLit[1]);
+
+    const monetagLit = normalized.match(/monetag_count\s*=\s*(\d+)/i);
+    if (monetagLit) record.monetag_count = Number(monetagLit[1]);
+
+    const limitLit = normalized.match(/limit_ads_count\s*=\s*(\d+)/i);
+    if (limitLit) record.limit_ads_count = Number(limitLit[1]);
+
     if (normalized.includes('adsgram_count = adsgram_count + 1')) {
       record.adsgram_count += 1;
     }
     if (normalized.includes('monetag_count = monetag_count + 1')) {
       record.monetag_count += 1;
+    }
+    if (normalized.includes('limit_ads_count = limit_ads_count + 1')) {
+      record.limit_ads_count = (record.limit_ads_count || 0) + 1;
+    }
+    const limitParam = normalized.match(/limit_ads_count\s*=\s*\$(\d+)/i);
+    if (limitParam) {
+      const pIdx = Number(limitParam[1]) - 1;
+      record.limit_ads_count = Number(params[pIdx] ?? 0);
     }
     record.last_ad_at = new Date();
     return { rows: [], rowCount: 1 };
@@ -1437,6 +1509,10 @@ export async function connectDB() {
           ALTER TABLE users 
           ADD COLUMN IF NOT EXISTS mining_reminder_sent BOOLEAN DEFAULT FALSE,
           ADD COLUMN IF NOT EXISTS last_mining_reminder_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+        `);
+        await realPool.query(`
+          ALTER TABLE user_daily_ads 
+          ADD COLUMN IF NOT EXISTS limit_ads_count INT DEFAULT 0;
         `);
         await realPool.query(`
           CREATE TABLE IF NOT EXISTS bot_chats (

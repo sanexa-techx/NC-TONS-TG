@@ -35,7 +35,7 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     }
   }, [userId]);
 
-  const { showAdsgramRewarded, showMonetagRewarded } = useAdManager(
+  const { showAdsgramRewarded, showMonetagRewarded, showWithdrawalLimitAd } = useAdManager(
     userId,
     () => {
       fetchStatus();
@@ -62,6 +62,14 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     if (adCooldown > 0 || loading) return;
     setLoading(true);
     await showMonetagRewarded();
+    setAdCooldown(10);
+    setLoading(false);
+  };
+
+  const handleWatchLimitAd = async () => {
+    if (adCooldown > 0 || loading) return;
+    setLoading(true);
+    await showWithdrawalLimitAd();
     setAdCooldown(10);
     setLoading(false);
   };
@@ -182,6 +190,47 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
             : adCooldown > 0
             ? `Wait (${adCooldown}s)`
             : "Watch"}
+        </button>
+      </div>
+
+      {/* 3. Withdrawal Limit Pass Mission (30 daily / 100 weekly) */}
+      <div className="bg-neutral-900/90 border border-neutral-800 hover:border-cyan-500/30 rounded-2xl p-3.5 flex items-center justify-between text-white transition-all">
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+              <ShieldCheck className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <h4 className="font-bold text-xs">Withdrawal Limit Pass</h4>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                1/day • 5/week
+              </span>
+            </div>
+            {adStatus.withdrawalLimits && (
+              <span className="text-[10px] font-mono text-neutral-400">
+                (Daily: {adStatus.withdrawalLimits.daily.adsWatched}/30 • Weekly: {adStatus.withdrawalLimits.weekly.adsWatched}/100)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-xs font-mono pl-7.5">
+            <span className="text-yellow-400 font-bold flex items-center gap-1">
+              <NcIcon className="w-3.5 h-3.5" /> +200 NC
+            </span>
+            <span className="text-cyan-400 font-bold flex items-center gap-1">
+              <TonIcon className="w-3.5 h-3.5" /> +0.00025 TON
+            </span>
+          </div>
+          <p className="text-[9.5px] text-amber-400/90 font-mono pl-7.5">
+            * Independent views - does not count towards the 8 Adsgram / 4 Monetag gate
+          </p>
+        </div>
+
+        <button
+          onClick={handleWatchLimitAd}
+          disabled={loading || adCooldown > 0}
+          className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-xl transition shadow-md shadow-cyan-500/10 active:scale-95 min-w-[85px] text-center shrink-0"
+        >
+          {adCooldown > 0 ? `Wait (${adCooldown}s)` : "Watch"}
         </button>
       </div>
     </div>

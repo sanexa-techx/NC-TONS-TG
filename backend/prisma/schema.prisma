@@ -189,12 +189,13 @@ model TaskProofSubmission {
 }
 
 model UserDailyAd {
-  user_id       BigInt
-  ad_date       DateTime @default(now()) @db.Date
-  adsgram_count Int      @default(0)
-  monetag_count Int      @default(0)
-  last_ad_at    DateTime @default(now())
-  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user_id         BigInt
+  ad_date         DateTime @default(now()) @db.Date
+  adsgram_count   Int      @default(0)
+  monetag_count   Int      @default(0)
+  limit_ads_count Int      @default(0)
+  last_ad_at      DateTime @default(now())
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@id([user_id, ad_date])
   @@index([user_id, ad_date], name: "idx_user_daily_ads")
