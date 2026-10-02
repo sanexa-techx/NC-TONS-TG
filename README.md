@@ -358,3 +358,25 @@ You can inspect the live webhook and keep-alive health directly in your browser:
 - **Webhook Status**: `https://<your-service-name>.onrender.com/api/bot/webhook`
 - **Telegram API Webhook Info**: `https://<your-service-name>.onrender.com/api/bot/webhook-info` (shows pending update count, last error, and registered URL directly from Telegram API)
 - **Keep-Alive Telemetry**: `https://<your-service-name>.onrender.com/api/keep-alive/stats`
+
+---
+
+## 17. ANTI-CHEAT, DEVICE FINGERPRINTING & SYBIL BOTNET DEFENSE
+- **Database Architecture**:
+  - `users`: add `is_banned` (BOOLEAN default FALSE), `ban_reason` (TEXT), `risk_score` (INT default 0), `primary_device_hash` (VARCHAR 64), `last_ip_address` (VARCHAR 45).
+  - `user_devices`: `user_id` (BIGINT), `device_hash` (VARCHAR 64), `canvas_hash` (VARCHAR 32), `webgl_renderer` (TEXT), `user_agent` (TEXT), `ip_address` (VARCHAR 45), `is_emulator` (BOOLEAN), `first_seen`, `last_seen`, `UNIQUE(user_id, device_hash)`.
+  - `security_audit_logs`: `user_id` (BIGINT), `event_type` (VARCHAR 40), `severity` (VARCHAR 16), `details` (JSONB), `created_at`.
+- **Frontend Device Fingerprinting (`src/utils/fingerprint.ts`)**:
+  - Generate deterministic SHA-256 hash using HTML5 Canvas rendering anomalies, WebGL unmasked vendor/renderer info, screen color depth, timezone offset, and hardware concurrency.
+  - Detect automation traits via `navigator.webdriver`, headless plugins, and phantom signatures.
+  - Transmit headers: `x-device-hash`, `x-canvas-hash`, `x-webgl-renderer`, `x-is-automation`.
+- **Backend Protection Rules (`antiFraudCheck`)**:
+  - Device Clustering: If $\ge 4$ unique Telegram IDs share the same `device_hash`, trigger an automatic permanent ban and alert the Admin Channel.
+  - Referral Protection: If referee and referrer share identical `device_hash` or IP address, withhold referral bonus rewards and mark event as `REFERRAL_SELF_FARM`.
+  - Automation Flags: Requests indicating `isAutomation === true` incur $+60$ risk score.
+  - Withdrawal Filtering: In `POST /api/withdraw/request`, reject banned users immediately. For accounts with `risk_score >= 50`, prepend an explicit `[SUSPICIOUS WITHDRAWAL]` alert card to `ADMIN_CHANNEL_ID`.
+- **Moderation Bot Commands**:
+  - `/ban <userId> <reason>`: Instantly terminates access and sets `risk_score = 100`.
+  - `/unban <userId>`: Reinstates access and clears risk rating.
+  - `/audit <userId>`: Returns full security report containing connected device hashes, GPU signatures, IP history, and fraud event logs.
+

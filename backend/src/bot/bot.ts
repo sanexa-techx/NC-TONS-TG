@@ -128,6 +128,9 @@ export async function setupBotCommands(b: Telegraf) {
         await b.telegram.setMyCommands(
           [
             { command: 'admin', description: '🛡️ Admin Command Center' },
+            { command: 'ban', description: '🚫 Ban user: /ban <id> <reason>' },
+            { command: 'unban', description: '✅ Unban user: /unban <id>' },
+            { command: 'audit', description: '🔍 Audit device & fraud logs: /audit <id>' },
             { command: 'broadcast', description: '📢 Global broadcast' },
             { command: 'stop_broadcast', description: '🛑 Stop active broadcast' },
             { command: 'stats_global', description: '🌐 Global platform metrics' },
@@ -186,58 +189,90 @@ export function registerMasterBotHandlers(b: Telegraf) {
           let bonusNc = isPremium ? 2500 : 1000;
           let bonusTon = isPremium ? 0.000200 : 0.000080;
 
-          try {
-            const refCfg = await client.query(
-              "SELECT action_type, nc_reward, ton_reward FROM reward_configs WHERE action_type IN ('referral_standard', 'referral_premium')"
-            );
-            for (const row of refCfg.rows) {
-              if (row.action_type === 'referral_standard' && !isPremium) {
-                bonusNc = Number(row.nc_reward);
-                bonusTon = parseFloat(row.ton_reward);
-              } else if (row.action_type === 'referral_premium' && isPremium) {
-                bonusNc = Number(row.nc_reward);
-                bonusTon = parseFloat(row.ton_reward);
+          // Anti-Fraud: check if referee and referrer share an active device or IP address
+          let hasClash = false;
+          if (referrerId) {
+            try {
+              const clashCheck = await client.query(
+                `SELECT 1 FROM user_devices d1
+                 JOIN user_devices d2 ON (d1.device_hash = d2.device_hash OR d1.ip_address = d2.ip_address)
+                 WHERE d1.user_id = $1 AND d2.user_id = $2`,
+                [referrerId, newUserId]
+              );
+              if (clashCheck.rows.length > 0) {
+                hasClash = true;
               }
+            } catch (clashErr) {
+              console.warn('[Anti-Cheat] Referral clash check error:', clashErr);
             }
-          } catch {
-            // fallback defaults
           }
 
-          await client.query(
-            `INSERT INTO users (id, first_name, username, nc_balance, referred_by)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [newUserId, firstName, username, starterNc, referrerId]
-          );
-
-          if (referrerId) {
-            const refCheck = await client.query('SELECT id FROM users WHERE id = $1', [referrerId]);
-            if (refCheck.rows.length > 0) {
-              await client.query(
-                `INSERT INTO referrals (referrer_id, referee_id, is_premium, bonus_nc, bonus_ton)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [referrerId, newUserId, isPremium, bonusNc, bonusTon]
+          if (hasClash) {
+            // Silent Fraud Mitigation: register user without awarding rewards to referrer
+            await client.query(
+              'INSERT INTO users (id, first_name, username, nc_balance, risk_score, referred_by) VALUES ($1, $2, $3, 500, 75, $4)',
+              [newUserId, firstName, username, referrerId]
+            );
+            // Log fraud event
+            await client.query(
+              `INSERT INTO security_audit_logs (user_id, event_type, severity, details)
+               VALUES ($1, 'REFERRAL_CLASH_ON_START', 'HIGH', $2)`,
+              [newUserId, JSON.stringify({ referrerId })]
+            );
+          } else {
+            try {
+              const refCfg = await client.query(
+                "SELECT action_type, nc_reward, ton_reward FROM reward_configs WHERE action_type IN ('referral_standard', 'referral_premium')"
               );
+              for (const row of refCfg.rows) {
+                if (row.action_type === 'referral_standard' && !isPremium) {
+                  bonusNc = Number(row.nc_reward);
+                  bonusTon = parseFloat(row.ton_reward);
+                } else if (row.action_type === 'referral_premium' && isPremium) {
+                  bonusNc = Number(row.nc_reward);
+                  bonusTon = parseFloat(row.ton_reward);
+                }
+              }
+            } catch {
+              // fallback defaults
+            }
 
-              await client.query(
-                `UPDATE users 
-                 SET referral_count = referral_count + 1,
-                     unclaimed_referral_nc = unclaimed_referral_nc + $1,
-                     unclaimed_referral_ton = unclaimed_referral_ton + $2,
-                     total_referral_nc = total_referral_nc + $1,
-                     total_referral_ton = total_referral_ton + $2
-                 WHERE id = $3`,
-                [bonusNc, bonusTon, referrerId]
-              );
+            await client.query(
+              `INSERT INTO users (id, first_name, username, nc_balance, referred_by)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [newUserId, firstName, username, starterNc, referrerId]
+            );
 
-              await b.telegram
-                .sendMessage(
-                  referrerId,
-                  `👥 <b>New Referral Joined!</b>\n\n` +
-                    `Your friend <b>${firstName}</b> just started mining.\n` +
-                    `🎁 Bounty Stashed: <b>+${bonusNc.toLocaleString()} NC</b> and <b>+${bonusTon.toFixed(6)} TON</b>!`,
-                  { parse_mode: 'HTML' }
-                )
-                .catch(() => {});
+            if (referrerId) {
+              const refCheck = await client.query('SELECT id FROM users WHERE id = $1', [referrerId]);
+              if (refCheck.rows.length > 0) {
+                await client.query(
+                  `INSERT INTO referrals (referrer_id, referee_id, is_premium, bonus_nc, bonus_ton)
+                   VALUES ($1, $2, $3, $4, $5)`,
+                  [referrerId, newUserId, isPremium, bonusNc, bonusTon]
+                );
+
+                await client.query(
+                  `UPDATE users 
+                   SET referral_count = referral_count + 1,
+                       unclaimed_referral_nc = unclaimed_referral_nc + $1,
+                       unclaimed_referral_ton = unclaimed_referral_ton + $2,
+                       total_referral_nc = total_referral_nc + $1,
+                       total_referral_ton = total_referral_ton + $2
+                   WHERE id = $3`,
+                  [bonusNc, bonusTon, referrerId]
+                );
+
+                await b.telegram
+                  .sendMessage(
+                    referrerId,
+                    `👥 <b>New Referral Joined!</b>\n\n` +
+                      `Your friend <b>${firstName}</b> just started mining.\n` +
+                      `🎁 Bounty Stashed: <b>+${bonusNc.toLocaleString()} NC</b> and <b>+${bonusTon.toFixed(6)} TON</b>!`,
+                    { parse_mode: 'HTML' }
+                  )
+                  .catch(() => {});
+              }
             }
           }
         }
@@ -469,6 +504,9 @@ export function registerMasterBotHandlers(b: Telegraf) {
       `🛡️ <b>NC TONs — Administrator Command Center</b>\n\n` +
         `Welcome, <b>${adminName}</b>! You have verified system administrator rights.\n\n` +
         `<b>Available Operations:</b>\n` +
+        `• <code>/ban &lt;userId&gt; &lt;reason&gt;</code>: Blacklist sybil/fraud account\n` +
+        `• <code>/unban &lt;userId&gt;</code>: Lift ban and reset risk to 0\n` +
+        `• <code>/audit &lt;userId&gt;</code>: Security report with device & GPU cluster footprints\n` +
         `• <code>/broadcast &lt;text&gt;</code>: Dispatch announcement to all miners and channels\n` +
         `• <code>/stop_broadcast</code>: Immediately halt an active broadcast in progress\n` +
         `• <i>Reply to any photo/video with</i> <code>/broadcast</code>: Rich media replication\n` +
@@ -497,6 +535,93 @@ export function registerMasterBotHandlers(b: Telegraf) {
         ]),
       }
     );
+  });
+
+  // ============================================================================
+  // ANTI-CHEAT & MODERATION COMMANDS (/ban, /unban, /audit)
+  // ============================================================================
+
+  // 1. /ban <userId> <reason>
+  b.command('ban', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) return;
+    const rawText = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const args = rawText.split(' ');
+    const targetId = parseInt(args[1], 10);
+    const reason = args.slice(2).join(' ') || 'Administrative Security Ban';
+
+    if (isNaN(targetId)) {
+      return ctx.reply('Usage: <code>/ban &lt;userId&gt; &lt;reason&gt;</code>', { parse_mode: 'HTML' });
+    }
+
+    await pool.query(
+      'UPDATE users SET is_banned = TRUE, ban_reason = $1, risk_score = 100 WHERE id = $2',
+      [reason, targetId]
+    );
+
+    return ctx.reply(`🚫 User <code>${targetId}</code> has been banned.\nReason: <i>${reason}</i>`, { parse_mode: 'HTML' });
+  });
+
+  // 2. /unban <userId>
+  b.command('unban', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) return;
+    const rawText = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const targetId = parseInt(rawText.split(' ')[1], 10);
+
+    if (isNaN(targetId)) {
+      return ctx.reply('Usage: <code>/unban &lt;userId&gt;</code>', { parse_mode: 'HTML' });
+    }
+
+    await pool.query(
+      'UPDATE users SET is_banned = FALSE, ban_reason = NULL, risk_score = 0 WHERE id = $1',
+      [targetId]
+    );
+
+    return ctx.reply(`✅ User <code>${targetId}</code> has been unbanned and risk score reset to 0.`, { parse_mode: 'HTML' });
+  });
+
+  // 3. /audit <userId> - Inspect Device Footprints
+  b.command('audit', async (ctx) => {
+    if (!ctx.from || !isAdmin(ctx.from.id)) return;
+    const rawText = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
+    const targetId = parseInt(rawText.split(' ')[1], 10);
+
+    if (isNaN(targetId)) {
+      return ctx.reply('Usage: <code>/audit &lt;userId&gt;</code>', { parse_mode: 'HTML' });
+    }
+
+    const userRes = await pool.query(
+      'SELECT id, first_name, username, risk_score, is_banned, last_ip_address FROM users WHERE id = $1',
+      [targetId]
+    );
+    if (userRes.rows.length === 0) return ctx.reply('User not found.');
+
+    const u = userRes.rows[0];
+    const devices = await pool.query('SELECT * FROM user_devices WHERE user_id = $1', [targetId]);
+    const logs = await pool.query(
+      'SELECT event_type, severity, created_at FROM security_audit_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5',
+      [targetId]
+    );
+
+    let reply =
+      `🔍 <b>Security Audit Report</b>\n\n` +
+      `👤 <b>User:</b> <code>${u.id}</code> (${u.first_name || 'Miner'})\n` +
+      `⚠️ <b>Risk Score:</b> ${u.risk_score || 0}/100\n` +
+      `🚫 <b>Status:</b> ${u.is_banned ? 'BANNED' : 'ACTIVE'}\n` +
+      `🌐 <b>Last IP:</b> <code>${u.last_ip_address || 'None'}</code>\n\n` +
+      `📱 <b>Connected Devices (${devices.rows.length}):</b>\n`;
+
+    devices.rows.forEach((d: any) => {
+      reply += `• Hash: <code>${(d.device_hash || '').slice(0, 10)}...</code> | GPU: <i>${(d.webgl_renderer || '').slice(0, 20)}</i>\n`;
+    });
+
+    if (logs.rows.length > 0) {
+      reply += `\n🚨 <b>Recent Security Flags:</b>\n`;
+      logs.rows.forEach((l: any) => {
+        reply += `• [${l.severity}] <b>${l.event_type}</b>\n`;
+      });
+    }
+
+    return ctx.reply(reply, { parse_mode: 'HTML' });
   });
 
   // ============================================================================

@@ -11,6 +11,7 @@ import { syncMining, rechargeMining } from './controllers/miningController.js';
 import { startGame, finishGame } from './controllers/gameController.js';
 import { getAvailableMissions, startMission, claimMission, createMission } from './controllers/missionController.js';
 import withdrawRouter from './routes/withdraw.js';
+import { antiFraudCheck } from './middleware/antiFraud.js';
 import {
   getRewardConfigs,
   updateRewardConfig,
@@ -99,6 +100,9 @@ app.post('/api/keep-alive/ping', async (req, res) => {
   const result = await KeepAliveService.pingNow();
   res.json(result);
 });
+
+// Anti-Fraud, Multi-Accounting & Device Fingerprint Engine
+app.use('/api', antiFraudCheck);
 
 // Authentication & Profile
 app.post('/api/auth/verify', authMiddleware, verifyAuth);

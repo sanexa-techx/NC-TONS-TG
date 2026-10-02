@@ -307,3 +307,50 @@ CREATE TABLE IF NOT EXISTS user_withdrawal_limits (
 
 CREATE INDEX IF NOT EXISTS idx_user_wd_limits_date ON user_withdrawal_limits(user_id, tracked_date);
 
+-- ----------------------------------------------------------------------------
+-- ANTI-FRAUD, DEVICE CLUSTERS & RISK REGISTRY
+-- ----------------------------------------------------------------------------
+
+-- 1. Extend Users Table with Security Status
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS ban_reason TEXT DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS risk_score INT DEFAULT 0,            -- 0 (clean) to 100 (fraud)
+ADD COLUMN IF NOT EXISTS primary_device_hash VARCHAR(64) DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_ip_address VARCHAR(45) DEFAULT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_users_banned ON users(is_banned);
+CREATE INDEX IF NOT EXISTS idx_users_device ON users(primary_device_hash);
+
+-- 2. Device Fingerprint History (Tracks multi-accounting across devices)
+CREATE TABLE IF NOT EXISTS user_devices (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_hash VARCHAR(64) NOT NULL,
+    canvas_hash VARCHAR(32),
+    webgl_vendor TEXT,
+    webgl_renderer TEXT,
+    user_agent TEXT,
+    ip_address VARCHAR(45),
+    is_emulator BOOLEAN DEFAULT FALSE,
+    first_seen TIMESTAMP DEFAULT NOW(),
+    last_seen TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT unique_user_device UNIQUE(user_id, device_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_devices_hash ON user_devices(device_hash);
+CREATE INDEX IF NOT EXISTS idx_user_devices_ip ON user_devices(ip_address);
+
+-- 3. Security Event Audit Logs
+CREATE TABLE IF NOT EXISTS security_audit_logs (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    event_type VARCHAR(40) NOT NULL, -- 'DEVICE_CLASH', 'REFERRAL_SELF_FARM', 'EMULATOR_DETECTED', 'AUTOMATION_FLAG'
+    severity VARCHAR(16) DEFAULT 'HIGH', -- 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
+    details JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_logs_user ON security_audit_logs(user_id);
+
+

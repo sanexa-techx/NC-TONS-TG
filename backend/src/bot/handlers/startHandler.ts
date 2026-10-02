@@ -40,22 +40,64 @@ export function registerStartHandler(bot: Telegraf) {
         // Starter welcome gift for the new user
         const starterNc = isPremium ? 2000 : 1000;
 
-        user = await (prisma.user as any).create({
-          data: {
-            id: userId,
-            first_name: firstName,
-            username: username,
-            referred_by: referrerId,
-            ton_balance: 0,
-            nc_balance: BigInt(starterNc),
-            power_percentage: 100,
-            power_capacity_hours: 8,
-            ton_hashrate_per_sec: 0.00000020,
-          },
-        });
-
-        // 3. If valid referrer, credit their pending stash & log referral entry
+        let hasClash = false;
         if (referrerId) {
+          try {
+            const clashCheck: any = await (prisma as any).$queryRawUnsafe(
+              `SELECT 1 FROM user_devices d1
+               JOIN user_devices d2 ON (d1.device_hash = d2.device_hash OR d1.ip_address = d2.ip_address)
+               WHERE d1.user_id = $1 AND d2.user_id = $2`,
+              referrerId.toString(),
+              userId.toString()
+            );
+            if (Array.isArray(clashCheck) && clashCheck.length > 0) {
+              hasClash = true;
+            }
+          } catch (e) {
+            console.warn('[Anti-Fraud] startHandler clash check:', e);
+          }
+        }
+
+        if (hasClash) {
+          user = await (prisma.user as any).create({
+            data: {
+              id: userId,
+              first_name: firstName,
+              username: username,
+              referred_by: referrerId,
+              ton_balance: 0,
+              nc_balance: BigInt(500),
+              risk_score: 75,
+              power_percentage: 100,
+              power_capacity_hours: 8,
+              ton_hashrate_per_sec: 0.00000020,
+            },
+          });
+
+          await (prisma as any).$executeRawUnsafe(
+            `INSERT INTO security_audit_logs (user_id, event_type, severity, details)
+             VALUES ($1, 'REFERRAL_CLASH_ON_START', 'HIGH', $2)`,
+            userId.toString(),
+            JSON.stringify({ referrerId: referrerId ? referrerId.toString() : null })
+          ).catch(() => {});
+        } else {
+          user = await (prisma.user as any).create({
+            data: {
+              id: userId,
+              first_name: firstName,
+              username: username,
+              referred_by: referrerId,
+              ton_balance: 0,
+              nc_balance: BigInt(starterNc),
+              power_percentage: 100,
+              power_capacity_hours: 8,
+              ton_hashrate_per_sec: 0.00000020,
+            },
+          });
+        }
+
+        // 3. If valid referrer and no fraud clash, credit their pending stash & log referral entry
+        if (referrerId && !hasClash) {
           try {
             const referrerExists = await prisma.user.findUnique({
               where: { id: referrerId },

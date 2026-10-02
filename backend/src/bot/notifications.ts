@@ -11,23 +11,29 @@ export async function sendWithdrawalApprovalCard(
   username: string | null | undefined,
   firstName: string,
   tonAddress: string,
-  tonAmount: string
+  tonAmount: string,
+  riskScore: number = 0
 ): Promise<bigint | null> {
   if (!bot || !ENV.ADMIN_CHANNEL_ID) {
     console.log(`[DEV/MOCK BOT] Withdrawal card #${withdrawalId} for ${tonAmount} TON to ${tonAddress} (Admin Channel not configured)`);
     return null;
   }
 
-  const userHandle = username ? `@${username}` : firstName;
+  const isHighRisk = riskScore >= 50;
+  const parsedAmount = parseFloat(tonAmount) || 0;
+  const requestTime = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  const nameDisplay = `${firstName} ${username ? `(@${username})` : ''}`.trim();
+
   const message =
-    `<b>🚨 New Withdrawal Request #${withdrawalId}</b>\n\n` +
-    `👤 <b>User:</b> ${firstName} (${userHandle})\n` +
+    `${isHighRisk ? '🚨 <b>SUSPICIOUS WITHDRAWAL DETECTED!</b> 🚨' : '💎 <b>NEW WITHDRAWAL REQUEST</b>'}\n\n` +
     `🆔 <b>User ID:</b> <code>${userId.toString()}</code>\n` +
-    `💰 <b>Amount:</b> ${TON_EMOJI_TAG} <b>${tonAmount} TON</b>\n` +
-    `🏦 <b>Wallet:</b> <code>${tonAddress}</code>\n` +
-    `⚙️ <b>Status:</b> ⏳ Pending Admin Review\n` +
-    `⏰ <b>Requested At:</b> ${new Date().toISOString().replace('T', ' ').substring(0, 19)} UTC\n\n` +
-    `Please review and approve or reject this payout:`;
+    `👤 <b>Name:</b> ${nameDisplay}\n` +
+    `⚠️ <b>Risk Score:</b> <b>${riskScore}/100</b> ${isHighRisk ? '🔴 (High Risk / Multi-Account)' : '🟢 (Clean)'}\n` +
+    `💰 <b>Amount:</b> <b>${parsedAmount.toFixed(4)} TON</b>\n` +
+    `🏦 <b>Wallet Address:</b>\n<code>${tonAddress}</code>\n` +
+    `🕒 <b>Time:</b> <code>${requestTime}</code>\n` +
+    `${isHighRisk ? '⚠️ <b>Warning:</b> Review device clashing or emulator logs before approving!\n' : ''}` +
+    `⚙️ <b>Status:</b> ⏳ Pending Review`;
 
   try {
     const sentMsg = await bot.telegram.sendMessage(ENV.ADMIN_CHANNEL_ID, message, {

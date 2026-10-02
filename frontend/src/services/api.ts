@@ -17,6 +17,7 @@ import {
   LevelStatusResponse,
   LevelUpgradeResponse,
 } from '../types/index.js';
+import { getCachedFingerprint, getDeviceFingerprint } from '../utils/fingerprint.js';
 
 /**
  * Automatically detects the authentic Telegram User identity from:
@@ -121,7 +122,20 @@ function getAuthHeaders(): Record<string, string> {
     headers['X-Dev-Username'] = sanitizeHeader(user.username || user.firstName);
   }
 
+  // Attach hardware fingerprint headers for anti-fraud validation
+  const fp = getCachedFingerprint();
+  if (fp) {
+    headers['X-Device-Hash'] = sanitizeHeader(fp.deviceHash);
+    headers['X-Canvas-Hash'] = sanitizeHeader(fp.canvasHash);
+    headers['X-Webgl-Renderer'] = sanitizeHeader(fp.webglRenderer);
+    headers['X-Is-Automation'] = String(fp.isAutomation);
+  }
+
   return headers;
+}
+
+if (typeof window !== 'undefined') {
+  getDeviceFingerprint().catch((e) => console.warn('[Fingerprint] init note:', e));
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {

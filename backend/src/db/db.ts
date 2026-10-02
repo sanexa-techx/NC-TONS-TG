@@ -295,6 +295,29 @@ const memoryStore = {
     weekly_break_ads: number;
     updated_at: Date;
   }>(),
+  userDevices: new Map<string, {
+    id: number;
+    user_id: bigint;
+    device_hash: string;
+    canvas_hash: string | null;
+    webgl_vendor: string | null;
+    webgl_renderer: string | null;
+    user_agent: string | null;
+    ip_address: string | null;
+    is_emulator: boolean;
+    first_seen: Date;
+    last_seen: Date;
+  }>(),
+  userDeviceIdSeq: 1,
+  securityAuditLogs: [] as Array<{
+    id: number;
+    user_id: bigint | null;
+    event_type: string;
+    severity: string;
+    details: any;
+    created_at: Date;
+  }>,
+  securityAuditLogIdSeq: 1,
 };
 
 
@@ -1328,6 +1351,153 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     return { rows: [{ ...tracker }], rowCount: 1 };
   }
 
+  // 14e. user_devices queries
+  if (normalized.startsWith('INSERT INTO user_devices')) {
+    const uId = BigInt(params[0]);
+    const dHash = params[1] || '';
+    const cHash = params[2] || null;
+    const wgl = params[3] || null;
+    const ua = params[4] || null;
+    const ip = params[5] || null;
+    const isEmu = Boolean(params[6]);
+    const key = `${uId.toString()}:${dHash}`;
+    let dev = memoryStore.userDevices.get(key);
+    if (dev) {
+      dev.last_seen = new Date();
+      dev.ip_address = ip;
+    } else {
+      dev = {
+        id: memoryStore.userDeviceIdSeq++,
+        user_id: uId,
+        device_hash: dHash,
+        canvas_hash: cHash,
+        webgl_vendor: null,
+        webgl_renderer: wgl,
+        user_agent: ua,
+        ip_address: ip,
+        is_emulator: isEmu,
+        first_seen: new Date(),
+        last_seen: new Date(),
+      };
+      memoryStore.userDevices.set(key, dev);
+    }
+    return { rows: [dev], rowCount: 1 };
+  }
+
+  if (normalized.includes('COUNT(DISTINCT user_id)::INT as count FROM user_devices WHERE device_hash =')) {
+    const dHash = params[0] || '';
+    const users = new Set<string>();
+    for (const d of memoryStore.userDevices.values()) {
+      if (d.device_hash === dHash) {
+        users.add(d.user_id.toString());
+      }
+    }
+    return { rows: [{ count: users.size }], rowCount: 1 };
+  }
+
+  if (normalized.includes('FROM user_devices d1') && normalized.includes('JOIN user_devices d2')) {
+    const refId = params[0]?.toString() || '';
+    const newId = params[1]?.toString() || '';
+    const d1s = Array.from(memoryStore.userDevices.values()).filter((d) => d.user_id.toString() === refId);
+    const d2s = Array.from(memoryStore.userDevices.values()).filter((d) => d.user_id.toString() === newId);
+    let match = false;
+    for (const a of d1s) {
+      for (const b of d2s) {
+        if (a.device_hash === b.device_hash || (a.ip_address && b.ip_address && a.ip_address === b.ip_address)) {
+          match = true;
+          break;
+        }
+      }
+      if (match) break;
+    }
+    return { rows: match ? [{ '?column?': 1 }] : [], rowCount: match ? 1 : 0 };
+  }
+
+  if (normalized.includes('FROM user_devices WHERE user_id =')) {
+    const uId = params[0]?.toString() || '';
+    const rows = Array.from(memoryStore.userDevices.values()).filter((d) => d.user_id.toString() === uId);
+    return { rows, rowCount: rows.length };
+  }
+
+  // 14f. security_audit_logs queries
+  if (normalized.startsWith('INSERT INTO security_audit_logs')) {
+    const uId = params[0] ? BigInt(params[0]) : null;
+    const evType = params[1] || 'SECURITY_EVENT';
+    const sev = params[2] || 'HIGH';
+    let det = params[3];
+    if (typeof det === 'string') {
+      try { det = JSON.parse(det); } catch (_) {}
+    }
+    const log = {
+      id: memoryStore.securityAuditLogIdSeq++,
+      user_id: uId,
+      event_type: evType,
+      severity: sev,
+      details: det || {},
+      created_at: new Date(),
+    };
+    memoryStore.securityAuditLogs.push(log);
+    return { rows: [log], rowCount: 1 };
+  }
+
+  if (normalized.includes('FROM security_audit_logs WHERE user_id =')) {
+    const uId = params[0]?.toString() || '';
+    const rows = memoryStore.securityAuditLogs
+      .filter((l) => l.user_id?.toString() === uId)
+      .slice(-5)
+      .reverse();
+    return { rows, rowCount: rows.length };
+  }
+
+  // 14g. User anti-fraud check queries
+  if (normalized.includes('FROM users WHERE id = $1') && normalized.includes('is_banned')) {
+    const uId = params[0]?.toString() || '';
+    const user = memoryStore.users.get(uId);
+    if (user) {
+      return {
+        rows: [
+          {
+            id: user.id.toString(),
+            first_name: user.first_name,
+            username: user.username,
+            is_banned: user.is_banned ?? false,
+            ban_reason: user.ban_reason ?? null,
+            risk_score: user.risk_score ?? 0,
+            referred_by: user.referred_by?.toString() || null,
+            last_ip_address: user.last_ip_address ?? null,
+            primary_device_hash: user.primary_device_hash ?? null,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  if (normalized.startsWith('UPDATE users SET is_banned = TRUE') || normalized.startsWith('UPDATE users SET is_banned = FALSE')) {
+    const isBan = normalized.includes('is_banned = TRUE');
+    const uId = params[params.length - 1]?.toString() || '';
+    const user = memoryStore.users.get(uId);
+    if (user) {
+      user.is_banned = isBan;
+      user.ban_reason = isBan ? (params[0] || 'Security Ban') : null;
+      user.risk_score = isBan ? 100 : 0;
+    }
+    return { rows: [], rowCount: user ? 1 : 0 };
+  }
+
+  if (normalized.startsWith('UPDATE users') && normalized.includes('risk_score =')) {
+    const uId = params[3]?.toString() || params[params.length - 1]?.toString() || '';
+    const user = memoryStore.users.get(uId);
+    if (user) {
+      const newScore = Number(params[0] || 0);
+      user.risk_score = Math.min(100, Math.max(user.risk_score || 0, newScore));
+      if (params[1]) user.primary_device_hash = user.primary_device_hash || params[1];
+      if (params[2]) user.last_ip_address = params[2];
+    }
+    return { rows: [], rowCount: user ? 1 : 0 };
+  }
+
   // 15. INSERT INTO user_daily_ads ... ON CONFLICT (user_id, ad_date) DO NOTHING
   if (normalized.startsWith('INSERT INTO user_daily_ads')) {
     const rawId = params[0]?.toString() || '';
@@ -1663,6 +1833,46 @@ export async function connectDB() {
             updated_at TIMESTAMP DEFAULT NOW()
           );
           CREATE INDEX IF NOT EXISTS idx_user_wd_limits_date ON user_withdrawal_limits(user_id, tracked_date);
+        `);
+        await realPool.query(`
+          ALTER TABLE users 
+          ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS ban_reason TEXT DEFAULT NULL,
+          ADD COLUMN IF NOT EXISTS risk_score INT DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS primary_device_hash VARCHAR(64) DEFAULT NULL,
+          ADD COLUMN IF NOT EXISTS last_ip_address VARCHAR(45) DEFAULT NULL;
+
+          CREATE INDEX IF NOT EXISTS idx_users_banned ON users(is_banned);
+          CREATE INDEX IF NOT EXISTS idx_users_device ON users(primary_device_hash);
+
+          CREATE TABLE IF NOT EXISTS user_devices (
+              id SERIAL PRIMARY KEY,
+              user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              device_hash VARCHAR(64) NOT NULL,
+              canvas_hash VARCHAR(32),
+              webgl_vendor TEXT,
+              webgl_renderer TEXT,
+              user_agent TEXT,
+              ip_address VARCHAR(45),
+              is_emulator BOOLEAN DEFAULT FALSE,
+              first_seen TIMESTAMP DEFAULT NOW(),
+              last_seen TIMESTAMP DEFAULT NOW(),
+              CONSTRAINT unique_user_device UNIQUE(user_id, device_hash)
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_user_devices_hash ON user_devices(device_hash);
+          CREATE INDEX IF NOT EXISTS idx_user_devices_ip ON user_devices(ip_address);
+
+          CREATE TABLE IF NOT EXISTS security_audit_logs (
+              id SERIAL PRIMARY KEY,
+              user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+              event_type VARCHAR(40) NOT NULL,
+              severity VARCHAR(16) DEFAULT 'HIGH',
+              details JSONB,
+              created_at TIMESTAMP DEFAULT NOW()
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_security_logs_user ON security_audit_logs(user_id);
         `);
       } catch (colErr: any) {
         console.warn('⚠️ Auto-migration check warning for database:', colErr.message);

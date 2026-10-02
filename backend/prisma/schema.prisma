@@ -43,7 +43,16 @@ model User {
   proof_submissions      TaskProofSubmission[]
   daily_ads              UserDailyAd[]
   withdrawal_limits      UserWithdrawalLimit?
+  is_banned              Boolean                @default(false)
+  ban_reason             String?                @db.Text
+  risk_score             Int                    @default(0)
+  primary_device_hash    String?                @db.VarChar(64)
+  last_ip_address        String?                @db.VarChar(45)
+  devices                UserDevice[]
+  security_logs          SecurityAuditLog[]
 
+  @@index([is_banned], name: "idx_users_banned")
+  @@index([primary_device_hash], name: "idx_users_device")
   @@map("users")
 }
 
@@ -246,6 +255,40 @@ model UserWithdrawalLimit {
   @@index([user_id, tracked_date], name: "idx_user_wd_limits_date")
   @@map("user_withdrawal_limits")
 }
+
+model UserDevice {
+  id             Int       @id @default(autoincrement())
+  user_id        BigInt
+  device_hash    String    @db.VarChar(64)
+  canvas_hash    String?   @db.VarChar(32)
+  webgl_vendor   String?   @db.Text
+  webgl_renderer String?   @db.Text
+  user_agent     String?   @db.Text
+  ip_address     String?   @db.VarChar(45)
+  is_emulator    Boolean   @default(false)
+  first_seen     DateTime  @default(now())
+  last_seen      DateTime  @default(now())
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, device_hash], name: "unique_user_device")
+  @@index([device_hash], name: "idx_user_devices_hash")
+  @@index([ip_address], name: "idx_user_devices_ip")
+  @@map("user_devices")
+}
+
+model SecurityAuditLog {
+  id         Int      @id @default(autoincrement())
+  user_id    BigInt?
+  event_type String   @db.VarChar(40)
+  severity   String   @default("HIGH") @db.VarChar(16)
+  details    Json?
+  created_at DateTime @default(now())
+  user       User?    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], name: "idx_security_logs_user")
+  @@map("security_audit_logs")
+}
+
 
 
 

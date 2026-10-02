@@ -306,13 +306,22 @@ router.post("/request", async (req, res) => {
 
     // D. Check balance & level restriction
     const userRes = await client.query(
-      `SELECT id, ton_balance, miner_level, username, first_name FROM users WHERE id = $1 FOR UPDATE`,
+      `SELECT id, ton_balance, miner_level, username, first_name, is_banned, ban_reason, risk_score FROM users WHERE id = $1 FOR UPDATE`,
       [userId]
     );
     const user = userRes.rows[0];
     if (!user) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Block banned users immediately
+    if (user.is_banned) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        error: "Your account is flagged for security violations.",
+        reason: user.ban_reason || "Violation of Fair-Play Security Policy",
+      });
     }
 
     const currentTon = parseFloat(user.ton_balance?.toString() || "0");
@@ -363,7 +372,8 @@ router.post("/request", async (req, res) => {
         user.username,
         user.first_name,
         withdrawal.ton_address,
-        Number(withdrawal.ton_amount).toFixed(4)
+        Number(withdrawal.ton_amount).toFixed(4),
+        Number(user.risk_score || 0)
       );
       if (channelMsgId) {
         await pool.query(
