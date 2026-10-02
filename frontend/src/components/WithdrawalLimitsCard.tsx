@@ -11,7 +11,7 @@ export interface WithdrawalLimitsCardProps {
 export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: WithdrawalLimitsCardProps) {
   const [limits, setLimits] = useState<any>(null);
   const [adLoading, setAdLoading] = useState(false);
-  const { showAdsgramRewarded, showMonetagRewarded } = useAdManager(userId ? userId.toString() : '');
+  const { showMonetagRewarded } = useAdManager(userId ? userId.toString() : '');
 
   const fetchLimits = async () => {
     try {
@@ -32,13 +32,9 @@ export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: Withdr
   const handleWatchBreakAd = async (target: "daily" | "weekly") => {
     setAdLoading(true);
 
-    // Play an ad (alternate between Adsgram and Monetag)
+    // Play Monetag rewarded ad (sole/main provider)
     try {
-      if (Math.random() < 0.5) {
-        await showAdsgramRewarded();
-      } else {
-        await showMonetagRewarded();
-      }
+      await showMonetagRewarded();
 
       // Record ad progress toward breaking the limit
       const res = await fetch("/api/withdraw/break-limit/watch-ad", {

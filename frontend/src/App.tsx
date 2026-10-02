@@ -16,6 +16,7 @@ import DailyStreakModal from './components/DailyStreakModal.js';
 import { DailyStreakStatusResponse } from './types/index.js';
 import { useAdManager } from './hooks/useAdManager.js';
 import { Loader2 } from 'lucide-react';
+import ForceJoinGate, { ChannelItem } from './components/ForceJoinGate.js';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('mining');
@@ -42,9 +43,30 @@ export const App: React.FC = () => {
     return null;
   });
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [membershipVerified, setMembershipVerified] = useState<boolean | null>(null);
+  const [missingChannels, setMissingChannels] = useState<ChannelItem[]>([]);
   const [dailyStatus, setDailyStatus] = useState<DailyStreakStatusResponse | null>(null);
   const [dailyModalOpen, setDailyModalOpen] = useState<boolean>(false);
   const [botUsername, setBotUsername] = useState<string>('');
+
+  const detected = getDetectedUser();
+  const currentUserId = detected?.id || (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id || user?.id || '123456789';
+
+  const checkMembership = useCallback(async (targetId?: string | number) => {
+    const idToCheck = targetId || currentUserId;
+    try {
+      const res = await api.getMembershipStatus(idToCheck);
+      if (res.allJoined) {
+        setMembershipVerified(true);
+      } else {
+        setMissingChannels(res.channels || []);
+        setMembershipVerified(false);
+      }
+    } catch (e) {
+      // In case of network timeout, allow cached or default to false
+      setMembershipVerified(false);
+    }
+  }, [currentUserId]);
 
   const {
     mining,
@@ -98,7 +120,8 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     initAuth();
-  }, [initAuth]);
+    checkMembership();
+  }, [initAuth, checkMembership]);
 
   const handleGameFinished = (_ncAwarded: number, _tonAwarded: string) => {
     // Refresh state after game round
@@ -120,15 +143,27 @@ export const App: React.FC = () => {
 
   const manifestUrl = `${window.location.origin}/tonconnect-manifest.json`;
 
-  if (authLoading) {
+  // Loading Splash
+  if (authLoading || membershipVerified === null) {
     return (
-      <div className="min-h-screen bg-cyber-bg flex flex-col items-center justify-center p-4 text-center">
-        <div className="w-16 h-16 rounded-full bg-cyber-cyan/20 flex items-center justify-center text-cyber-cyan mb-4 shadow-glow-cyan animate-pulse">
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 text-center">
+        <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 mb-4 shadow-[0_0_20px_rgba(6,182,212,0.3)] animate-pulse">
           <Loader2 size={32} className="animate-spin" />
         </div>
         <h2 className="text-xl font-bold text-white tracking-tight">INITIALIZING MINING RIG</h2>
-        <p className="text-xs text-slate-400 mt-1 font-mono">Connecting to NC TONs nodes...</p>
+        <p className="text-xs text-neutral-400 mt-1 font-mono">Verifying security clearance...</p>
       </div>
+    );
+  }
+
+  // Mandatory Subscription Gate (Blocks everything if any channel missing)
+  if (!membershipVerified) {
+    return (
+      <ForceJoinGate
+        userId={currentUserId}
+        channels={missingChannels}
+        onVerified={() => setMembershipVerified(true)}
+      />
     );
   }
 

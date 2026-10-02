@@ -65,6 +65,17 @@ CREATE TABLE IF NOT EXISTS withdrawals (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT NULL;
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS reviewed_by_admin VARCHAR(64) DEFAULT NULL;
+
+-- Ephemeral admin prompt session tracker (for custom reason typing)
+CREATE TABLE IF NOT EXISTS admin_chat_sessions (
+    admin_id BIGINT PRIMARY KEY,
+    action_type VARCHAR(32) NOT NULL, -- 'AWAITING_REJECT_REASON' or 'AWAITING_BAN_REASON'
+    target_withdrawal_id INT NOT NULL,
+    target_user_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
 
 -- 6. Game Sessions Table
@@ -352,5 +363,23 @@ CREATE TABLE IF NOT EXISTS security_audit_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_security_logs_user ON security_audit_logs(user_id);
+-- ----------------------------------------------------------------------------
+-- MANDATORY CHANNELS & GROUPS REGISTRY
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS mandatory_chats (
+    id SERIAL PRIMARY KEY,
+    chat_id VARCHAR(64) NOT NULL UNIQUE,       -- Numeric ID (-100...) or @username
+    title VARCHAR(128) NOT NULL,
+    invite_link TEXT NOT NULL,
+    chat_type VARCHAR(32) DEFAULT 'channel',    -- 'channel' or 'group'
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
-
+-- Seed Initial Mandatory Channels
+INSERT INTO mandatory_chats (chat_id, title, invite_link, chat_type, is_active)
+VALUES 
+  ('@nctons_official', 'NC TONs Updates', 'https://t.me/nctons_official', 'channel', TRUE),
+  ('@ncton_officialgroup', 'NC TONs Official Group', 'https://t.me/ncton_officialgroup', 'group', TRUE),
+  ('@nicecoinpayouts', 'NC PAYOUT AND PROOF', 'https://t.me/nicecoinpayouts', 'channel', TRUE)
+ON CONFLICT (chat_id) DO NOTHING;

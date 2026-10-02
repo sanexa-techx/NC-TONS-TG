@@ -38,6 +38,7 @@ import proofTasksRouter from './routes/proofTasks.js';
 import adsRouter from './routes/ads.js';
 import gamesRouter from './routes/games.js';
 import levelRouter from './routes/level.js';
+import membershipRouter from './routes/membership.js';
 
 // Telegraf Bot Lifecycle & Keep-Alive Service
 import { initBotEngine, stopBotEngine, getBotState } from './bot/botLifecycle.js';
@@ -146,6 +147,9 @@ app.use('/api/ads', adsRouter);
 
 // Level & Rig Upgrade System
 app.use('/api/level', levelRouter);
+
+// Mandatory Channel & Group Gatekeeper
+app.use('/api/membership', membershipRouter);
 
 // Notion Workspace Integration
 import notionRouter from './routes/notion.js';

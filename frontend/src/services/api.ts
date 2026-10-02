@@ -599,6 +599,16 @@ export const api = {
     });
     return handleResponse(res);
   },
+
+  // Mandatory Channel & Group Gatekeeper
+  async getMembershipStatus(userId?: string | number): Promise<{ allJoined: boolean; channels: any[] }> {
+    const id = userId || getDetectedUser()?.id;
+    const queryParam = id ? `?userId=${id}` : '';
+    const res = await fetch(`/api/membership/status${queryParam}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
 };
 
 

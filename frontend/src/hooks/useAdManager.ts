@@ -112,9 +112,6 @@ export function useAdManager(
   userId: number | string,
   onRewardClaimed?: (rewardData: any) => void
 ) {
-  const ADSGRAM_BLOCK_ID =
-    (import.meta as any).env?.VITE_ADSGRAM_BLOCK_ID || "49696";
-
   // Claim reward with backend
   const claimReward = async (provider: "adsgram" | "monetag") => {
     try {
@@ -141,29 +138,7 @@ export function useAdManager(
     }
   };
 
-  // 1. Play Rewarded Adsgram Video
-  const showAdsgramRewarded = useCallback(async () => {
-    if (window.Adsgram) {
-      const controller = window.Adsgram.init({
-        blockId: ADSGRAM_BLOCK_ID,
-        userId: String(userId),
-      });
-      try {
-        const result = await controller.show();
-        if (result.done) {
-          await claimReward("adsgram");
-        }
-      } catch (e) {
-        console.warn("Adsgram skipped or error", e);
-      }
-    } else {
-      // Dev mode fallback simulation
-      console.log("[Dev Mode] Simulating Adsgram Rewarded Video playback...");
-      await claimReward("adsgram");
-    }
-  }, [userId, ADSGRAM_BLOCK_ID]);
-
-  // 2. Play Rewarded Monetag Ad
+  // 1. Play Rewarded Monetag Ad (Main Ad Provider)
   const showMonetagRewarded = useCallback(async () => {
     try {
       const globalSdkFn = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
@@ -205,6 +180,12 @@ export function useAdManager(
       console.warn("Monetag error or dismissed:", e?.message || e);
     }
   }, [userId, MONETAG_SDK_FN, monetagHandler]);
+
+  // 2. Play Rewarded Video (Redirected to Monetag as sole/main provider)
+  const showAdsgramRewarded = useCallback(async () => {
+    console.log("[AdManager] Routing ad request to Monetag (main ad provider)");
+    return await showMonetagRewarded();
+  }, [showMonetagRewarded]);
 
   // 3. Interstitial Trigger (Guarded against playing while game is active, no recurring timers)
   // STRICT REQUIREMENT: Interstitial ads ONLY show Monetag. Adsgram is reserved exclusively for Missions.
@@ -276,26 +257,10 @@ export function useAdManager(
       }
     };
 
-    if (window.Adsgram) {
-      const controller = window.Adsgram.init({
-        blockId: ADSGRAM_BLOCK_ID,
-        userId: String(userId),
-      });
-      try {
-        const result = await controller.show();
-        if (result.done) {
-          return await claimLimitAd();
-        }
-      } catch (e) {
-        console.warn("Adsgram limit ad fallback to Monetag:", e);
-        await executeMonetagInterstitial(userId);
-        return await claimLimitAd();
-      }
-    } else {
-      await executeMonetagInterstitial(userId);
-      return await claimLimitAd();
-    }
-  }, [userId, ADSGRAM_BLOCK_ID, onRewardClaimed]);
+    // Sole/main provider: Monetag
+    await executeMonetagInterstitial(userId);
+    return await claimLimitAd();
+  }, [userId, onRewardClaimed]);
 
   return {
     showAdsgramRewarded,

@@ -318,6 +318,42 @@ const memoryStore = {
     created_at: Date;
   }>,
   securityAuditLogIdSeq: 1,
+  mandatoryChats: [
+    {
+      id: 1,
+      chat_id: '@nctons_official',
+      title: 'NC TONs Updates',
+      invite_link: 'https://t.me/nctons_official',
+      chat_type: 'channel',
+      is_active: true,
+      created_at: new Date(),
+    },
+    {
+      id: 2,
+      chat_id: '@ncton_officialgroup',
+      title: 'NC TONs Official Group',
+      invite_link: 'https://t.me/ncton_officialgroup',
+      chat_type: 'group',
+      is_active: true,
+      created_at: new Date(),
+    },
+    {
+      id: 3,
+      chat_id: '@nicecoinpayouts',
+      title: 'NC PAYOUT AND PROOF',
+      invite_link: 'https://t.me/nicecoinpayouts',
+      chat_type: 'channel',
+      is_active: true,
+      created_at: new Date(),
+    },
+  ],
+  adminChatSessions: new Map<string, {
+    admin_id: bigint;
+    action_type: string;
+    target_withdrawal_id: number;
+    target_user_id: bigint;
+    created_at: Date;
+  }>(),
 };
 
 
@@ -1756,6 +1792,44 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     return { rows: [{ nc_reward: 55, ton_reward: '0.000020' }], rowCount: 1 };
   }
 
+  // 17b. Query mandatory_chats
+  if (normalized.includes('FROM mandatory_chats')) {
+    let chats = [...memoryStore.mandatoryChats];
+    if (normalized.includes('is_active = TRUE') || normalized.includes('is_active = true')) {
+      chats = chats.filter((c) => c.is_active);
+    }
+    return { rows: chats, rowCount: chats.length };
+  }
+
+  // 17c. Query admin_chat_sessions
+  if (normalized.includes('FROM admin_chat_sessions WHERE admin_id = $1')) {
+    const adminId = params[0]?.toString() || '';
+    const session = memoryStore.adminChatSessions.get(adminId);
+    return { rows: session ? [{ ...session }] : [], rowCount: session ? 1 : 0 };
+  }
+
+  if (normalized.startsWith('INSERT INTO admin_chat_sessions')) {
+    const adminId = params[0]?.toString() || '';
+    const actionType = params[1] || '';
+    const targetWdId = Number(params[2] || 0);
+    const targetUserId = BigInt(params[3] || 0);
+    const session = {
+      admin_id: BigInt(adminId),
+      action_type: actionType,
+      target_withdrawal_id: targetWdId,
+      target_user_id: targetUserId,
+      created_at: new Date(),
+    };
+    memoryStore.adminChatSessions.set(adminId, session);
+    return { rows: [{ ...session }], rowCount: 1 };
+  }
+
+  if (normalized.startsWith('DELETE FROM admin_chat_sessions WHERE admin_id = $1')) {
+    const adminId = params[0]?.toString() || '';
+    memoryStore.adminChatSessions.delete(adminId);
+    return { rows: [], rowCount: 1 };
+  }
+
   // 18. Transaction control (BEGIN, COMMIT, ROLLBACK)
   if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized.toUpperCase())) {
     return { rows: [], rowCount: 0 };
@@ -1873,6 +1947,34 @@ export async function connectDB() {
           );
 
           CREATE INDEX IF NOT EXISTS idx_security_logs_user ON security_audit_logs(user_id);
+
+          CREATE TABLE IF NOT EXISTS mandatory_chats (
+              id SERIAL PRIMARY KEY,
+              chat_id VARCHAR(64) NOT NULL UNIQUE,
+              title VARCHAR(128) NOT NULL,
+              invite_link TEXT NOT NULL,
+              chat_type VARCHAR(32) DEFAULT 'channel',
+              is_active BOOLEAN DEFAULT TRUE,
+              created_at TIMESTAMP DEFAULT NOW()
+          );
+
+          INSERT INTO mandatory_chats (chat_id, title, invite_link, chat_type, is_active)
+          VALUES 
+            ('@nctons_official', 'NC TONs Updates', 'https://t.me/nctons_official', 'channel', TRUE),
+            ('@ncton_officialgroup', 'NC TONs Official Group', 'https://t.me/ncton_officialgroup', 'group', TRUE),
+            ('@nicecoinpayouts', 'NC PAYOUT AND PROOF', 'https://t.me/nicecoinpayouts', 'channel', TRUE)
+          ON CONFLICT (chat_id) DO NOTHING;
+
+          ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT NULL;
+          ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS reviewed_by_admin VARCHAR(64) DEFAULT NULL;
+
+          CREATE TABLE IF NOT EXISTS admin_chat_sessions (
+              admin_id BIGINT PRIMARY KEY,
+              action_type VARCHAR(32) NOT NULL,
+              target_withdrawal_id INT NOT NULL,
+              target_user_id BIGINT NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW()
+          );
         `);
       } catch (colErr: any) {
         console.warn('⚠️ Auto-migration check warning for database:', colErr.message);

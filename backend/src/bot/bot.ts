@@ -2,6 +2,7 @@ import { Telegraf, Markup } from 'telegraf';
 import { pool } from '../db/index.js';
 import { ENV, isAdmin, getAdminIds } from '../config/env.js';
 import { MiningReminderService } from '../services/miningReminderService.js';
+import { checkUserMembership } from '../services/membership.js';
 
 let botInstance: Telegraf | null = null;
 
@@ -170,6 +171,29 @@ export function registerMasterBotHandlers(b: Telegraf) {
       const username = from.username || null;
       const isPremium = Boolean((from as any).is_premium);
 
+      // Check mandatory membership
+      const { allJoined, channels } = await checkUserMembership(newUserId);
+
+      if (!allJoined) {
+        const unjoined = channels.filter((c) => !c.isMember);
+        const keyboard: any[][] = unjoined.map((c) => [
+          Markup.button.url(`Join ${c.title} 🔗`, c.inviteLink),
+        ]);
+
+        keyboard.push([Markup.button.callback("I Have Joined All ✅", "check_bot_membership")]);
+
+        return ctx.reply(
+          `👋 <b>Welcome, ${firstName}!</b>\n\n` +
+          `To use <b>NC TONs</b> and launch the Mini App, you must first join our official channels and community group:\n\n` +
+          unjoined.map((c) => `• <b>${c.title}</b>`).join("\n") +
+          `\n\n<i>Click the buttons below to join, then tap "I Have Joined All".</i>`,
+          {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard(keyboard),
+          }
+        );
+      }
+
       let referrerId: number | null = null;
       if (startPayload && startPayload.startsWith('ref_')) {
         const parsedId = parseInt(startPayload.replace('ref_', '').trim(), 10);
@@ -311,6 +335,441 @@ export function registerMasterBotHandlers(b: Telegraf) {
     } catch (err) {
       console.error('Error handling /start command:', err);
     }
+  });
+
+  // Callback for "I Have Joined All" button
+  b.action('check_bot_membership', async (ctx) => {
+    try {
+      const from = ctx.from;
+      if (!from) return;
+      const userId = from.id;
+      const firstName = from.first_name || 'Miner';
+      const username = from.username || null;
+      const { allJoined } = await checkUserMembership(userId);
+
+      if (!allJoined) {
+        return ctx.answerCbQuery('⚠️ You have not joined all channels yet! Please join all links.', {
+          show_alert: true,
+        });
+      }
+
+      await ctx.answerCbQuery('✅ Membership verified!');
+
+      try {
+        const check = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+        if (check.rows.length === 0) {
+          await pool.query(
+            'INSERT INTO users (id, first_name, username, nc_balance) VALUES ($1, $2, $3, 1000) ON CONFLICT (id) DO NOTHING',
+            [userId, firstName, username]
+          );
+        }
+      } catch (dbErr) {
+        console.warn('Membership action DB ensure error:', dbErr);
+      }
+
+      const launchUrl = `${WEBAPP_URL}?userId=${userId}&firstName=${encodeURIComponent(firstName)}${username ? `&username=${encodeURIComponent(username)}` : ''}`;
+
+      await ctx.editMessageText(
+        `⚡ <b>Membership verified! Welcome to NC TONs!</b>\n\nYou can now launch the Mini App and start mining.`,
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.webApp('Launch NC TONs 🚀', launchUrl)],
+          ]),
+        }
+      );
+    } catch (err: any) {
+      console.error('Error handling check_bot_membership callback:', err);
+      try {
+        await ctx.answerCbQuery('Error verifying membership. Please try again.');
+      } catch {}
+    }
+  });
+
+  // ============================================================================
+  // ADMIN WITHDRAWAL MODERATION PIPELINE (Approve, Reject, Ban, Custom Reasons)
+  // ============================================================================
+
+  const PRESET_REASONS: Record<string, string> = {
+    multi_account: "Multiple accounts detected operating on the same physical device or network.",
+    bot_automation: "Automated scraping, macro, or headless browser behavior was detected on your account.",
+    invalid_wallet: "Your submitted TON wallet address is invalid, non-activated, or belongs to an unsupported memo exchange.",
+    sybil_farm: "Operating a referral farm and multi-account device cluster violating Fair-Play policies.",
+    bot_exploit: "Exploiting game automation scripts or bypassing security integrity checks.",
+  };
+
+  async function executeRejection(ctx: any, withdrawalId: number, reason: string) {
+    const adminName = ctx.from?.first_name || (ctx.from?.username ? `@${ctx.from.username}` : "Admin");
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const res = await client.query(
+        `SELECT w.*, u.first_name, u.username 
+         FROM withdrawals w
+         JOIN users u ON w.user_id = u.id
+         WHERE w.id = $1 FOR UPDATE`,
+        [withdrawalId]
+      );
+
+      if (res.rows.length === 0) {
+        await client.query("ROLLBACK");
+        if (ctx.answerCbQuery) await ctx.answerCbQuery("Withdrawal not found");
+        return;
+      }
+      const wd = res.rows[0];
+
+      if (wd.status !== 'PENDING') {
+        await client.query("ROLLBACK");
+        if (ctx.answerCbQuery) await ctx.answerCbQuery(`⚠️ Already processed as ${wd.status}`);
+        return;
+      }
+
+      // Mark rejected and store reason
+      await client.query(
+        `UPDATE withdrawals 
+         SET status = 'REJECTED', rejection_reason = $1, reviewed_by_admin = $2, updated_at = NOW() 
+         WHERE id = $3`,
+        [reason, adminName, withdrawalId]
+      );
+
+      // Refund TON balance
+      await client.query(
+        "UPDATE users SET ton_balance = ton_balance + $1 WHERE id = $2",
+        [wd.ton_amount, wd.user_id]
+      );
+
+      // Edit Admin Channel Card
+      const adminChannelId = process.env.ADMIN_CHANNEL_ID || ENV.ADMIN_CHANNEL_ID;
+      if (wd.channel_message_id && adminChannelId) {
+        await b.telegram.editMessageText(
+          adminChannelId,
+          Number(wd.channel_message_id),
+          undefined,
+          `❌ <b>WITHDRAWAL REJECTED & REFUNDED</b>\n\n` +
+          `🆔 <b>User ID:</b> <code>${wd.user_id}</code>\n` +
+          `👤 <b>User:</b> ${wd.first_name} ${wd.username ? `(@${wd.username})` : ""}\n` +
+          `💰 <b>Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b> (Refunded)\n` +
+          `👮 <b>Reviewed By:</b> ${adminName}\n\n` +
+          `⚠️ <b>Official Reason Sent to User:</b>\n<i>"${reason}"</i>`,
+          { parse_mode: "HTML" }
+        ).catch(() => {});
+      }
+
+      // Send DM to User with Exact Cause
+      await b.telegram.sendMessage(
+        wd.user_id,
+        `⚠️ <b>Withdrawal Request Rejected</b>\n\n` +
+        `Your withdrawal request of <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b> has been declined by an administrator.\n\n` +
+        `🔍 <b>Reason:</b>\n<i>${reason}</i>\n\n` +
+        `🔄 <b>Your balance of ${parseFloat(wd.ton_amount).toFixed(4)} TON has been refunded to your in-game wallet.</b>`,
+        { parse_mode: "HTML" }
+      ).catch(() => {});
+
+      await client.query("COMMIT");
+      if (ctx.answerCbQuery) await ctx.answerCbQuery("❌ Withdrawal rejected and user notified.");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("Execute rejection error:", err);
+      if (ctx.answerCbQuery) await ctx.answerCbQuery("Error processing rejection");
+    } finally {
+      client.release();
+    }
+  }
+
+  async function executeBan(ctx: any, withdrawalId: number, reason: string) {
+    const adminName = ctx.from?.first_name || (ctx.from?.username ? `@${ctx.from.username}` : "Admin");
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const res = await client.query(
+        `SELECT w.*, u.first_name, u.username, u.primary_device_hash 
+         FROM withdrawals w
+         JOIN users u ON w.user_id = u.id
+         WHERE w.id = $1 FOR UPDATE`,
+        [withdrawalId]
+      );
+
+      if (res.rows.length === 0) {
+        await client.query("ROLLBACK");
+        if (ctx.answerCbQuery) await ctx.answerCbQuery("Withdrawal not found");
+        return;
+      }
+      const wd = res.rows[0];
+
+      if (wd.status !== 'PENDING') {
+        await client.query("ROLLBACK");
+        if (ctx.answerCbQuery) await ctx.answerCbQuery(`⚠️ Already processed as ${wd.status}`);
+        return;
+      }
+
+      // 1. Mark withdrawal rejected
+      await client.query(
+        `UPDATE withdrawals 
+         SET status = 'REJECTED', rejection_reason = $1, reviewed_by_admin = $2, updated_at = NOW() 
+         WHERE id = $3`,
+        [`[PERMANENT BAN] ${reason}`, adminName, withdrawalId]
+      );
+
+      // 2. Permanently ban user and wipe active balances
+      await client.query(
+        `UPDATE users 
+         SET is_banned = TRUE, 
+             ban_reason = $1, 
+             risk_score = 100, 
+             ton_balance = 0, 
+             nc_balance = 0 
+         WHERE id = $2`,
+        [reason, wd.user_id]
+      );
+
+      // 3. Edit Admin Channel Card
+      const adminChannelId = process.env.ADMIN_CHANNEL_ID || ENV.ADMIN_CHANNEL_ID;
+      if (wd.channel_message_id && adminChannelId) {
+        await b.telegram.editMessageText(
+          adminChannelId,
+          Number(wd.channel_message_id),
+          undefined,
+          `🚫 <b>USER PERMANENTLY BANNED & CONFISCATED</b>\n\n` +
+          `🆔 <b>User ID:</b> <code>${wd.user_id}</code>\n` +
+          `👤 <b>User:</b> ${wd.first_name} ${wd.username ? `(@${wd.username})` : ""}\n` +
+          `💰 <b>Confiscated Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b>\n` +
+          `📱 <b>Device Hash:</b> <code>${(wd.primary_device_hash || "N/A").slice(0, 16)}...</code>\n` +
+          `👮 <b>Banned By:</b> ${adminName}\n\n` +
+          `🚨 <b>Ban Reason Sent:</b>\n<i>"${reason}"</i>`,
+          { parse_mode: "HTML" }
+        ).catch(() => {});
+      }
+
+      // 4. Send Ban Notice to User
+      await b.telegram.sendMessage(
+        wd.user_id,
+        `🚫 <b>Account Permanently Suspended</b>\n\n` +
+        `Your account has been banned for violating NC TONs Fair-Play policies. All pending withdrawals and mining balances have been frozen.\n\n` +
+        `⚖️ <b>Cause of Suspension:</b>\n<i>${reason}</i>`,
+        { parse_mode: "HTML" }
+      ).catch(() => {});
+
+      await client.query("COMMIT");
+      if (ctx.answerCbQuery) await ctx.answerCbQuery("🚫 Account banned and confiscated.");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("Execute ban error:", err);
+      if (ctx.answerCbQuery) await ctx.answerCbQuery("Error processing ban");
+    } finally {
+      client.release();
+    }
+  }
+
+  // 1. APPROVE & MARK PAID
+  b.action(/^wd_approve:(\d+)$/, async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("Unauthorized");
+    const withdrawalId = parseInt(ctx.match[1], 10);
+    const adminName = ctx.from?.first_name || (ctx.from?.username ? `@${ctx.from.username}` : "Admin");
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const res = await client.query(
+        `SELECT w.*, u.first_name, u.username, u.ton_balance 
+         FROM withdrawals w
+         JOIN users u ON w.user_id = u.id
+         WHERE w.id = $1 FOR UPDATE`,
+        [withdrawalId]
+      );
+
+      if (res.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return ctx.answerCbQuery("Withdrawal not found");
+      }
+      const wd = res.rows[0];
+
+      if (wd.status !== 'PENDING') {
+        await client.query("ROLLBACK");
+        return ctx.answerCbQuery(`⚠️ Already processed as ${wd.status}`);
+      }
+
+      await client.query(
+        `UPDATE withdrawals 
+         SET status = 'APPROVED', reviewed_by = $1, reviewed_by_admin = $2, updated_at = NOW() 
+         WHERE id = $3`,
+        [ctx.from.id, adminName, withdrawalId]
+      );
+
+      const adminChannelId = process.env.ADMIN_CHANNEL_ID || ENV.ADMIN_CHANNEL_ID;
+      if (wd.channel_message_id && adminChannelId) {
+        await b.telegram.editMessageText(
+          adminChannelId,
+          Number(wd.channel_message_id),
+          undefined,
+          `✅ <b>WITHDRAWAL APPROVED & PAID</b>\n\n` +
+          `🆔 <b>User ID:</b> <code>${wd.user_id}</code>\n` +
+          `👤 <b>User:</b> ${wd.first_name} ${wd.username ? `(@${wd.username})` : ""}\n` +
+          `💰 <b>Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b>\n` +
+          `🏦 <b>Wallet:</b> <code>${wd.ton_address}</code>\n` +
+          `👮 <b>Approved By:</b> ${adminName}\n` +
+          `🕒 <b>Time:</b> <code>${new Date().toISOString().replace('T', ' ').slice(0, 19)} UTC</code>`,
+          { parse_mode: "HTML" }
+        ).catch(() => {});
+      }
+
+      // Notify user via DM
+      await b.telegram.sendMessage(
+        wd.user_id,
+        `💎 <b>Withdrawal Approved!</b>\n\n` +
+        `Your payout of <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b> has been approved and sent to your wallet:\n` +
+        `<code>${wd.ton_address}</code>\n\n` +
+        `Thank you for mining with NC TONs! 🚀`,
+        { parse_mode: "HTML" }
+      ).catch(() => {});
+
+      // Broadcast proof to public channel if configured
+      const publicChannelId = process.env.PUBLIC_PAYOUT_CHANNEL_ID || ENV.PUBLIC_PAYOUT_CHANNEL_ID;
+      if (publicChannelId) {
+        await b.telegram.sendMessage(
+          publicChannelId,
+          `💸 <b>NEW PAYOUT DISPATCHED</b>\n\n` +
+          `👤 <b>Miner:</b> ${wd.first_name}\n` +
+          `💰 <b>Amount:</b> <b>${parseFloat(wd.ton_amount).toFixed(4)} TON</b>\n` +
+          `🏦 <b>Destination:</b> <code>${wd.ton_address.slice(0, 6)}...${wd.ton_address.slice(-4)}</code>\n` +
+          `⚡ <b>Status:</b> Completed ✅`,
+          { parse_mode: "HTML" }
+        ).catch(() => {});
+      }
+
+      await client.query("COMMIT");
+      return ctx.answerCbQuery("✅ Payout approved successfully!");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("Approve withdrawal error:", err);
+      return ctx.answerCbQuery("Error processing approval");
+    } finally {
+      client.release();
+    }
+  });
+
+  // 2. REJECTION REASON SELECTION MENU
+  b.action(/^wd_menu_reject:(\d+)$/, async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("Unauthorized");
+    const withdrawalId = ctx.match[1];
+
+    await ctx.editMessageReplyMarkup({
+      inline_keyboard: [
+        [
+          Markup.button.callback("Multiple Accounts / Same Device", `wd_do_reject:${withdrawalId}:multi_account`),
+        ],
+        [
+          Markup.button.callback("Automation / Bot Script Detected", `wd_do_reject:${withdrawalId}:bot_automation`),
+        ],
+        [
+          Markup.button.callback("Invalid or Exchange Wallet Address", `wd_do_reject:${withdrawalId}:invalid_wallet`),
+        ],
+        [
+          Markup.button.callback("✍️ Type Custom Reason...", `wd_custom_reject:${withdrawalId}`),
+        ],
+        [
+          Markup.button.callback("« Back to Review", `wd_cancel_menu:${withdrawalId}`),
+        ],
+      ],
+    });
+    return ctx.answerCbQuery();
+  });
+
+  // 3. BAN & CONFISCATE SELECTION MENU
+  b.action(/^wd_menu_ban:(\d+)$/, async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("Unauthorized");
+    const withdrawalId = ctx.match[1];
+
+    await ctx.editMessageReplyMarkup({
+      inline_keyboard: [
+        [
+          Markup.button.callback("Confirm Ban: Sybil Multi-Accounting", `wd_do_ban:${withdrawalId}:multi_account`),
+        ],
+        [
+          Markup.button.callback("Confirm Ban: Bot / Script Exploit", `wd_do_ban:${withdrawalId}:bot_exploit`),
+        ],
+        [
+          Markup.button.callback("✍️ Type Custom Ban Notice...", `wd_custom_ban:${withdrawalId}`),
+        ],
+        [
+          Markup.button.callback("« Back to Review", `wd_cancel_menu:${withdrawalId}`),
+        ],
+      ],
+    });
+    return ctx.answerCbQuery();
+  });
+
+  // Return to primary review buttons if cancelled
+  b.action(/^wd_cancel_menu:(\d+)$/, async (ctx) => {
+    const withdrawalId = ctx.match[1];
+    await ctx.editMessageReplyMarkup({
+      inline_keyboard: [
+        [Markup.button.callback("Approve & Mark Paid ✅", `wd_approve:${withdrawalId}`)],
+        [
+          Markup.button.callback("Reject with Reason ⚠️", `wd_menu_reject:${withdrawalId}`),
+          Markup.button.callback("🚨 Ban & Confiscate", `wd_menu_ban:${withdrawalId}`),
+        ],
+      ],
+    });
+    return ctx.answerCbQuery();
+  });
+
+  // 4. EXECUTE PRESET REJECTION
+  b.action(/^wd_do_reject:(\d+):([a-z_]+)$/, async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("Unauthorized");
+    const withdrawalId = parseInt(ctx.match[1], 10);
+    const reasonKey = ctx.match[2];
+    const explanation = PRESET_REASONS[reasonKey] || "Security verification check failed.";
+
+    await executeRejection(ctx, withdrawalId, explanation);
+  });
+
+  // 5. EXECUTE PRESET BAN
+  b.action(/^wd_do_ban:(\d+):([a-z_]+)$/, async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("Unauthorized");
+    const withdrawalId = parseInt(ctx.match[1], 10);
+    const reasonKey = ctx.match[2];
+    const explanation = PRESET_REASONS[reasonKey] || "Violation of Fair-Play Security Policy.";
+
+    await executeBan(ctx, withdrawalId, explanation);
+  });
+
+  // 6. CUSTOM REASON PROMPT INITIALIZER
+  b.action(/^wd_custom_(reject|ban):(\d+)$/, async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return ctx.answerCbQuery("Unauthorized");
+    const mode = ctx.match[1]; // 'reject' or 'ban'
+    const withdrawalId = parseInt(ctx.match[2], 10);
+    const adminId = ctx.from.id;
+
+    const wdRes = await pool.query("SELECT user_id FROM withdrawals WHERE id = $1", [withdrawalId]);
+    if (wdRes.rows.length === 0) return ctx.answerCbQuery("Withdrawal not found");
+    const targetUserId = wdRes.rows[0].user_id;
+
+    await pool.query(
+      `INSERT INTO admin_chat_sessions (admin_id, action_type, target_withdrawal_id, target_user_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (admin_id) 
+       DO UPDATE SET action_type = $2, target_withdrawal_id = $3, target_user_id = $4`,
+      [adminId, mode === "reject" ? "AWAITING_REJECT_REASON" : "AWAITING_BAN_REASON", withdrawalId, targetUserId]
+    );
+
+    await b.telegram.sendMessage(
+      adminId,
+      `✍️ <b>Enter custom reason for ${mode.toUpperCase()} (User ID: <code>${targetUserId}</code>):</b>\n\n` +
+      `<i>Simply type your message in this chat right now. The bot will deliver your exact words to the user and finalize the action.</i>`,
+      { parse_mode: "HTML" }
+    ).catch(() => {
+      return ctx.reply(
+        `✍️ <b>Enter custom reason for ${mode.toUpperCase()} (User ID: <code>${targetUserId}</code>):</b>\n\n` +
+        `<i>Simply type your message in this chat right now. The bot will deliver your exact words to the user and finalize the action.</i>`,
+        { parse_mode: "HTML" }
+      );
+    });
+
+    return ctx.answerCbQuery("Ready for your text message input...");
   });
 
   // ============================================================================
@@ -1616,14 +2075,43 @@ export function registerMasterBotHandlers(b: Telegraf) {
   });
 
   // ============================================================================
-  // 10. GENERAL TEXT FALLBACK (Menu buttons guidance)
+  // 10. GENERAL TEXT LISTENER & ADMIN REASON SESSION HANDLER
   // ============================================================================
   b.on('text', async (ctx, next) => {
+    const from = ctx.from;
+    if (from && isAdmin(from.id)) {
+      try {
+        const sessionRes = await pool.query(
+          "SELECT * FROM admin_chat_sessions WHERE admin_id = $1",
+          [from.id]
+        );
+
+        if (sessionRes.rows.length > 0) {
+          const session = sessionRes.rows[0];
+          const customReason = ctx.message.text.trim();
+
+          // Clear session
+          await pool.query("DELETE FROM admin_chat_sessions WHERE admin_id = $1", [from.id]);
+
+          if (session.action_type === "AWAITING_REJECT_REASON") {
+            await executeRejection(ctx, session.target_withdrawal_id, customReason);
+            return ctx.reply(`✅ Rejection processed. User has received your exact custom message.`);
+          }
+
+          if (session.action_type === "AWAITING_BAN_REASON") {
+            await executeBan(ctx, session.target_withdrawal_id, customReason);
+            return ctx.reply(`🚫 Account permanently banned. User notified with your explanation.`);
+          }
+        }
+      } catch (err) {
+        console.error("Error processing admin text session:", err);
+      }
+    }
+
     const text = ctx.message.text;
     if (text.startsWith('/')) {
       return next();
     }
-    const from = ctx.from;
     const launchUrl = from ? `${WEBAPP_URL}?userId=${from.id}` : WEBAPP_URL;
     return ctx.reply(
       `👋 Hello <b>${from.first_name || 'Miner'}</b>!\nUse the menu buttons below or click Launch to open your mining rig:`,

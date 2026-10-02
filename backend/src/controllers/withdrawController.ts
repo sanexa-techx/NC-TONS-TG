@@ -10,7 +10,7 @@ export const WEEKLY_WITHDRAWAL_LIMIT = 5;
 export const DAILY_BREAK_ADS_REQUIRED = 30;
 export const WEEKLY_BREAK_ADS_REQUIRED = 150;
 
-export const GATE_ADSGRAM_REQUIRED = 8;
+export const GATE_ADSGRAM_REQUIRED = 0;
 export const GATE_MONETAG_REQUIRED = 4;
 
 export async function getUserWithdrawalLimits(userId: bigint | number | string) {
@@ -19,7 +19,7 @@ export async function getUserWithdrawalLimits(userId: bigint | number | string) 
   try {
     const tracker = await getOrCreateLimitTracker(client, uid);
 
-    // 1. Check Gatekeeper (min 8 Adsgram & 4 Monetag)
+    // 1. Check Gatekeeper (Only Monetag as main provider, min 4 Monetag)
     const adCheck = await client.query(
       `SELECT adsgram_count, monetag_count, last_ad_at 
        FROM user_daily_ads 
@@ -29,9 +29,7 @@ export async function getUserWithdrawalLimits(userId: bigint | number | string) 
     const counts = adCheck.rows[0] || { adsgram_count: 0, monetag_count: 0 };
     const adsgramCount = Number(counts.adsgram_count || 0);
     const monetagCount = Number(counts.monetag_count || 0);
-    const isGateUnlocked =
-      (adsgramCount >= GATE_ADSGRAM_REQUIRED && monetagCount >= GATE_MONETAG_REQUIRED) ||
-      (adsgramCount >= GATE_MONETAG_REQUIRED && monetagCount >= GATE_ADSGRAM_REQUIRED);
+    const isGateUnlocked = monetagCount >= GATE_MONETAG_REQUIRED;
 
     // 2. Count withdrawals today
     const dailyCountRes = await client.query(
@@ -124,7 +122,7 @@ export async function getWithdrawalStatus(req: Request, res: Response) {
 
     let blockReason: string | null = null;
     if (!limits.gate.isUnlocked) {
-      blockReason = 'Daily withdrawal gate locked: Watch 8 Adsgram and 4 Monetag ads today';
+      blockReason = `Daily withdrawal gate locked: Watch ${GATE_MONETAG_REQUIRED} Monetag ads today`;
     } else if (limits.daily.used >= limits.daily.limit) {
       blockReason = 'Daily limit reached: 1/1 withdrawal already made today';
     } else if (!limits.daily.isUnlocked) {
@@ -266,14 +264,14 @@ export async function requestWithdrawal(req: Request, res: Response) {
     // 1. Fetch comprehensive withdrawal limits & gate progress
     const limits = await getUserWithdrawalLimits(userId);
 
-    // 2. Check Daily Withdrawal Gate (8 Adsgram & 4 Monetag)
+    // 2. Check Daily Withdrawal Gate (Monetag required)
     if (!limits.gate.isUnlocked) {
       return res.status(403).json({
         error: 'Daily withdrawal gate requirements not met!',
         details: {
           adsgramProgress: `${limits.gate.adsgramWatched}/${limits.gate.adsgramRequired}`,
           monetagProgress: `${limits.gate.monetagWatched}/${limits.gate.monetagRequired}`,
-          message: 'You must watch at least 8 Adsgram ads and 4 Monetag ads today to unlock the daily withdrawal gate.',
+          message: `You must watch at least ${limits.gate.monetagRequired} Monetag ads today to unlock the daily withdrawal gate.`,
         },
       });
     }

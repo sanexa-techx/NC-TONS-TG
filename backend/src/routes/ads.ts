@@ -5,8 +5,8 @@ import { getUserWithdrawalLimits, watchWithdrawalLimitAd } from "../controllers/
 const router = Router();
 
 export const AD_LIMITS = {
-  adsgram: { max: 50, minWithdraw: 8, nc: 200, ton: 0.000300 },
-  monetag: { max: 50, minWithdraw: 4, nc: 200, ton: 0.000200 },
+  adsgram: { max: 50, minWithdraw: 0, nc: 200, ton: 0.000300 },
+  monetag: { max: 200, minWithdraw: 4, nc: 200, ton: 0.000200 },
 };
 
 // 1. Get User Daily Ad Status
@@ -32,8 +32,8 @@ router.get("/status", async (req, res) => {
       adsgram: {
         watched: adsgramWatched,
         max: AD_LIMITS.adsgram.max,
-        requiredForWithdraw: AD_LIMITS.adsgram.minWithdraw,
-        isWithdrawUnlocked: adsgramWatched >= AD_LIMITS.adsgram.minWithdraw,
+        requiredForWithdraw: 0,
+        isWithdrawUnlocked: true,
       },
       monetag: {
         watched: monetagWatched,
@@ -53,7 +53,7 @@ router.get("/status", async (req, res) => {
 // 2. Claim Ad Reward (Called after verified ad view)
 router.post("/claim", async (req, res) => {
   const userId = req.body.userId || req.headers['x-telegram-user-id'] || req.headers['x-dev-telegram-id'] || (req as any).telegramUser?.id;
-  const provider = req.body.provider; // provider: 'adsgram' | 'monetag'
+  const provider = req.body.provider || "monetag"; // Monetag is the sole/main provider
 
   if (!userId) {
     return res.status(400).json({ error: "Missing userId" });
@@ -288,7 +288,7 @@ router.post("/dev-set", async (req, res) => {
       `UPDATE user_daily_ads 
        SET adsgram_count = $1, monetag_count = $2 
        WHERE user_id = $3 AND ad_date = CURRENT_DATE`,
-      [Number(adsgram ?? 8), Number(monetag ?? 4), userId]
+      [Number(adsgram ?? 0), Number(monetag ?? 4), userId]
     );
 
     if (limitAds !== undefined) {

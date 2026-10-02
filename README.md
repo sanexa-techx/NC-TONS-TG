@@ -380,3 +380,39 @@ You can inspect the live webhook and keep-alive health directly in your browser:
   - `/unban <userId>`: Reinstates access and clears risk rating.
   - `/audit <userId>`: Returns full security report containing connected device hashes, GPU signatures, IP history, and fraud event logs.
 
+---
+
+## 18. MANDATORY CHANNELS & COMMUNITY GROUP FORCE-JOIN GATE
+- **Database Architecture**:
+  - `mandatory_chats`: `id` (SERIAL PK), `chat_id` (VARCHAR 64 UNIQUE), `title` (VARCHAR 128), `invite_link` (TEXT), `chat_type` ('channel' | 'group'), `is_active` (BOOLEAN default TRUE).
+- **Backend Verification Service (`checkUserMembership`)**:
+  - Fetches all active records from `mandatory_chats`.
+  - Calls `bot.telegram.getChatMember(chat_id, userId)` across all targets.
+  - Validates `status` against `['creator', 'administrator', 'member', 'restricted']`.
+  - Flags `allJoined = true` only when all targets return a valid member status.
+- **Frontend Full-Screen Blocking Gateway (`ForceJoinGate.tsx`)**:
+  - Runs check on initial app load before rendering tabs.
+  - If `allJoined === false`, mounts a full-screen, non-dismissible blocking view.
+  - Lists every channel with dynamic status badges (`Joined ✅` or `Join 🔗` button linking via `WebApp.openTelegramLink`).
+  - Includes a "Verify & Enter App" action button with haptic feedback to re-query the backend.
+- **Bot-Level Guard**:
+  - Blocks `/start` in private chat with a list of unjoined channel buttons and an inline callback `"I Have Joined All ✅"` before revealing the app launch button.
+
+---
+
+## 19. ADMIN CHANNEL MODERATION: FRAUD DETECTION & CUSTOM REASON DM PIPELINE
+- **Database Architecture**:
+  - `withdrawals`: add `rejection_reason` (TEXT), `reviewed_by_admin` (VARCHAR 64).
+  - `admin_chat_sessions`: `admin_id` (BIGINT PK), `action_type` (VARCHAR 32), `target_withdrawal_id` (INT), `target_user_id` (BIGINT), `created_at`.
+- **Card Telemetry & Clustered Account Diagnostics (`sendAdminWithdrawalCard`)**:
+  - Queries `user_devices` to count how many distinct Telegram IDs share the requester's `primary_device_hash`.
+  - When $\ge 2$ accounts share hardware, the card renders a prominent warning: `🚨 CLONED DEVICE DETECTED: X accounts share this hardware!`, listing other linked Telegram IDs.
+  - Exposes `Risk Score (0-100)`, IP address, and shortened device hash.
+- **Interactive Moderation Keyboard**:
+  - `[Approve & Mark Paid ✅]`: Marks approved, updates card, DMs user confirmation, broadcasts proof to public channel.
+  - `[Reject with Reason ⚠️]`: Opens an inline submenu with preset options (*"Multiple Accounts / Same Device"*, *"Automation / Bot Script"*, *"Invalid Wallet"*) and a *✍️ Type Custom Reason...* button.
+  - `[🚨 Ban & Confiscate]`: Zeroes balances, flags `is_banned = TRUE`, updates card to blacklisted state, and informs the user.
+- **Custom Admin Messaging Flow**:
+  - Selecting custom input creates a temporary record in `admin_chat_sessions`.
+  - The admin's next regular text message in that chat is captured as the official explanation, delivered verbatim to the user's private Telegram DM, and appended to the admin card.
+

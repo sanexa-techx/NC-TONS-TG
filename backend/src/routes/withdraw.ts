@@ -2,6 +2,7 @@ import { Router } from "express";
 import { pool } from "../db/db.js";
 import { sendWithdrawalApprovalCard } from "../bot/notifications.js";
 import { syncWithdrawalToNotion } from "../services/notionService.js";
+import { sendAdminWithdrawalCard } from "../services/adminAlert.js";
 
 const router = Router();
 
@@ -243,7 +244,7 @@ router.post("/request", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // A. Verify baseline 8 Adsgram + 4 Monetag quota
+    // A. Verify baseline Monetag quota (Monetag is the main/sole ad provider)
     const adCheck = await client.query(
       `SELECT adsgram_count, monetag_count 
        FROM user_daily_ads 
@@ -253,14 +254,12 @@ router.post("/request", async (req, res) => {
     const counts = adCheck.rows[0] || { adsgram_count: 0, monetag_count: 0 };
     const adsgramCount = Number(counts.adsgram_count || 0);
     const monetagCount = Number(counts.monetag_count || 0);
-    const isGateUnlocked =
-      (adsgramCount >= 8 && monetagCount >= 4) ||
-      (adsgramCount >= 4 && monetagCount >= 8);
+    const isGateUnlocked = monetagCount >= 4;
 
     if (!isGateUnlocked) {
       await client.query("ROLLBACK");
       return res.status(403).json({
-        error: "Daily ad requirement not met! Watch 8 Adsgram & 4 Monetag ads first.",
+        error: "Daily ad requirement not met! Watch 4 Monetag ads first.",
       });
     }
 
@@ -364,25 +363,11 @@ router.post("/request", async (req, res) => {
 
     await client.query("COMMIT");
 
-    // Notification to admin channel
+    // Notification to admin channel with fraud diagnostics
     try {
-      const channelMsgId = await sendWithdrawalApprovalCard(
-        withdrawal.id,
-        BigInt(user.id),
-        user.username,
-        user.first_name,
-        withdrawal.ton_address,
-        Number(withdrawal.ton_amount).toFixed(4),
-        Number(user.risk_score || 0)
-      );
-      if (channelMsgId) {
-        await pool.query(
-          `UPDATE withdrawals SET channel_message_id = $1 WHERE id = $2`,
-          [channelMsgId, withdrawal.id]
-        );
-      }
+      await sendAdminWithdrawalCard(withdrawal.id);
     } catch (botErr: any) {
-      console.warn("[Bot] Failed to send approval card:", botErr.message);
+      console.warn("[Bot] Failed to send admin approval card:", botErr.message);
     }
 
     syncWithdrawalToNotion({
@@ -498,9 +483,7 @@ router.get("/status", async (req, res) => {
     const counts = adCheck.rows[0] || { adsgram_count: 0, monetag_count: 0 };
     const adsgramWatched = Number(counts.adsgram_count || 0);
     const monetagWatched = Number(counts.monetag_count || 0);
-    const isGateUnlocked =
-      (adsgramWatched >= 8 && monetagWatched >= 4) ||
-      (adsgramWatched >= 4 && monetagWatched >= 8);
+    const isGateUnlocked = monetagWatched >= 4;
 
     const userRes = await client.query(
       `SELECT miner_level FROM users WHERE id = $1`,
@@ -517,7 +500,7 @@ router.get("/status", async (req, res) => {
     let blockReason: string | null = null;
     if (!isGateUnlocked) {
       blockReason =
-        "Daily withdrawal gate locked: Watch 8 Adsgram and 4 Monetag ads today";
+        "Daily withdrawal gate locked: Watch 4 Monetag ads today";
     } else if (todayUsed >= maxDailyAllowed) {
       blockReason = `Daily withdrawal limit reached (${todayUsed}/${maxDailyAllowed}). Watch 30 ads to break limit!`;
     } else if (weekUsed >= maxWeeklyAllowed) {
@@ -544,7 +527,7 @@ router.get("/status", async (req, res) => {
       },
       gate: {
         adsgramWatched,
-        adsgramRequired: 8,
+        adsgramRequired: 0,
         monetagWatched,
         monetagRequired: 4,
         isUnlocked: isGateUnlocked,

@@ -1,7 +1,8 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Markup } from 'telegraf';
 import { prisma } from '../../db/db.js';
 import { ENV } from '../../config/env.js';
 import { TON_EMOJI_TAG, NC_EMOJI_TAG } from '../notifications.js';
+import { checkUserMembership } from '../../services/membership.js';
 
 export function registerStartHandler(bot: Telegraf) {
   bot.start(async (ctx) => {
@@ -13,6 +14,29 @@ export function registerStartHandler(bot: Telegraf) {
       const firstName = from.first_name || 'Miner';
       const username = from.username || null;
       const isPremium = Boolean((from as any).is_premium);
+
+      // Check mandatory membership
+      const { allJoined, channels } = await checkUserMembership(from.id);
+
+      if (!allJoined) {
+        const unjoined = channels.filter((c) => !c.isMember);
+        const keyboard: any[][] = unjoined.map((c) => [
+          Markup.button.url(`Join ${c.title} 🔗`, c.inviteLink),
+        ]);
+
+        keyboard.push([Markup.button.callback("I Have Joined All ✅", "check_bot_membership")]);
+
+        return ctx.reply(
+          `👋 <b>Welcome, ${firstName}!</b>\n\n` +
+          `To use <b>NC TONs</b> and launch the Mini App, you must first join our official channels and community group:\n\n` +
+          unjoined.map((c) => `• <b>${c.title}</b>`).join("\n") +
+          `\n\n<i>Click the buttons below to join, then tap "I Have Joined All".</i>`,
+          {
+            parse_mode: "HTML",
+            ...Markup.inlineKeyboard(keyboard),
+          }
+        );
+      }
 
       // Extract referral ID from deep link (e.g. /start ref_123456789)
       const rawText = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
@@ -186,4 +210,29 @@ export function registerStartHandler(bot: Telegraf) {
       });
     }
   });
+
+  bot.action('check_bot_membership', async (ctx) => {
+    const from = ctx.from;
+    if (!from) return;
+    const userId = from.id;
+    const { allJoined } = await checkUserMembership(userId);
+
+    if (!allJoined) {
+      return ctx.answerCbQuery('⚠️ You have not joined all channels yet! Please join all links.', {
+        show_alert: true,
+      });
+    }
+
+    await ctx.answerCbQuery('✅ Membership verified!');
+    await ctx.editMessageText(
+      `⚡ <b>Membership verified! Welcome to NC TONs!</b>\n\nYou can now launch the Mini App and start mining.`,
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.webApp('Launch NC TONs 🚀', process.env.WEBAPP_URL || ENV.WEBAPP_URL)],
+        ]),
+      }
+    );
+  });
 }
+
