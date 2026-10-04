@@ -50,6 +50,7 @@ model User {
   last_ip_address        String?                @db.VarChar(45)
   devices                UserDevice[]
   security_logs          SecurityAuditLog[]
+  visit_sessions         MissionVisitSession[]
 
   @@index([is_banned], name: "idx_users_banned")
   @@index([primary_device_hash], name: "idx_users_device")
@@ -86,6 +87,7 @@ model DynamicMission {
   created_at         DateTime               @default(now())
   claims             MissionClaim[]
   proof_submissions  TaskProofSubmission[]
+  visit_sessions     MissionVisitSession[]
 
   @@map("dynamic_missions")
 }
@@ -203,16 +205,29 @@ model TaskProofSubmission {
 
 model UserDailyAd {
   user_id         BigInt
-  ad_date         DateTime @default(now()) @db.Date
-  adsgram_count   Int      @default(0)
-  monetag_count   Int      @default(0)
-  limit_ads_count Int      @default(0)
-  last_ad_at      DateTime @default(now())
-  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  ad_date         DateTime  @default(now()) @db.Date
+  adsgram_count   Int       @default(0)
+  monetag_count   Int       @default(0)
+  limit_ads_count Int       @default(0)
+  last_ad_at      DateTime?
+  user            User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@id([user_id, ad_date])
   @@index([user_id, ad_date], name: "idx_user_daily_ads")
   @@map("user_daily_ads")
+}
+
+model MissionVisitSession {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    BigInt
+  mission_id Int
+  started_at DateTime       @default(now())
+  mission    DynamicMission @relation(fields: [mission_id], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, mission_id], name: "unique_user_mission_visit")
+  @@index([user_id, mission_id], name: "idx_mission_visit_user")
+  @@map("mission_visit_sessions")
 }
 
 model BotChat {

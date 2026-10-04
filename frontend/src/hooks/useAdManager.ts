@@ -121,7 +121,21 @@ export function useAdManager(
         body: JSON.stringify({ userId: userId.toString(), provider }),
       });
       const data = await res.json();
+      if (res.status === 429) {
+        const remaining = data.remainingSeconds || 30;
+        const expiresAt = Date.now() + remaining * 1000;
+        localStorage.setItem("ad_cooldown_expires_at", String(expiresAt));
+        window.dispatchEvent(new CustomEvent("ad_cooldown_started", { detail: { remaining } }));
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("warning");
+        alert(data.message || `Please wait ${remaining}s before watching another ad.`);
+        return null;
+      }
       if (res.ok) {
+        const cooldown = data.cooldown || 30;
+        const expiresAt = Date.now() + cooldown * 1000;
+        localStorage.setItem("ad_cooldown_expires_at", String(expiresAt));
+        window.dispatchEvent(new CustomEvent("ad_cooldown_started", { detail: { remaining: cooldown } }));
         const tg = (window as any).Telegram?.WebApp;
         if (tg?.HapticFeedback) {
           tg.HapticFeedback.notificationOccurred("success");
@@ -138,7 +152,7 @@ export function useAdManager(
     }
   };
 
-  // 1. Play Rewarded Monetag Ad (Main Ad Provider)
+  // 1. Play Rewarded Monetag Ad (100 Daily Cap with Tiered Payouts)
   const showMonetagRewarded = useCallback(async () => {
     try {
       const globalSdkFn = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
@@ -147,45 +161,60 @@ export function useAdManager(
         try {
           console.log(`[Monetag] Calling global ${MONETAG_SDK_FN} interstitial...`);
           await globalSdkFn({ ymid: String(userId) });
-          await claimReward("monetag");
-          return;
+          return await claimReward("monetag");
         } catch (interstitialErr) {
           console.warn(`[Monetag] ${MONETAG_SDK_FN} interstitial failed, trying pop:`, interstitialErr);
           await globalSdkFn("pop");
-          await claimReward("monetag");
-          return;
+          return await claimReward("monetag");
         }
       } else if (monetagHandler) {
         try {
           console.log("[Monetag] Calling monetag-tg-sdk handler...");
           await monetagHandler({ ymid: String(userId) });
-          await claimReward("monetag");
-          return;
+          return await claimReward("monetag");
         } catch (interstitialErr) {
           console.warn("[Monetag] Interstitial fallback to popup format:", interstitialErr);
           await monetagHandler("pop");
-          await claimReward("monetag");
-          return;
+          return await claimReward("monetag");
         }
       } else if (window.showMonetagInterstitial) {
         const watched = await window.showMonetagInterstitial();
-        if (watched) await claimReward("monetag");
-        return;
+        if (watched) return await claimReward("monetag");
       } else {
         // Fallback simulation for dev mode or when script is still loading
-        console.log("[Monetag] Simulating Rewarded Ad playback in dev mode...");
-        await claimReward("monetag");
+        console.log("[Monetag Dev] Simulating Rewarded Ad playback in dev mode...");
+        return await claimReward("monetag");
       }
     } catch (e: any) {
       console.warn("Monetag error or dismissed:", e?.message || e);
     }
+    return null;
   }, [userId, MONETAG_SDK_FN, monetagHandler]);
 
-  // 2. Play Rewarded Video (Redirected to Monetag as sole/main provider)
+  // 2. Play Rewarded Adsgram Video (100 Daily Cap with Tiered Payouts)
   const showAdsgramRewarded = useCallback(async () => {
-    console.log("[AdManager] Routing ad request to Monetag (main ad provider)");
-    return await showMonetagRewarded();
-  }, [showMonetagRewarded]);
+    try {
+      const adsgram = typeof window !== "undefined" ? (window as any).Adsgram : null;
+      let watched = false;
+
+      if (adsgram && typeof adsgram.init === "function") {
+        const blockId = (import.meta as any).env?.VITE_ADSGRAM_BLOCK_ID || "1234";
+        const ad = adsgram.init({ blockId, userId: String(userId) });
+        const res = await ad.show();
+        watched = Boolean(res?.done);
+      } else {
+        console.log("[Adsgram Dev] Simulating Adsgram Rewarded Video playback...");
+        watched = true;
+      }
+
+      if (watched) {
+        return await claimReward("adsgram");
+      }
+    } catch (err: any) {
+      console.warn("Adsgram error or dismissed:", err?.message || err);
+    }
+    return null;
+  }, [userId]);
 
   // 3. Interstitial Trigger (Guarded against playing while game is active, no recurring timers)
   // STRICT REQUIREMENT: Interstitial ads ONLY show Monetag. Adsgram is reserved exclusively for Missions.

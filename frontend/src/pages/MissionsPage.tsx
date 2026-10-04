@@ -36,15 +36,28 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
   }, [fetchMissions]);
 
   const handleClaim = async (missionId: number) => {
-    const res = await api.claimMission(missionId);
-    // Update local mission state
-    setMissions((prev) =>
-      prev.map((m) =>
-        m.id === missionId ? { ...m, isCompleted: true, completedCount: m.completedCount + 1 } : m
-      )
-    );
-    onRewardClaimed(res.ncAwarded, res.tonAwarded);
-    return res;
+    let res: any;
+    try {
+      res = await api.claimVisitMission(missionId, userId);
+      const nc = res.reward?.nc || 0;
+      const ton = res.reward?.ton ? String(res.reward.ton) : '0';
+      setMissions((prev) =>
+        prev.map((m) =>
+          m.id === missionId ? { ...m, isCompleted: true, completedCount: m.completedCount + 1 } : m
+        )
+      );
+      onRewardClaimed(nc, ton);
+      return res;
+    } catch {
+      res = await api.claimMission(missionId);
+      setMissions((prev) =>
+        prev.map((m) =>
+          m.id === missionId ? { ...m, isCompleted: true, completedCount: m.completedCount + 1 } : m
+        )
+      );
+      onRewardClaimed(res.ncAwarded, res.tonAwarded);
+      return res;
+    }
   };
 
   const categories = [

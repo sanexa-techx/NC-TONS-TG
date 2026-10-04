@@ -39,6 +39,7 @@ import adsRouter from './routes/ads.js';
 import gamesRouter from './routes/games.js';
 import levelRouter from './routes/level.js';
 import membershipRouter from './routes/membership.js';
+import missionsRouter from './routes/missions.js';
 
 // Telegraf Bot Lifecycle & Keep-Alive Service
 import { initBotEngine, stopBotEngine, getBotState } from './bot/botLifecycle.js';
@@ -119,7 +120,8 @@ app.post('/api/mining/recharge', authMiddleware, rechargeMining);
 app.use('/api/games', gamesRouter);
 app.use('/api/game', gamesRouter);
 
-// Missions Marketplace
+// Missions Marketplace & SmartLink Visit Engine
+app.use('/api/missions', missionsRouter);
 app.get('/api/missions/available', authMiddleware, getAvailableMissions);
 app.post('/api/missions/start', authMiddleware, startMission);
 app.post('/api/missions/claim', authMiddleware, claimMission);

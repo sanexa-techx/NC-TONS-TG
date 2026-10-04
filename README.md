@@ -416,3 +416,23 @@ You can inspect the live webhook and keep-alive health directly in your browser:
   - Selecting custom input creates a temporary record in `admin_chat_sessions`.
   - The admin's next regular text message in that chat is captured as the official explanation, delivered verbatim to the user's private Telegram DM, and appended to the admin card.
 
+---
+
+## 22. 200 DAILY ADS ENGINE & SMARTLINK VISIT ENGAGEMENT TIMERS
+- **Daily Quotas (200 Total Views)**:
+  - Max 100 Adsgram Rewarded Videos + 100 Monetag Impressions daily per user.
+  - Reset occurs at 00:00:00 UTC daily.
+- **30-Second Ad Cooldown**:
+  - `user_daily_ads.last_ad_at`: Enforces 30s pause between consecutive ads across both networks.
+  - Returns HTTP 429 with `remainingSeconds` if triggered early.
+  - Frontend: Disables watch buttons with live 30s countdown synced to `localStorage`.
+- **Sustainable Tiered Payout Schedule (Per Network)**:
+  - **Tier 1 (Ads 1–20)**: +150 NC & +0.000010 TON.
+  - **Tier 2 (Ads 21–50)**: +200 NC & +0.000002 TON.
+  - **Tier 3 (Ads 51–100)**: +300 NC & 0 TON (Grind tier: builds NC fuel and progresses daily/weekly limit breakers at zero TON payout cost).
+- **15-Second SmartLink Dwell Time Verification**:
+  - `mission_visit_sessions`: `user_id` (BIGINT), `mission_id` (INT), `started_at` (TIMESTAMP default NOW()), `UNIQUE(user_id, mission_id)`.
+  - `POST /api/missions/visit/start`: Upserts entry with `started_at = NOW()` when user opens external link via `WebApp.openLink`.
+  - `POST /api/missions/visit/claim`: Enforces `EXTRACT(EPOCH FROM (NOW() - started_at)) >= 15`. If $< 15$ seconds, blocks claim with HTTP 403. Upon verification, deletes session, inserts record into `user_mission_claims`, and credits rewards.
+  - Frontend: Changes button state to `Visiting` -> shows 15s countdown timer -> unlocks `[Claim]` button only once the full 15 seconds have elapsed.
+

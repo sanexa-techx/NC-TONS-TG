@@ -21,19 +21,28 @@ export class MissionService {
 
     if (pool) {
       await pool.query(
-        `INSERT INTO mission_visits (user_id, mission_id, started_at)
+        `INSERT INTO mission_visit_sessions (user_id, mission_id, started_at)
          VALUES ($1, $2, NOW())
          ON CONFLICT (user_id, mission_id)
          DO UPDATE SET started_at = NOW()`,
         [userId.toString(), missionId]
       );
+      try {
+        await pool.query(
+          `INSERT INTO mission_visits (user_id, mission_id, started_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (user_id, mission_id)
+           DO UPDATE SET started_at = NOW()`,
+          [userId.toString(), missionId]
+        );
+      } catch {}
     }
 
     return {
       success: true,
       missionId,
       startedAt: new Date().toISOString(),
-      requiredEngagementSeconds: 10,
+      requiredEngagementSeconds: 15,
     };
   }
 
@@ -221,23 +230,32 @@ export class MissionService {
     // 4. STRICT CHECK: Engagement / Link Visit Timing for external URLs & bot launches
     if (mission.task_type === 'visit_url' || mission.task_type === 'bot_launch') {
       if (pool) {
-        const visitRes = await pool.query(
+        let visitRes = await pool.query(
           `SELECT started_at, EXTRACT(EPOCH FROM (NOW() - started_at)) as elapsed_sec 
-           FROM mission_visits 
+           FROM mission_visit_sessions 
            WHERE user_id = $1 AND mission_id = $2`,
           [userId.toString(), missionId]
         );
 
         if (visitRes.rows.length === 0) {
-          throw new Error('You must open and engage with the mission link before claiming.');
+          visitRes = await pool.query(
+            `SELECT started_at, EXTRACT(EPOCH FROM (NOW() - started_at)) as elapsed_sec 
+             FROM mission_visits 
+             WHERE user_id = $1 AND mission_id = $2`,
+            [userId.toString(), missionId]
+          );
+        }
+
+        if (visitRes.rows.length === 0) {
+          throw new Error('No active visit session found. Tap Visit first.');
         }
 
         const elapsedSec = parseFloat(visitRes.rows[0].elapsed_sec);
-        const REQUIRED_ENGAGEMENT_SEC = 10;
+        const REQUIRED_ENGAGEMENT_SEC = 15;
         if (isNaN(elapsedSec) || elapsedSec < REQUIRED_ENGAGEMENT_SEC) {
           const remaining = Math.ceil(REQUIRED_ENGAGEMENT_SEC - (elapsedSec || 0));
           throw new Error(
-            `Engagement check in progress. Please review the link for at least ${remaining} more second${remaining === 1 ? '' : 's'} before claiming.`
+            `Stay on the partner site for at least 15 seconds. (${remaining}s left)`
           );
         }
       }
@@ -257,6 +275,14 @@ export class MissionService {
         try {
           await pool.query(
             'INSERT INTO user_mission_claims (user_id, mission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [userId.toString(), missionId]
+          );
+          await pool.query(
+            'DELETE FROM mission_visit_sessions WHERE user_id = $1 AND mission_id = $2',
+            [userId.toString(), missionId]
+          );
+          await pool.query(
+            'DELETE FROM mission_visits WHERE user_id = $1 AND mission_id = $2',
             [userId.toString(), missionId]
           );
         } catch (e) {}

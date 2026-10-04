@@ -255,6 +255,36 @@ export const api = {
     return handleResponse(res);
   },
 
+  async startVisitMission(
+    missionId: number,
+    userId?: string | number
+  ): Promise<{ success: boolean; minStaySeconds: number }> {
+    const id = userId || getDetectedUser()?.id;
+    const res = await fetch('/api/missions/visit/start', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ missionId, userId: id }),
+    });
+    return handleResponse(res);
+  },
+
+  async claimVisitMission(
+    missionId: number,
+    userId?: string | number
+  ): Promise<{
+    success: boolean;
+    reward: { nc: number; ton: number };
+    newBalances: { nc_balance: string; ton_balance: string };
+  }> {
+    const id = userId || getDetectedUser()?.id;
+    const res = await fetch('/api/missions/visit/claim', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ missionId, userId: id }),
+    });
+    return handleResponse(res);
+  },
+
   async createMission(missionData: any): Promise<{ success: boolean; mission: any }> {
     const res = await fetch('/api/missions/create', {
       method: 'POST',
@@ -570,7 +600,14 @@ export const api = {
   async claimAdReward(
     provider: 'adsgram' | 'monetag',
     userId?: string | number
-  ): Promise<{ success: boolean; reward: { nc: number; ton: number }; newBalances: any }> {
+  ): Promise<{
+    success: boolean;
+    cooldown?: number;
+    currentCount?: number;
+    maxDaily?: number;
+    reward: { nc: number; ton: number; tier?: number };
+    newBalances: any;
+  }> {
     const id = userId || getDetectedUser()?.id;
     const res = await fetch('/api/ads/claim', {
       method: 'POST',

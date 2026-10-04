@@ -212,6 +212,9 @@ export interface AdNetworkStats {
 export interface DailyAdStatusResponse {
   adsgram: AdNetworkStats;
   monetag: AdNetworkStats;
+  totalWatched?: number;
+  totalMax?: number;
+  cooldownRemaining?: number;
   canWithdraw: boolean;
   withdrawalLimits?: {
     daily: WithdrawalLimitTier;

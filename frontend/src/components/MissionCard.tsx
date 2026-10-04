@@ -55,20 +55,21 @@ export const MissionCard: React.FC<MissionCardProps> = ({
     openLink(mission.actionUrl);
     setVisited(true);
     setClaimError(null);
-    // Register engagement start in backend
-    api.startMission(mission.id).catch((e) => console.warn('Start mission visit:', e));
-    // Start mandatory 10s engagement countdown
-    setCountdown(10);
+    // Register 15s visit session in backend
+    api.startVisitMission(mission.id, userId).catch(() => {});
+    api.startMission(mission.id).catch(() => {});
+    // Start mandatory 15s dwell timer
+    setCountdown(15);
   };
 
   const handleClaim = async () => {
     if (!visited) {
-      setClaimError('Please open and engage with the link before claiming.');
+      setClaimError('Please open and engage with the partner site before claiming.');
       haptic('error');
       return;
     }
     if (countdown > 0) {
-      setClaimError(`Please wait ${countdown} more seconds while engagement is being verified.`);
+      setClaimError(`Stay on the partner site for at least 15 seconds. (${countdown}s left)`);
       haptic('error');
       return;
     }
@@ -215,22 +216,22 @@ export const MissionCard: React.FC<MissionCardProps> = ({
               !visited
                 ? 'bg-cyber-surface border border-cyber-border/40 text-slate-500 cursor-not-allowed opacity-60'
                 : countdown > 0
-                ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 cursor-wait'
+                ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300 cursor-wait shadow-sm'
                 : 'bg-gradient-to-r from-cyber-cyan to-cyber-blue text-cyber-bg shadow-glow-cyan font-extrabold'
             }`}
           >
             {claiming ? (
               <>
                 <Loader2 size={14} className="animate-spin" />
-                <span>Checking...</span>
+                <span>Verifying...</span>
               </>
             ) : countdown > 0 ? (
               <>
-                <Clock size={14} className="animate-pulse" />
-                <span>Wait ({countdown}s)</span>
+                <Clock size={14} className="animate-pulse text-amber-400" />
+                <span>Visiting ({countdown}s)</span>
               </>
             ) : (
-              <span>Verify & Claim</span>
+              <span>Claim Reward</span>
             )}
           </button>
         </div>

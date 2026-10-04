@@ -240,8 +240,29 @@ CREATE TABLE IF NOT EXISTS user_daily_ads (
 );
 
 ALTER TABLE user_daily_ads ADD COLUMN IF NOT EXISTS limit_ads_count INT DEFAULT 0;
+ALTER TABLE user_daily_ads ADD COLUMN IF NOT EXISTS last_ad_at TIMESTAMP DEFAULT NULL;
+
+-- 200 Daily Ads (100/100) Constraints
+ALTER TABLE user_daily_ads 
+DROP CONSTRAINT IF EXISTS user_daily_ads_adsgram_count_check,
+DROP CONSTRAINT IF EXISTS user_daily_ads_monetag_count_check;
+
+ALTER TABLE user_daily_ads
+ADD CONSTRAINT user_daily_ads_adsgram_count_check CHECK (adsgram_count <= 100),
+ADD CONSTRAINT user_daily_ads_monetag_count_check CHECK (monetag_count <= 100);
 
 CREATE INDEX IF NOT EXISTS idx_user_daily_ads ON user_daily_ads(user_id, ad_date);
+
+-- SmartLink / Visit Missions Duration Tracker (15s minimum dwell time)
+CREATE TABLE IF NOT EXISTS mission_visit_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mission_id INT NOT NULL REFERENCES dynamic_missions(id) ON DELETE CASCADE,
+    started_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT unique_user_mission_visit UNIQUE (user_id, mission_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mission_visit_user ON mission_visit_sessions(user_id, mission_id);
 
 -- 2. Update Reward Configurations Table
 INSERT INTO reward_configs (action_type, display_name, nc_reward, ton_reward)

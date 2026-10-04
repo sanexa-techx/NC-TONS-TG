@@ -155,186 +155,341 @@ export function registerMasterBotHandlers(b: Telegraf) {
   const PUBLIC_PAYOUT_CHANNEL_ID = process.env.PUBLIC_PAYOUT_CHANNEL_ID || ENV.PUBLIC_PAYOUT_CHANNEL_ID;
 
   // ============================================================================
-  // 1. DEEP-LINK ONBOARDING & LAUNCHER (/start)
+  // 1. IN-MEMORY RATE LIMITER & FLOOD CONTROL (Anti-Spam)
+  // ============================================================================
+  const userMessageTimestamps = new Map<number, number[]>();
+
+  function checkRateLimit(userId: number): { allowed: boolean; violationCount?: number } {
+    const now = Date.now();
+    const timestamps = userMessageTimestamps.get(userId) || [];
+
+    // Keep timestamps within the last 4 seconds
+    const recent = timestamps.filter((t) => now - t < 4000);
+    recent.push(now);
+    userMessageTimestamps.set(userId, recent);
+
+    // If more than 3 actions in 4 seconds, flag rate limit
+    if (recent.length > 3) {
+      return { allowed: false, violationCount: recent.length };
+    }
+    return { allowed: true };
+  }
+
+  // Cleanup inactive rate-limit records every 10 minutes
+  setInterval(() => {
+    const cutoff = Date.now() - 60000;
+    for (const [userId, times] of userMessageTimestamps.entries()) {
+      if (times.length === 0 || times[times.length - 1] < cutoff) {
+        userMessageTimestamps.delete(userId);
+      }
+    }
+  }, 10 * 60 * 1000);
+
+  // ============================================================================
+  // 2. GLOBAL SECURITY & BOT INTERCEPTOR MIDDLEWARE
+  // ============================================================================
+  b.use(async (ctx, next) => {
+    const from = ctx.from;
+    if (!from) return; // Drop updates without sender context
+
+    // 1. Drop automated bot accounts
+    if (from.is_bot) {
+      return;
+    }
+
+    // 2. Enforce Sliding-Window Rate Limit
+    const rate = checkRateLimit(from.id);
+    if (!rate.allowed) {
+      if (rate.violationCount && rate.violationCount > 7) {
+        // Auto-ban persistent spammers
+        await pool
+          .query(
+            "UPDATE users SET is_banned = TRUE, ban_reason = 'Automated Command Flood / Spam Script' WHERE id = $1",
+            [from.id]
+          )
+          .catch(() => {});
+        return ctx.reply("⛔ Your account has been permanently blacklisted for automated command spamming.");
+      }
+      return ctx.reply("⚠️ Too many requests. Please slow down.");
+    }
+
+    // 3. Drop Banned Accounts
+    try {
+      const banRes = await pool.query(
+        "SELECT is_banned, ban_reason FROM users WHERE id = $1",
+        [from.id]
+      );
+      if (banRes.rows.length > 0 && banRes.rows[0].is_banned) {
+        return ctx.reply(`🚫 Account Suspended: ${banRes.rows[0].ban_reason || "Fair-Play Violation"}`);
+      }
+    } catch (err) {
+      console.error("Middleware DB error:", err);
+    }
+
+    return next();
+  });
+
+  // ============================================================================
+  // 3. HUMAN VERIFICATION CAPTCHA STATE (For /start and Referrals)
+  // ============================================================================
+  interface CaptchaSession {
+    targetEmoji: string;
+    referrerId: number | null;
+    createdAt: number;
+  }
+  const pendingCaptchas = new Map<number, CaptchaSession>();
+
+  const CAPTCHA_EMOJIS = [
+    { name: "Diamond", symbol: "💎", id: "gem" },
+    { name: "Rocket", symbol: "🚀", id: "rock" },
+    { name: "Battery", symbol: "🔋", id: "bat" },
+    { name: "Lightning", symbol: "⚡", id: "bolt" },
+  ];
+
+  // Helper to route verified users through the Force-Join check
+  async function proceedToApp(ctx: any) {
+    const userId = ctx.from.id;
+    const firstName = ctx.from.first_name || "Miner";
+    const username = ctx.from.username || null;
+
+    // Check mandatory channels & groups
+    const { allJoined, channels } = await checkUserMembership(userId);
+
+    if (!allJoined) {
+      const unjoined = channels.filter((c) => !c.isMember);
+      const keyboard: any[][] = unjoined.map((c) => [
+        Markup.button.url(`Join ${c.title} 🔗`, c.inviteLink),
+      ]);
+      keyboard.push([Markup.button.callback("I Have Joined All ✅", "check_bot_membership")]);
+
+      return ctx.reply(
+        `👋 <b>Welcome, ${firstName}!</b>\n\n` +
+        `Join our required community channels to unlock access:\n\n` +
+        unjoined.map((c) => `• <b>${c.title}</b>`).join("\n") +
+        `\n\n<i>Click the buttons below to join, then tap "I Have Joined All".</i>`,
+        {
+          parse_mode: "HTML",
+          ...Markup.inlineKeyboard(keyboard),
+        }
+      );
+    }
+
+    const launchUrl = `${WEBAPP_URL}?userId=${userId}&firstName=${encodeURIComponent(firstName)}${username ? `&username=${encodeURIComponent(username)}` : ''}`;
+
+    await ctx.reply(
+      `⚡ <b>Welcome to NC TONs, ${firstName}!</b>\n\n` +
+        `Mine real TON, play arcade games, and earn daily rewards directly inside Telegram.\n\n` +
+        `🔋 <i>Keep your battery charged to maintain continuous mining!</i>\n\n` +
+        `👇 <b>Tap the menu buttons below to begin!</b>`,
+      {
+        parse_mode: 'HTML',
+        ...getMainMenuKeyboard(launchUrl),
+      }
+    );
+
+    return ctx.reply(
+      `⚡ <b>Access Granted! Welcome to NC TONs.</b>\n\n` +
+      `Your human status is verified and channel memberships are active.\n` +
+      `Tap below to launch the mining grid:`,
+      {
+        parse_mode: "HTML",
+        ...Markup.inlineKeyboard([
+          [Markup.button.webApp("Launch NC TONs 🚀", launchUrl)],
+          [Markup.button.url('Official Updates Channel 📢', 'https://t.me/nctons_official')],
+        ]),
+      }
+    );
+  }
+
+  // ============================================================================
+  // 4. DEEP-LINK ONBOARDING WITH CAPTCHA GATE (/start)
   // ============================================================================
   b.start(async (ctx) => {
     try {
       const from = ctx.from;
       if (!from) return;
 
+      const userId = from.id;
       const rawText = ctx.message && 'text' in ctx.message ? ctx.message.text : '';
       const textParts = rawText.split(' ');
       const startPayload = ctx.payload || (textParts.length > 1 ? textParts[1] : '');
 
-      const newUserId = from.id;
-      const firstName = from.first_name || 'Miner';
-      const username = from.username || null;
-      const isPremium = Boolean((from as any).is_premium);
+      // Check if user already exists in database
+      const userCheck = await pool.query("SELECT id FROM users WHERE id = $1", [userId]);
 
-      // Check mandatory membership
-      const { allJoined, channels } = await checkUserMembership(newUserId);
+      if (userCheck.rows.length === 0) {
+        // Parse referrer ID
+        let referrerId: number | null = null;
+        if (startPayload && startPayload.startsWith("ref_")) {
+          const parsed = parseInt(startPayload.replace("ref_", "").trim(), 10);
+          if (!isNaN(parsed) && parsed !== userId) {
+            referrerId = parsed;
+          }
+        }
 
-      if (!allJoined) {
-        const unjoined = channels.filter((c) => !c.isMember);
-        const keyboard: any[][] = unjoined.map((c) => [
-          Markup.button.url(`Join ${c.title} 🔗`, c.inviteLink),
-        ]);
+        // Pick a random target emoji for human verification
+        const target = CAPTCHA_EMOJIS[Math.floor(Math.random() * CAPTCHA_EMOJIS.length)];
+        pendingCaptchas.set(userId, {
+          targetEmoji: target.id,
+          referrerId,
+          createdAt: Date.now(),
+        });
 
-        keyboard.push([Markup.button.callback("I Have Joined All ✅", "check_bot_membership")]);
+        // Shuffle buttons to prevent automated position-clicking scripts
+        const shuffled = [...CAPTCHA_EMOJIS].sort(() => Math.random() - 0.5);
+        const buttons = shuffled.map((item) =>
+          Markup.button.callback(item.symbol, `captcha_verify:${item.id}`)
+        );
 
         return ctx.reply(
-          `👋 <b>Welcome, ${firstName}!</b>\n\n` +
-          `To use <b>NC TONs</b> and launch the Mini App, you must first join our official channels and community group:\n\n` +
-          unjoined.map((c) => `• <b>${c.title}</b>`).join("\n") +
-          `\n\n<i>Click the buttons below to join, then tap "I Have Joined All".</i>`,
+          `🛡️ <b>Human Verification Required</b>\n\n` +
+          `To prevent bot syndicates, please prove you are human.\n\n` +
+          `👉 Tap the <b>${target.name} (${target.symbol})</b> below to continue:`,
           {
             parse_mode: "HTML",
-            ...Markup.inlineKeyboard(keyboard),
+            ...Markup.inlineKeyboard([buttons]),
           }
         );
       }
 
-      let referrerId: number | null = null;
-      if (startPayload && startPayload.startsWith('ref_')) {
-        const parsedId = parseInt(startPayload.replace('ref_', '').trim(), 10);
-        if (!isNaN(parsedId) && parsedId !== newUserId) {
-          referrerId = parsedId;
-        }
-      }
-
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-
-        const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [newUserId]);
-
-        if (userCheck.rows.length === 0) {
-          let starterNc = isPremium ? 2000 : 1000;
-          let bonusNc = isPremium ? 2500 : 1000;
-          let bonusTon = isPremium ? 0.000200 : 0.000080;
-
-          // Anti-Fraud: check if referee and referrer share an active device or IP address
-          let hasClash = false;
-          if (referrerId) {
-            try {
-              const clashCheck = await client.query(
-                `SELECT 1 FROM user_devices d1
-                 JOIN user_devices d2 ON (d1.device_hash = d2.device_hash OR d1.ip_address = d2.ip_address)
-                 WHERE d1.user_id = $1 AND d2.user_id = $2`,
-                [referrerId, newUserId]
-              );
-              if (clashCheck.rows.length > 0) {
-                hasClash = true;
-              }
-            } catch (clashErr) {
-              console.warn('[Anti-Cheat] Referral clash check error:', clashErr);
-            }
-          }
-
-          if (hasClash) {
-            // Silent Fraud Mitigation: register user without awarding rewards to referrer
-            await client.query(
-              'INSERT INTO users (id, first_name, username, nc_balance, risk_score, referred_by) VALUES ($1, $2, $3, 500, 75, $4)',
-              [newUserId, firstName, username, referrerId]
-            );
-            // Log fraud event
-            await client.query(
-              `INSERT INTO security_audit_logs (user_id, event_type, severity, details)
-               VALUES ($1, 'REFERRAL_CLASH_ON_START', 'HIGH', $2)`,
-              [newUserId, JSON.stringify({ referrerId })]
-            );
-          } else {
-            try {
-              const refCfg = await client.query(
-                "SELECT action_type, nc_reward, ton_reward FROM reward_configs WHERE action_type IN ('referral_standard', 'referral_premium')"
-              );
-              for (const row of refCfg.rows) {
-                if (row.action_type === 'referral_standard' && !isPremium) {
-                  bonusNc = Number(row.nc_reward);
-                  bonusTon = parseFloat(row.ton_reward);
-                } else if (row.action_type === 'referral_premium' && isPremium) {
-                  bonusNc = Number(row.nc_reward);
-                  bonusTon = parseFloat(row.ton_reward);
-                }
-              }
-            } catch {
-              // fallback defaults
-            }
-
-            await client.query(
-              `INSERT INTO users (id, first_name, username, nc_balance, referred_by)
-               VALUES ($1, $2, $3, $4, $5)`,
-              [newUserId, firstName, username, starterNc, referrerId]
-            );
-
-            if (referrerId) {
-              const refCheck = await client.query('SELECT id FROM users WHERE id = $1', [referrerId]);
-              if (refCheck.rows.length > 0) {
-                await client.query(
-                  `INSERT INTO referrals (referrer_id, referee_id, is_premium, bonus_nc, bonus_ton)
-                   VALUES ($1, $2, $3, $4, $5)`,
-                  [referrerId, newUserId, isPremium, bonusNc, bonusTon]
-                );
-
-                await client.query(
-                  `UPDATE users 
-                   SET referral_count = referral_count + 1,
-                       unclaimed_referral_nc = unclaimed_referral_nc + $1,
-                       unclaimed_referral_ton = unclaimed_referral_ton + $2,
-                       total_referral_nc = total_referral_nc + $1,
-                       total_referral_ton = total_referral_ton + $2
-                   WHERE id = $3`,
-                  [bonusNc, bonusTon, referrerId]
-                );
-
-                await b.telegram
-                  .sendMessage(
-                    referrerId,
-                    `👥 <b>New Referral Joined!</b>\n\n` +
-                      `Your friend <b>${firstName}</b> just started mining.\n` +
-                      `🎁 Bounty Stashed: <b>+${bonusNc.toLocaleString()} NC</b> and <b>+${bonusTon.toFixed(6)} TON</b>!`,
-                    { parse_mode: 'HTML' }
-                  )
-                  .catch(() => {});
-              }
-            }
-          }
-        }
-
-        await client.query('COMMIT');
-      } catch (dbErr) {
-        await client.query('ROLLBACK');
-        console.error('Bot /start registration error:', dbErr);
-      } finally {
-        client.release();
-      }
-
-      const launchUrl = `${WEBAPP_URL}?userId=${newUserId}&firstName=${encodeURIComponent(firstName)}${username ? `&username=${encodeURIComponent(username)}` : ''}`;
-
-      await ctx.reply(
-        `⚡ <b>Welcome to NC TONs, ${firstName}!</b>\n\n` +
-          `Mine real TON, play arcade games, and earn daily rewards directly inside Telegram.\n\n` +
-          `🔋 <i>Keep your battery charged to maintain continuous mining!</i>\n\n` +
-          `👇 <b>Tap the menu buttons below to begin!</b>`,
-        {
-          parse_mode: 'HTML',
-          ...getMainMenuKeyboard(launchUrl),
-        }
-      );
-
-      return ctx.reply(
-        `🚀 <b>Launch NC TONs Rig:</b>\nClick below to open your mining rig or join the community.`,
-        {
-          parse_mode: 'HTML',
-          ...Markup.inlineKeyboard([
-            [Markup.button.webApp('Launch NC TONs 🚀', launchUrl)],
-            [Markup.button.url('Official Updates Channel 📢', 'https://t.me/nctons_official')],
-          ]),
-        }
-      );
+      // Existing users: check mandatory channel subscription & launch
+      return proceedToApp(ctx);
     } catch (err) {
       console.error('Error handling /start command:', err);
     }
+  });
+
+  // Captcha Verification Callback
+  b.action(/^captcha_verify:([a-z]+)$/, async (ctx) => {
+    const userId = ctx.from.id;
+    const selectedEmojiId = ctx.match[1];
+    const session = pendingCaptchas.get(userId);
+
+    if (!session) {
+      return ctx.answerCbQuery("Session expired. Please send /start again.", { show_alert: true });
+    }
+
+    // Failed Captcha
+    if (session.targetEmoji !== selectedEmojiId) {
+      pendingCaptchas.delete(userId);
+      return ctx.editMessageText(
+        "❌ <b>Verification Failed!</b>\n\nAutomated behavior suspected. Send /start to retry.",
+        { parse_mode: "HTML" }
+      );
+    }
+
+    // Passed Captcha: Execute atomic user creation & reward allocation
+    pendingCaptchas.delete(userId);
+    await ctx.answerCbQuery("✅ Human verified!");
+
+    const firstName = ctx.from.first_name || "Miner";
+    const username = ctx.from.username || null;
+    const isPremium = Boolean((ctx.from as any).is_premium);
+    const referrerId = session.referrerId;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      let starterNc = isPremium ? 2000 : 1000;
+      let bonusNc = isPremium ? 2500 : 1000;
+      let bonusTon = isPremium ? 0.000200 : 0.000080;
+
+      try {
+        const refCfg = await client.query(
+          "SELECT action_type, nc_reward, ton_reward FROM reward_configs WHERE action_type IN ('referral_standard', 'referral_premium')"
+        );
+        for (const row of refCfg.rows) {
+          if (row.action_type === 'referral_standard' && !isPremium) {
+            bonusNc = Number(row.nc_reward);
+            bonusTon = parseFloat(row.ton_reward);
+          } else if (row.action_type === 'referral_premium' && isPremium) {
+            bonusNc = Number(row.nc_reward);
+            bonusTon = parseFloat(row.ton_reward);
+          }
+        }
+      } catch {
+        // fallback defaults
+      }
+
+      // Anti-Fraud: check if referee and referrer share an active device or IP address
+      let hasClash = false;
+      if (referrerId) {
+        try {
+          const clashCheck = await client.query(
+            `SELECT 1 FROM user_devices d1
+             JOIN user_devices d2 ON (d1.device_hash = d2.device_hash OR d1.ip_address = d2.ip_address)
+             WHERE d1.user_id = $1 AND d2.user_id = $2`,
+            [referrerId, userId]
+          );
+          if (clashCheck.rows.length > 0) {
+            hasClash = true;
+          }
+        } catch (clashErr) {
+          console.warn('[Anti-Cheat] Referral clash check error:', clashErr);
+        }
+      }
+
+      if (hasClash) {
+        // Silent Fraud Mitigation: register user with high risk score without awarding referrer
+        await client.query(
+          'INSERT INTO users (id, first_name, username, nc_balance, risk_score, referred_by) VALUES ($1, $2, $3, 500, 75, $4) ON CONFLICT (id) DO NOTHING',
+          [userId, firstName, username, referrerId]
+        );
+        await client.query(
+          `INSERT INTO security_audit_logs (user_id, event_type, severity, details)
+           VALUES ($1, 'REFERRAL_CLASH_ON_START', 'HIGH', $2)`,
+          [userId, JSON.stringify({ referrerId })]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO users (id, first_name, username, nc_balance, referred_by)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (id) DO NOTHING`,
+          [userId, firstName, username, starterNc, referrerId]
+        );
+
+        if (referrerId) {
+          const refCheck = await client.query("SELECT id FROM users WHERE id = $1", [referrerId]);
+          if (refCheck.rows.length > 0) {
+            await client.query(
+              `INSERT INTO referrals (referrer_id, referee_id, is_premium, bonus_nc, bonus_ton)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT DO NOTHING`,
+              [referrerId, userId, isPremium, bonusNc, bonusTon]
+            );
+
+            await client.query(
+              `UPDATE users 
+               SET referral_count = referral_count + 1,
+                   unclaimed_referral_nc = unclaimed_referral_nc + $1,
+                   unclaimed_referral_ton = unclaimed_referral_ton + $2,
+                   total_referral_nc = total_referral_nc + $1,
+                   total_referral_ton = total_referral_ton + $2
+               WHERE id = $3`,
+              [bonusNc, bonusTon, referrerId]
+            );
+
+            await b.telegram.sendMessage(
+              referrerId,
+              `👥 <b>New Verified Referral!</b>\n\n` +
+              `Your friend <b>${firstName}</b> passed verification and joined.\n` +
+              `🎁 Stashed: <b>+${bonusNc.toLocaleString()} NC</b> and <b>+${bonusTon.toFixed(6)} TON</b>!`,
+              { parse_mode: "HTML" }
+            ).catch(() => {});
+          }
+        }
+      }
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      console.error("Verified registration error:", err);
+    } finally {
+      client.release();
+    }
+
+    return proceedToApp(ctx);
   });
 
   // Callback for "I Have Joined All" button
