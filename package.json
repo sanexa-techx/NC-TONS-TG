@@ -7,6 +7,7 @@
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "deploy:frontend": "node scripts/deploy-netlify.js",
     "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend"
   },
   "devDependencies": {
