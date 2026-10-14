@@ -87,7 +87,15 @@ export function getDetectedUser(): { id: string; username: string; firstName: st
     localStorage.removeItem('nctons_first_name');
   }
 
-  return null;
+  // 4. Safe persistent fallback for standalone browser & preview testing
+  const fallbackId = '123456789';
+  localStorage.setItem('nctons_user_id', fallbackId);
+  return {
+    id: fallbackId,
+    username: 'miner_demo',
+    firstName: 'Miner',
+    photoUrl: '',
+  };
 }
 
 /**
@@ -100,7 +108,7 @@ function sanitizeHeader(val: string | number | null | undefined): string {
   return str.replace(/[^\x00-\xFF]/gu, (char) => encodeURIComponent(char));
 }
 
-function getAuthHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -139,11 +147,21 @@ if (typeof window !== 'undefined') {
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.message || data.error || 'Request failed');
+  const text = await res.text();
+  let data: any = null;
+  if (text && text.trim().length > 0) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  } else {
+    data = {};
   }
-  return data;
+  if (!res.ok) {
+    throw new Error(data?.message || data?.error || `Request failed with status ${res.status}`);
+  }
+  return data as T;
 }
 
 export const api = {

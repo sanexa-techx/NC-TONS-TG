@@ -8,25 +8,37 @@ export default {
     extend: {
       colors: {
         cyber: {
-          bg: '#090c12',
-          surface: '#111622',
-          card: '#161c2b',
-          border: '#212a3e',
-          cyan: '#00f0ff',
-          blue: '#0077fe',
-          gold: '#ffb703',
-          red: '#ff0055',
-          green: '#00f59b',
-        }
+          bg: '#F4F7FB',
+          surface: '#FFFFFF',
+          card: '#FFFFFF',
+          border: '#E2E8F0',
+          cyan: '#2563EB',
+          blue: '#1E3A8A',
+          gold: '#10B981',
+          red: '#DC2626',
+          green: '#10B981',
+        },
+        mint: {
+          DEFAULT: '#10B981',
+          hover: '#059669',
+          light: '#ECFDF5',
+        },
+        cobalt: {
+          DEFAULT: '#2563EB',
+          hover: '#1D4ED8',
+          navy: '#1E3A8A',
+          light: '#EFF6FF',
+        },
+        daylight: '#F4F7FB',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       boxShadow: {
-        'glow-cyan': '0 0 20px rgba(0, 240, 255, 0.4)',
-        'glow-gold': '0 0 20px rgba(255, 183, 3, 0.4)',
-        'glow-red': '0 0 20px rgba(255, 0, 85, 0.4)',
+        'glow-cyan': '0 0 16px rgba(37, 99, 235, 0.25)',
+        'glow-gold': '0 0 16px rgba(16, 185, 129, 0.25)',
+        'glow-red': '0 0 16px rgba(220, 38, 38, 0.25)',
       },
       animation: {
         'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',

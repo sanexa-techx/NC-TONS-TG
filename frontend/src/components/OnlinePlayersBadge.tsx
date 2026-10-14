@@ -21,27 +21,25 @@ export const OnlinePlayersBadge: React.FC<OnlinePlayersBadgeProps> = ({
         type="button"
         onClick={() => setShowModal(true)}
         title="Live Online Miners • Click for network telemetry"
-        className={`group relative flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-cyber-surface/90 border border-cyber-green/40 hover:border-cyber-green shadow-sm shadow-cyber-green/10 backdrop-blur-md transition-all duration-300 active:scale-95 cursor-pointer ${
-          isPulsing ? 'scale-105 border-cyber-green shadow-cyber-green/30' : ''
+        className={`group relative flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-white border border-emerald-200 hover:border-emerald-300 shadow-xs transition-all duration-300 active:scale-95 cursor-pointer ${
+          isPulsing ? 'scale-105 border-emerald-400 shadow-sm' : ''
         } ${className}`}
       >
         {/* Animated Pulsing Radar Dot */}
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyber-green opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-cyber-green shadow-[0_0_8px_#00ff88]"></span>
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10B981] opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#10B981]"></span>
         </span>
 
         {/* Players Count */}
         <span
-          className={`font-mono text-xs font-bold tracking-tight transition-colors duration-200 ${
-            isPulsing ? 'text-cyber-green' : 'text-white'
-          }`}
+          className="font-mono text-xs font-black tracking-tight text-slate-800"
         >
           {onlineCount.toLocaleString()}
         </span>
 
         {/* Online Label */}
-        <span className="text-[10px] font-mono text-cyber-green uppercase tracking-wider font-semibold group-hover:underline">
+        <span className="text-[10px] font-mono text-[#059669] uppercase tracking-wider font-bold">
           online
         </span>
       </button>

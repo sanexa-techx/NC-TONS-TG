@@ -16,8 +16,9 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
 }) => {
   const isDead = powerPercentage <= 0;
   const size = 260;
+  const svgSize = size - 30;
   const strokeWidth = 14;
-  const radius = (size - strokeWidth) / 2;
+  const radius = (svgSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = Math.max(0, Math.min(100, powerPercentage));
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -33,44 +34,39 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
     : `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
   return (
-    <div className="flex flex-col items-center justify-center my-6 relative">
+    <div className="flex flex-col items-center justify-center my-4 relative">
       {/* Outer ambient glow */}
       <div
-        className={`absolute w-64 h-64 rounded-full blur-3xl opacity-30 transition-all duration-700 pointer-events-none ${
-          isDead ? 'bg-cyber-red animate-pulse' : 'bg-cyber-cyan'
+        className={`absolute w-60 h-60 rounded-full blur-3xl opacity-20 transition-all duration-700 pointer-events-none ${
+          isDead ? 'bg-[#DC2626]' : 'bg-[#10B981]'
         }`}
       />
 
       {/* SVG Ring Container */}
-      <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="transform -rotate-90">
+      <div className="relative flex items-center justify-center bg-white rounded-full p-4 border border-[#E2E8F0] shadow-sm" style={{ width: size, height: size }}>
+        <svg width={svgSize} height={svgSize} className="transform -rotate-90">
           {/* Background Track */}
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={svgSize / 2}
+            cy={svgSize / 2}
             r={radius}
-            stroke="#1a2336"
+            stroke="#E2E8F0"
             strokeWidth={strokeWidth}
             fill="transparent"
           />
 
           {/* Animated Gauge Arc */}
           <circle
-            cx={size / 2}
-            cy={size / 2}
+            cx={svgSize / 2}
+            cy={svgSize / 2}
             r={radius}
-            stroke={isDead ? '#ff0055' : '#00f0ff'}
+            stroke={isDead ? '#DC2626' : '#10B981'}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
             strokeLinecap="round"
             fill="transparent"
             className="transition-all duration-500 ease-out"
-            style={{
-              filter: isDead
-                ? 'drop-shadow(0 0 10px rgba(255, 0, 85, 0.8))'
-                : 'drop-shadow(0 0 12px rgba(0, 240, 255, 0.7))',
-            }}
           />
         </svg>
 
@@ -78,27 +74,27 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
         <div className="absolute flex flex-col items-center justify-center text-center px-4">
           {isDead ? (
             <div className="flex flex-col items-center animate-bounce">
-              <AlertTriangle size={36} className="text-cyber-red mb-1 drop-shadow-glow-red" />
-              <span className="text-xs font-bold text-cyber-red tracking-wider uppercase">
+              <AlertTriangle size={32} className="text-[#DC2626] mb-1" />
+              <span className="text-[11px] font-bold text-[#DC2626] tracking-wider uppercase">
                 Battery Exhausted
               </span>
-              <span className="text-2xl font-black font-mono text-white mt-1">0%</span>
-              <span className="text-[11px] text-slate-400 mt-1">Mining Halted</span>
+              <span className="text-2xl font-black font-mono text-slate-900 mt-0.5">0%</span>
+              <span className="text-[10px] text-slate-400 mt-0.5">Mining Halted</span>
             </div>
           ) : (
             <div className="flex flex-col items-center">
-              <div className="flex items-center space-x-1 text-cyber-cyan mb-1">
-                <Zap size={20} className="animate-pulse" />
-                <span className="text-xs font-semibold uppercase tracking-wider">Rig Active</span>
+              <div className="flex items-center space-x-1 text-[#10B981] mb-0.5">
+                <Zap size={16} className="fill-[#10B981]" />
+                <span className="text-[10px] font-extrabold uppercase tracking-wider">Rig Active</span>
               </div>
-              <div className="text-4xl font-black font-mono tracking-tight text-white drop-shadow">
+              <div className="text-3xl font-black font-mono tracking-tight text-slate-900">
                 {powerPercentage}%
               </div>
-              <div className="text-xs font-mono text-slate-400 mt-1 flex items-center space-x-1">
-                <Battery size={14} className="text-cyber-cyan" />
+              <div className="text-[11px] font-mono text-slate-500 mt-0.5 flex items-center space-x-1">
+                <Battery size={13} className="text-[#10B981]" />
                 <span>{formattedTime} Left</span>
               </div>
-              <div className="text-[11px] text-cyber-cyan/80 font-mono mt-1">
+              <div className="text-[10px] text-[#2563EB] font-mono mt-0.5 font-bold">
                 {hashratePerSec} TON/s
               </div>
             </div>
@@ -110,13 +106,13 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
       <div className="mt-4 w-full max-w-xs">
         <button
           onClick={onRechargeClick}
-          className={`w-full py-3.5 px-6 rounded-2xl font-bold flex items-center justify-center space-x-2 transition-all transform active:scale-95 shadow-lg ${
+          className={`w-full py-3 px-5 rounded-2xl font-extrabold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all transform active:scale-95 shadow-md cursor-pointer ${
             isDead
-              ? 'bg-gradient-to-r from-cyber-red to-pink-600 hover:from-cyber-red/90 text-white shadow-glow-red animate-pulse'
-              : 'bg-gradient-to-r from-cyber-cyan to-cyber-blue hover:opacity-90 text-cyber-bg font-extrabold shadow-glow-cyan'
+              ? 'bg-[#DC2626] hover:bg-red-700 text-white shadow-red-500/20 animate-pulse'
+              : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-blue-600/25'
           }`}
         >
-          <BatteryCharging size={20} />
+          <BatteryCharging size={18} />
           <span>{isDead ? 'EMERGENCY RECHARGE' : 'RECHARGE POWER GRID'}</span>
         </button>
       </div>

@@ -71,25 +71,25 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
-      <div className="glass-panel w-full max-w-md rounded-3xl p-5 border border-cyber-cyan/30 shadow-glow-cyan relative my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white w-full max-w-md rounded-3xl p-5 border border-[#E2E8F0] shadow-xl relative my-8 text-slate-800">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-full transition"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
 
-        <div className="flex items-center space-x-2 text-cyber-cyan mb-1">
-          <Sparkles size={22} />
-          <h3 className="text-lg font-bold">Promote Your Community</h3>
+        <div className="flex items-center space-x-2 text-[#2563EB] mb-1">
+          <Sparkles size={20} />
+          <h3 className="text-base font-bold text-slate-900">Promote Your Community</h3>
         </div>
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-slate-500 mb-4">
           Launch a sponsored mission for real NC TONs miners. Pay via Telegram Stars or TON.
         </p>
 
         {error && (
-          <div className="p-3 mb-4 rounded-xl bg-cyber-red/15 border border-cyber-red/30 text-xs text-cyber-red flex items-center space-x-2">
+          <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 flex items-center space-x-2">
             <AlertCircle size={16} />
             <span>{error}</span>
           </div>
@@ -97,14 +97,14 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
 
         {success ? (
           <div className="py-8 flex flex-col items-center justify-center text-center">
-            <CheckCircle2 size={48} className="text-cyber-green mb-3 animate-bounce" />
-            <h4 className="text-lg font-bold text-white mb-1">Mission Published!</h4>
-            <p className="text-xs text-slate-300">Your campaign is now live for all miners.</p>
+            <CheckCircle2 size={48} className="text-[#10B981] mb-3 animate-bounce" />
+            <h4 className="text-base font-bold text-slate-900 mb-1">Mission Published!</h4>
+            <p className="text-xs text-slate-500">Your campaign is now live for all miners.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Campaign Title *
               </label>
               <input
@@ -113,12 +113,12 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Join Ton Alpha Group"
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Description *
               </label>
               <textarea
@@ -127,7 +127,7 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                 placeholder="Brief instructions for miners..."
                 rows={2}
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
             </div>
 
@@ -138,10 +138,10 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   setTaskType('telegram_join');
                   setCategory('telegram');
                 }}
-                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all ${
                   taskType === 'telegram_join'
-                    ? 'bg-cyber-cyan/15 border-cyber-cyan text-cyber-cyan'
-                    : 'bg-cyber-surface border-cyber-border text-slate-400'
+                    ? 'bg-[#EFF6FF] border-[#2563EB] text-[#2563EB] shadow-2xs'
+                    : 'bg-slate-50 border-[#E2E8F0] text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Send size={15} />
@@ -154,10 +154,10 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   setTaskType('screenshot_social');
                   setCategory('social');
                 }}
-                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all ${
                   taskType === 'screenshot_social'
-                    ? 'bg-yellow-500/15 border-yellow-500 text-yellow-400'
-                    : 'bg-cyber-surface border-cyber-border text-slate-400'
+                    ? 'bg-[#ECFDF5] border-[#10B981] text-[#059669] shadow-2xs'
+                    : 'bg-slate-50 border-[#E2E8F0] text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Camera size={15} />
@@ -170,10 +170,10 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   setTaskType('visit_url');
                   setCategory('social');
                 }}
-                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all ${
                   taskType === 'visit_url'
-                    ? 'bg-cyber-cyan/15 border-cyber-cyan text-cyber-cyan'
-                    : 'bg-cyber-surface border-cyber-border text-slate-400'
+                    ? 'bg-[#EFF6FF] border-[#2563EB] text-[#2563EB] shadow-2xs'
+                    : 'bg-slate-50 border-[#E2E8F0] text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Globe size={15} />
@@ -186,10 +186,10 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   setTaskType('bot_launch');
                   setCategory('partner');
                 }}
-                className={`py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all ${
                   taskType === 'bot_launch'
-                    ? 'bg-cyber-cyan/15 border-cyber-cyan text-cyber-cyan'
-                    : 'bg-cyber-surface border-cyber-border text-slate-400'
+                    ? 'bg-[#EFF6FF] border-[#2563EB] text-[#2563EB] shadow-2xs'
+                    : 'bg-slate-50 border-[#E2E8F0] text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 <Bot size={15} />
@@ -198,7 +198,7 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Destination URL *
               </label>
               <input
@@ -207,13 +207,13 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                 onChange={(e) => setActionUrl(e.target.value)}
                 placeholder={taskType === 'screenshot_social' ? 'https://youtube.com/@channel or instagram' : 'https://t.me/your_channel or website'}
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
             </div>
 
             {taskType === 'screenshot_social' && (
               <div>
-                <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Screenshot Proof Instructions
                 </label>
                 <input
@@ -221,14 +221,14 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   value={proofInstructions}
                   onChange={(e) => setProofInstructions(e.target.value)}
                   placeholder="Upload a screenshot showing you followed/subscribed"
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-yellow-400"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
                 />
               </div>
             )}
 
             {taskType === 'telegram_join' && (
               <div>
-                <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Telegram Username or Chat ID (for automated verification)
                 </label>
                 <input
@@ -236,14 +236,14 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   value={telegramChatId}
                   onChange={(e) => setTelegramChatId(e.target.value)}
                   placeholder="@your_channel"
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
                 />
               </div>
             )}
 
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-300 uppercase mb-1">
+                <label className="flex items-center space-x-1 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   <NcIcon className="w-3.5 h-3.5" />
                   <span>NC / User</span>
                 </label>
@@ -253,11 +253,11 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   step="50"
                   value={ncReward}
                   onChange={(e) => setNcReward(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyber-gold font-mono"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#10B981] focus:bg-white font-mono"
                 />
               </div>
               <div>
-                <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-300 uppercase mb-1">
+                <label className="flex items-center space-x-1 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   <TonIcon className="w-3.5 h-3.5" />
                   <span>TON / User</span>
                 </label>
@@ -265,11 +265,11 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   type="text"
                   value={tonReward}
                   onChange={(e) => setTonReward(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan font-mono"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white font-mono"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-mono text-slate-300 uppercase mb-1">
+                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Target Miners
                 </label>
                 <input
@@ -278,14 +278,14 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   step="10"
                   value={targetUsers}
                   onChange={(e) => setTargetUsers(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan font-mono"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white font-mono"
                 />
               </div>
             </div>
 
             {/* Payment Method Selector */}
             <div className="pt-2">
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1.5">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Funding Method
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -294,8 +294,8 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   onClick={() => setPaymentMethod('stars')}
                   className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
                     paymentMethod === 'stars'
-                      ? 'bg-cyber-gold/20 border-cyber-gold text-cyber-gold'
-                      : 'bg-cyber-surface border-cyber-border text-slate-400'
+                      ? 'bg-amber-50 border-amber-300 text-amber-700 shadow-2xs'
+                      : 'bg-slate-50 border-[#E2E8F0] text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   ⭐ Telegram Stars (XTR)
@@ -305,8 +305,8 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
                   onClick={() => setPaymentMethod('ton')}
                   className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
                     paymentMethod === 'ton'
-                      ? 'bg-cyber-cyan/20 border-cyber-cyan text-cyber-cyan'
-                      : 'bg-cyber-surface border-cyber-border text-slate-400'
+                      ? 'bg-[#EFF6FF] border-[#2563EB] text-[#2563EB] shadow-2xs'
+                      : 'bg-slate-50 border-[#E2E8F0] text-slate-600 hover:bg-slate-100'
                   }`}
                 >
                   <span className="flex items-center justify-center space-x-1.5">
@@ -320,7 +320,7 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-cyber-cyan to-cyber-blue text-cyber-bg font-extrabold text-xs uppercase tracking-wider shadow-glow-cyan active:scale-95 transition-all flex items-center justify-center space-x-2 mt-4"
+              className="w-full py-3.5 px-4 rounded-2xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 active:scale-98 transition-all flex items-center justify-center space-x-2 mt-4"
             >
               {loading ? (
                 <>

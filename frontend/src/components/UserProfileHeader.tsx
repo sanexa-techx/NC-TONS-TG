@@ -54,7 +54,7 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
       >
         {/* Avatar with power ring indicator */}
         <div className="relative flex-shrink-0">
-          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-yellow-500/60 bg-neutral-800 flex items-center justify-center shadow-md">
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#10B981] bg-slate-100 flex items-center justify-center shadow-xs">
             {avatarUrl && !imgError ? (
               <img
                 src={avatarUrl}
@@ -64,14 +64,14 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
                 onError={() => setImgError(true)}
               />
             ) : (
-              <span className="font-bold text-sm text-yellow-400 font-mono">{initial}</span>
+              <span className="font-extrabold text-sm text-[#10B981] font-mono">{initial}</span>
             )}
           </div>
 
           {/* Live power status dot */}
           <span
-            className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-neutral-900 ${
-              isPowerActive ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'
+            className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+              isPowerActive ? 'bg-[#10B981]' : 'bg-[#DC2626] animate-pulse'
             }`}
           />
         </div>
@@ -79,14 +79,14 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
         {/* Name & Telegram ID pill */}
         <div className="flex flex-col min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="font-bold text-xs text-white truncate max-w-[110px]">
+            <span className="font-black text-xs text-slate-900 truncate max-w-[110px]">
               {user.firstName}
             </span>
-            <span className="text-[9px] bg-yellow-500/10 text-yellow-400 font-mono px-1.5 rounded border border-yellow-500/30 leading-5">
+            <span className="text-[9px] bg-[#EFF6FF] text-[#2563EB] font-bold px-1.5 rounded-full border border-blue-200 leading-4">
               LVL {minerLevel}
             </span>
             {user.isAdmin && (
-              <span className="text-[9px] bg-red-500/20 text-red-400 font-mono px-1.5 rounded border border-red-500/40 flex items-center gap-0.5 leading-5 font-bold shadow-sm animate-pulse">
+              <span className="text-[9px] bg-red-50 text-[#DC2626] font-bold px-1.5 rounded-full border border-red-200 flex items-center gap-0.5 leading-4 shadow-xs">
                 🛡️ ADMIN
               </span>
             )}
@@ -95,14 +95,14 @@ export const UserProfileHeader: React.FC<UserProfileHeaderProps> = ({
           {/* Clickable Telegram ID with copy pill */}
           <button
             onClick={handleCopyId}
-            className="flex items-center gap-1 text-[10px] font-mono text-neutral-400 hover:text-neutral-200 mt-0.5 transition-colors text-left"
+            className="flex items-center gap-1 text-[10px] font-mono text-slate-400 hover:text-slate-600 mt-0.5 transition-colors text-left"
             aria-label="Copy Telegram ID"
           >
             <span>ID: {user.id}</span>
             {copied ? (
-              <Check className="w-3 h-3 text-emerald-400" />
+              <Check className="w-3 h-3 text-[#10B981]" />
             ) : (
-              <Copy className="w-2.5 h-2.5 text-neutral-500" />
+              <Copy className="w-2.5 h-2.5 text-slate-400" />
             )}
           </button>
         </div>

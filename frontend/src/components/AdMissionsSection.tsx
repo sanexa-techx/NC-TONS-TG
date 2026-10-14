@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { ShieldCheck, Lock, Sparkles, Zap, Video, Clock, Layers } from "lucide-react";
+import { ShieldCheck, Lock, Video, Clock, ExternalLink, ArrowRight, CheckCircle2, Play } from "lucide-react";
 import { TonIcon, NcIcon } from "./icons/index.js";
-import { useAdManager } from "../hooks/useAdManager.js";
+import { showSmartRewardedAd, getAdManagerStats, AD_STATE } from "../services/adManager.js";
 import { api } from "../services/api.js";
 import { DailyAdStatusResponse } from "../types/index.js";
+import confetti from "canvas-confetti";
 
 interface AdMissionsSectionProps {
   userId: number | string;
@@ -16,396 +17,404 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
 }) => {
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [adFeedback, setAdFeedback] = useState<string | null>(null);
 
-  // Sync cooldown with localStorage and backend
+  // Dwell partner link state: 15s countdown with 11s left default
+  const [dwellSecondsLeft, setDwellSecondsLeft] = useState<number>(11);
+  const [isDwelling, setIsDwelling] = useState<boolean>(false);
+  const [dwellClaimed, setDwellClaimed] = useState<boolean>(false);
+
+  // Ad cooldown state (30s cooldown between rewarded ads)
   const [adCooldown, setAdCooldown] = useState<number>(() => {
-    const stored = localStorage.getItem("ad_cooldown_expires_at");
-    if (stored) {
-      const remaining = Math.ceil((Number(stored) - Date.now()) / 1000);
-      return Math.max(0, remaining);
-    }
-    return 0;
+    const stats = getAdManagerStats();
+    return stats.rewardedCooldownLeft;
   });
 
-  // Countdown timer loop
+  const [liveCounts, setLiveCounts] = useState(() => ({
+    monetag: AD_STATE.counts.monetag,
+    gigapub: AD_STATE.counts.gigapub,
+    adsgram: AD_STATE.counts.adsgram,
+  }));
+
+  // Countdown loop for cooldown
   useEffect(() => {
-    if (adCooldown <= 0) return;
     const timer = setInterval(() => {
-      const stored = localStorage.getItem("ad_cooldown_expires_at");
-      if (stored) {
-        const remaining = Math.ceil((Number(stored) - Date.now()) / 1000);
-        if (remaining <= 0) {
-          localStorage.removeItem("ad_cooldown_expires_at");
-          setAdCooldown(0);
-        } else {
-          setAdCooldown(remaining);
-        }
-      } else {
-        setAdCooldown((prev) => Math.max(0, prev - 1));
-      }
+      const stats = getAdManagerStats();
+      setAdCooldown(stats.rewardedCooldownLeft);
     }, 1000);
     return () => clearInterval(timer);
-  }, [adCooldown]);
-
-  // Listen to cooldown events triggered across components
-  useEffect(() => {
-    const handleCooldownStarted = (e: any) => {
-      const remaining = e.detail?.remaining || 30;
-      setAdCooldown(remaining);
-    };
-    window.addEventListener("ad_cooldown_started", handleCooldownStarted);
-    return () => window.removeEventListener("ad_cooldown_started", handleCooldownStarted);
   }, []);
+
+  // Countdown loop for 15s Dwell Partner Link
+  useEffect(() => {
+    if (!isDwelling || dwellSecondsLeft <= 0 || dwellClaimed) return;
+    const interval = setInterval(() => {
+      setDwellSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setIsDwelling(false);
+          setDwellClaimed(true);
+          try {
+            confetti({
+              particleCount: 80,
+              spread: 60,
+              origin: { y: 0.6 },
+              colors: ["#2563EB", "#10B981"],
+            });
+          } catch (_) {}
+          if (onRewardClaimed) onRewardClaimed();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isDwelling, dwellSecondsLeft, dwellClaimed, onRewardClaimed]);
 
   const fetchStatus = useCallback(async () => {
     try {
       const data = await api.getAdStatus(userId);
       setAdStatus(data);
-      if (data.cooldownRemaining && data.cooldownRemaining > 0) {
-        const currentStored = localStorage.getItem("ad_cooldown_expires_at");
-        const storedRemaining = currentStored
-          ? Math.ceil((Number(currentStored) - Date.now()) / 1000)
-          : 0;
-        if (data.cooldownRemaining > storedRemaining) {
-          const expiresAt = Date.now() + data.cooldownRemaining * 1000;
-          localStorage.setItem("ad_cooldown_expires_at", String(expiresAt));
-          setAdCooldown(data.cooldownRemaining);
-        }
-      }
     } catch (e) {
       console.warn("Could not fetch ad status:", e);
     }
   }, [userId]);
 
-  const { showAdsgramRewarded, showMonetagRewarded, showWithdrawalLimitAd } = useAdManager(
-    userId,
-    () => {
-      fetchStatus();
-      const expiresAt = Date.now() + 30 * 1000;
-      localStorage.setItem("ad_cooldown_expires_at", String(expiresAt));
-      setAdCooldown(30);
-      if (onRewardClaimed) onRewardClaimed();
-    }
-  );
-
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
 
-  if (!adStatus) return null;
-
-  const handleWatchAdsgram = async () => {
+  const handleWatchSmartAd = async () => {
     if (adCooldown > 0 || loading) return;
     setLoading(true);
-    await showAdsgramRewarded();
-    setLoading(false);
-  };
+    setAdFeedback(null);
 
-  const handleWatchMonetag = async () => {
-    if (adCooldown > 0 || loading) return;
-    setLoading(true);
-    await showMonetagRewarded();
-    setLoading(false);
-  };
+    try {
+      // Execute Priority Waterfall Queue (1. Monetag -> 2. Gigapub -> 3. Adsgram)
+      const res = await showSmartRewardedAd(false);
+      if (res.success) {
+        setLiveCounts({
+          monetag: AD_STATE.counts.monetag,
+          gigapub: AD_STATE.counts.gigapub,
+          adsgram: AD_STATE.counts.adsgram,
+        });
 
-  const handleWatchLimitAd = async () => {
-    if (adCooldown > 0 || loading) return;
-    setLoading(true);
-    await showWithdrawalLimitAd();
-    const expiresAt = Date.now() + 30 * 1000;
-    localStorage.setItem("ad_cooldown_expires_at", String(expiresAt));
-    setAdCooldown(30);
-    setLoading(false);
-  };
+        try {
+          confetti({
+            particleCount: 90,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ["#10B981", "#2563EB", "#F59E0B"],
+          });
+        } catch (_) {}
 
-  const adsgramMax = adStatus.adsgram.max || 100;
-  const adsgramWatched = adStatus.adsgram.watched || 0;
-  const isAdsgramMaxed = adsgramWatched >= adsgramMax;
-
-  const monetagMax = adStatus.monetag.max || 100;
-  const monetagWatched = adStatus.monetag.watched || 0;
-  const monetagRequired = adStatus.monetag.requiredForWithdraw || 4;
-  const isMonetagMaxed = monetagWatched >= monetagMax;
-
-  const totalWatched = adStatus.totalWatched ?? adsgramWatched + monetagWatched;
-  const totalMax = adStatus.totalMax ?? 200;
-  const totalProgressPercent = Math.min(100, Math.round((totalWatched / totalMax) * 100));
-
-  // Dynamic Tier calculation based on next ad view
-  const getTierInfo = (watchedCount: number) => {
-    const nextAd = watchedCount + 1;
-    if (nextAd <= 20) {
-      return {
-        tier: 1,
-        nc: 150,
-        ton: "0.000010",
-        label: "Tier 1: High TON",
-        badgeColor: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-        payoutDesc: "+150 NC & +0.000010 TON",
-      };
-    } else if (nextAd <= 50) {
-      return {
-        tier: 2,
-        nc: 200,
-        ton: "0.000002",
-        label: "Tier 2: Mid TON",
-        badgeColor: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-        payoutDesc: "+200 NC & +0.000002 TON",
-      };
-    } else {
-      return {
-        tier: 3,
-        nc: 300,
-        ton: "0",
-        label: "Tier 3: Fuel Grind",
-        badgeColor: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-        payoutDesc: "+300 NC & 0 TON",
-      };
+        setAdFeedback(
+          `Ad delivered via ${res.provider}! Rewarded: +${res.reward?.nc} NC & +${res.reward?.ton} TON (${res.reward?.tier})`
+        );
+        fetchStatus();
+        if (onRewardClaimed) onRewardClaimed();
+      } else {
+        setAdFeedback(res.reason || "Ad playback unavailable. Please try again.");
+      }
+    } catch (err: any) {
+      setAdFeedback(err.message || "Failed to trigger ad.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const adsgramTier = getTierInfo(adsgramWatched);
-  const monetagTier = getTierInfo(monetagWatched);
+  const handleStartDwell = () => {
+    if (dwellClaimed) return;
+    setIsDwelling(true);
+    // Optionally open demo sponsor link
+    window.open("https://t.me/toncoin", "_blank");
+  };
+
+  const totalWatched = liveCounts.monetag + liveCounts.gigapub + liveCounts.adsgram;
+  const totalMax = 200;
+  const totalPercent = Math.min(100, Math.round((totalWatched / totalMax) * 100));
 
   return (
-    <div className="w-full space-y-2.5">
-      {/* 200 Daily Ads Engine HUD Header */}
-      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-purple-950/30 to-amber-950/40 border border-blue-500/30 text-white shadow-sm space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
+    <div className="w-full space-y-3.5">
+      {/* 1. "15-SECOND DWELL PARTNER LINK" Card */}
+      <div className="w-full bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-sm relative overflow-hidden group">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-xl bg-[#EFF6FF] border border-blue-200 flex items-center justify-center text-[#2563EB]">
+              <ExternalLink size={17} />
             </div>
             <div>
-              <h4 className="font-bold text-xs flex items-center gap-1.5">
-                <span>200 Daily Ads Engine</span>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-500/40 text-blue-300">
-                  100/100 Quota
-                </span>
+              <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                15-SECOND DWELL PARTNER LINK
               </h4>
-              <p className="text-[10px] text-slate-400">
-                Tiered dual rewards • 30s network cooldown
-              </p>
+              <p className="text-[10px] font-mono text-slate-500">Visit sponsor link to earn dual rewards</p>
             </div>
           </div>
+
+          {/* Cobalt Countdown Pill: "15s • 11s LEFT" */}
+          <div className="px-2.5 py-1 rounded-full bg-[#EFF6FF] border border-blue-300 text-[#2563EB] font-mono font-bold text-xs shadow-2xs flex items-center gap-1.5">
+            <Clock size={12} className="text-[#2563EB] animate-spin" />
+            <span>
+              {dwellClaimed
+                ? "CLAIMED ✅"
+                : `15s • ${dwellSecondsLeft}s LEFT`}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E2E8F0] my-2.5 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-1 text-[#10B981] font-bold">
+            <NcIcon className="w-4 h-4" />
+            <span>+100 NC</span>
+          </div>
+          <div className="flex items-center gap-1 text-[#2563EB] font-bold">
+            <TonIcon className="w-4 h-4" />
+            <span>+0.000100 TON</span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-sans">15s Anti-Bot Proof</span>
+        </div>
+
+        <button
+          onClick={handleStartDwell}
+          disabled={dwellClaimed || isDwelling}
+          className={`w-full py-2.5 px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition active:scale-98 cursor-pointer shadow-xs ${
+            dwellClaimed
+              ? "bg-slate-100 text-slate-400 border border-slate-200"
+              : isDwelling
+              ? "bg-[#2563EB] text-white animate-pulse"
+              : "bg-[#2563EB] hover:bg-blue-700 text-white shadow-blue-500/20"
+          }`}
+        >
+          {dwellClaimed ? (
+            <span>MISSION COMPLETED (+100 NC & TON CLAIMED)</span>
+          ) : isDwelling ? (
+            <span>DWELL TIMER RUNNING ({dwellSecondsLeft}s LEFT)...</span>
+          ) : (
+            <>
+              <span>START 15-SECOND DWELL MISSION</span>
+              <ArrowRight size={14} />
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* 2. "WATCH ADS (200 DAILY SYSTEM)" Card */}
+      <div className="w-full bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-sm space-y-3">
+        {/* Header & Daily Total */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#10B981]">
+              <Video size={17} />
+            </div>
+            <div>
+              <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                WATCH ADS (200 DAILY SYSTEM)
+              </h4>
+              <p className="text-[10px] font-mono text-slate-500">Multi-network high-CPM waterfall</p>
+            </div>
+          </div>
+
           <div className="text-right">
-            <span className="font-mono font-bold text-xs text-cyber-gold block">
+            <span className="font-mono font-black text-xs text-[#2563EB]">
               {totalWatched} / {totalMax}
             </span>
-            <span className="text-[9px] text-slate-400 font-mono">Total Viewed</span>
+            <span className="text-[9px] text-slate-400 block font-mono">Daily Viewed</span>
           </div>
         </div>
 
         {/* Total Progress Bar */}
-        <div className="w-full bg-black/50 rounded-full h-1.5 overflow-hidden">
+        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/80">
           <div
-            className="bg-gradient-to-r from-blue-500 via-cyan-400 to-amber-400 h-1.5 rounded-full transition-all duration-500"
-            style={{ width: `${totalProgressPercent}%` }}
+            className="h-full bg-gradient-to-r from-emerald-400 to-[#10B981] rounded-full transition-all duration-500"
+            style={{ width: `${totalPercent}%` }}
           />
         </div>
 
-        {/* Tier Roadmap Pills */}
-        <div className="grid grid-cols-3 gap-1 pt-1 text-[9px] font-mono text-center">
-          <div className="px-1.5 py-1 rounded-lg bg-black/40 border border-emerald-500/30 text-emerald-300">
-            <span className="block font-bold">1–20 (Tier 1)</span>
-            <span className="opacity-80">+150 NC • High TON</span>
+        {/* Priority Waterfall Queue Flow Banner */}
+        <div className="bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E2E8F0] space-y-1">
+          <div className="text-[10px] font-mono font-bold text-slate-500 uppercase flex items-center justify-between">
+            <span>Priority Waterfall Queue</span>
+            <span className="text-[#2563EB] font-bold">Smart Micro-Rotation</span>
           </div>
-          <div className="px-1.5 py-1 rounded-lg bg-black/40 border border-blue-500/30 text-blue-300">
-            <span className="block font-bold">21–50 (Tier 2)</span>
-            <span className="opacity-80">+200 NC • Mid TON</span>
-          </div>
-          <div className="px-1.5 py-1 rounded-lg bg-black/40 border border-amber-500/30 text-amber-300">
-            <span className="block font-bold">51–100 (Tier 3)</span>
-            <span className="opacity-80">+300 NC • Fuel Grind</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Global 30s Cooldown Active Banner */}
-      {adCooldown > 0 && (
-        <div className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 flex items-center justify-between text-xs animate-pulse">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-            <span className="font-medium text-[11px]">
-              Cooldown Active: Wait before next ad
+          <div className="flex items-center justify-between text-[11px] font-mono pt-0.5">
+            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+              1. Monetag
+            </span>
+            <ArrowRight size={12} className="text-slate-400" />
+            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-bold">
+              2. Gigapub
+            </span>
+            <ArrowRight size={12} className="text-slate-400" />
+            <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-bold">
+              3. Adsgram
             </span>
           </div>
-          <span className="font-mono font-bold text-xs bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
-            {adCooldown}s
-          </span>
         </div>
-      )}
+
+        {/* 3-Tier CPM Protection Pills */}
+        <div className="grid grid-cols-1 gap-1.5 pt-1">
+          <div className="px-2.5 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-800 text-[10px] font-mono flex items-center justify-between">
+            <span className="font-bold">ADS 1-20: HIGH (NC + Full TON)</span>
+            <span className="text-emerald-600 font-bold">+300 NC • 0.0005 TON</span>
+          </div>
+          <div className="px-2.5 py-1.5 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-800 text-[10px] font-mono flex items-center justify-between">
+            <span className="font-bold">ADS 21-50: MID (NC + 50% TON)</span>
+            <span className="text-blue-600 font-bold">+200 NC • 0.0002 TON</span>
+          </div>
+          <div className="px-2.5 py-1.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-800 text-[10px] font-mono flex items-center justify-between">
+            <span className="font-bold">ADS 51+: FUEL & NC ONLY (0 TON)</span>
+            <span className="text-amber-600 font-bold">+150 NC • Fuel Boost</span>
+          </div>
+        </div>
+
+        {/* Live Provider Status Rows */}
+        <div className="space-y-2 pt-1 border-t border-slate-100">
+          <div className="text-[10px] font-mono font-bold text-slate-500 uppercase">
+            Live Provider Progress
+          </div>
+
+          {/* Monetag Row */}
+          <div className="p-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#10B981] inline-block" />
+                Monetag (Priority #1)
+              </span>
+              <span className="font-bold text-[#10B981]">
+                {liveCounts.monetag} / {AD_STATE.dailyCaps.monetag}
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
+              <div
+                className="bg-[#10B981] h-full rounded-full"
+                style={{
+                  width: `${Math.min(100, (liveCounts.monetag / AD_STATE.dailyCaps.monetag) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Gigapub Row */}
+          <div className="p-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#2563EB] inline-block" />
+                Gigapub (Priority #2)
+              </span>
+              <span className="font-bold text-[#2563EB]">
+                {liveCounts.gigapub} / {AD_STATE.dailyCaps.gigapub}
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
+              <div
+                className="bg-[#2563EB] h-full rounded-full"
+                style={{
+                  width: `${Math.min(100, (liveCounts.gigapub / AD_STATE.dailyCaps.gigapub) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Adsgram Row */}
+          <div className="p-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
+                Adsgram (Priority #3)
+              </span>
+              <span className="font-bold text-purple-600">
+                {liveCounts.adsgram} / {AD_STATE.dailyCaps.adsgram}
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
+              <div
+                className="bg-purple-500 h-full rounded-full"
+                style={{
+                  width: `${Math.min(100, (liveCounts.adsgram / AD_STATE.dailyCaps.adsgram) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 30-Second Cooldown Status */}
+        {adCooldown > 0 && (
+          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-between text-xs animate-pulse">
+            <div className="flex items-center gap-2">
+              <Clock size={14} className="text-amber-600" />
+              <span className="font-mono text-[11px] font-semibold">
+                30s Cooldown Active (CPM Protection)
+              </span>
+            </div>
+            <span className="font-mono font-black bg-white px-2 py-0.5 rounded border border-amber-300">
+              {adCooldown}s
+            </span>
+          </div>
+        )}
+
+        {/* Primary Action Button: Solid Neo-Mint */}
+        <button
+          onClick={handleWatchSmartAd}
+          disabled={loading || adCooldown > 0 || totalWatched >= totalMax}
+          className="w-full py-3.5 px-4 rounded-xl bg-[#10B981] hover:bg-[#059669] disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all active:scale-98 shadow-md shadow-emerald-500/20 cursor-pointer"
+        >
+          {loading ? (
+            <span>DELIVERING AD VIA WATERFALL...</span>
+          ) : adCooldown > 0 ? (
+            <span>COOLDOWN ACTIVE ({adCooldown}s LEFT)</span>
+          ) : totalWatched >= totalMax ? (
+            <span>200 DAILY ADS COMPLETED</span>
+          ) : (
+            <>
+              <Play size={15} className="fill-white" />
+              <span>WATCH REWARDED AD (WATERFALL)</span>
+            </>
+          )}
+        </button>
+
+        {adFeedback && (
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-mono text-center flex items-center justify-center gap-1.5">
+            <CheckCircle2 size={14} className="text-[#10B981] shrink-0" />
+            <span>{adFeedback}</span>
+          </div>
+        )}
+      </div>
 
       {/* Daily Withdrawal Requirement Badge */}
-      <div
-        className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs transition-all shadow-sm ${
-          adStatus.canWithdraw
-            ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-300 shadow-glow-green/10"
-            : "bg-amber-950/30 border-amber-500/40 text-amber-300 shadow-glow-gold/10"
-        }`}
-      >
-        <div className="flex items-center gap-2.5">
-          {adStatus.canWithdraw ? (
-            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
-          ) : (
-            <Lock className="w-5 h-5 text-amber-400 shrink-0" />
-          )}
-          <div>
-            <h5 className="font-bold flex items-center gap-1.5">
-              <span>Daily Withdrawal Gate</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-black/40 border border-current">
-                UTC Reset
-              </span>
-            </h5>
-            <p className="text-[10.5px] opacity-90 mt-0.5">
-              Monetag: <span className="font-bold font-mono">{monetagWatched}/{monetagRequired}</span> ads required to unlock daily payouts
-            </p>
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <span className="font-mono font-bold text-[11px] block">
-            {adStatus.canWithdraw ? "UNLOCKED ✅" : "LOCKED 🔒"}
-          </span>
-          <span className="text-[9px] text-slate-400 block font-mono">
-            {adStatus.canWithdraw ? "Ready to Payout" : "Watch to Unlock"}
-          </span>
-        </div>
-      </div>
-
-      {/* 1. Adsgram Rewarded Video Card (100 Daily Cap) */}
-      <div className="bg-neutral-900/90 border border-neutral-800 hover:border-purple-500/30 rounded-2xl p-3.5 flex items-center justify-between text-white transition-all">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
-              <Video className="w-3.5 h-3.5" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <h4 className="font-bold text-xs">Watch Adsgram Video</h4>
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${adsgramTier.badgeColor}`}>
-                {adsgramTier.label}
-              </span>
-            </div>
-            <span className="text-[10px] font-mono text-neutral-400">
-              ({adsgramWatched}/{adsgramMax})
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-xs font-mono pl-7.5">
-            <span className="text-yellow-400 font-bold flex items-center gap-1">
-              <NcIcon className="w-3.5 h-3.5" /> +{adsgramTier.nc} NC
-            </span>
-            {parseFloat(adsgramTier.ton) > 0 ? (
-              <span className="text-blue-400 font-bold flex items-center gap-1">
-                <TonIcon className="w-3.5 h-3.5" /> +{adsgramTier.ton} TON
-              </span>
+      {adStatus && (
+        <div
+          className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs transition-all shadow-xs ${
+            adStatus.canWithdraw
+              ? "bg-[#ECFDF5] border-emerald-200 text-[#059669]"
+              : "bg-[#FFFBEB] border-amber-200 text-amber-800"
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {adStatus.canWithdraw ? (
+              <ShieldCheck className="w-5 h-5 text-[#10B981] shrink-0" />
             ) : (
-              <span className="text-slate-400 font-bold text-[10px]">
-                0 TON (Fuel Grind)
-              </span>
+              <Lock className="w-5 h-5 text-amber-500 shrink-0" />
             )}
+            <div>
+              <h5 className="font-bold flex items-center gap-1.5 text-slate-900">
+                <span>Daily Withdrawal Gate</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white border border-current font-semibold">
+                  UTC Reset
+                </span>
+              </h5>
+              <p className="text-[10.5px] opacity-90 mt-0.5">
+                {adStatus.canWithdraw
+                  ? "Daily ad threshold unlocked for TON withdrawals!"
+                  : "Watch ads to unlock instant TON withdrawals"}
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="font-mono font-bold text-[11px] block">
+              {adStatus.canWithdraw ? "UNLOCKED ✅" : "LOCKED 🔒"}
+            </span>
           </div>
         </div>
-
-        <button
-          onClick={handleWatchAdsgram}
-          disabled={isAdsgramMaxed || loading || adCooldown > 0}
-          className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-xs rounded-xl transition shadow-md shadow-purple-500/10 active:scale-95 min-w-[85px] text-center shrink-0"
-        >
-          {isAdsgramMaxed
-            ? "Maxed"
-            : adCooldown > 0
-            ? `Wait (${adCooldown}s)`
-            : "Watch"}
-        </button>
-      </div>
-
-      {/* 2. Monetag Rewarded Impression Card (100 Daily Cap) */}
-      <div className="bg-neutral-900/90 border border-neutral-800 hover:border-blue-500/30 rounded-2xl p-3.5 flex items-center justify-between text-white transition-all">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <h4 className="font-bold text-xs">Watch Monetag Ad</h4>
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${monetagTier.badgeColor}`}>
-                {monetagTier.label}
-              </span>
-            </div>
-            <span className="text-[10px] font-mono text-neutral-400">
-              ({monetagWatched}/{monetagMax})
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-xs font-mono pl-7.5">
-            <span className="text-yellow-400 font-bold flex items-center gap-1">
-              <NcIcon className="w-3.5 h-3.5" /> +{monetagTier.nc} NC
-            </span>
-            {parseFloat(monetagTier.ton) > 0 ? (
-              <span className="text-blue-400 font-bold flex items-center gap-1">
-                <TonIcon className="w-3.5 h-3.5" /> +{monetagTier.ton} TON
-              </span>
-            ) : (
-              <span className="text-slate-400 font-bold text-[10px]">
-                0 TON (Fuel Grind)
-              </span>
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={handleWatchMonetag}
-          disabled={isMonetagMaxed || loading || adCooldown > 0}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-500/10 active:scale-95 min-w-[85px] text-center shrink-0"
-        >
-          {isMonetagMaxed
-            ? "Maxed"
-            : adCooldown > 0
-            ? `Wait (${adCooldown}s)`
-            : "Watch"}
-        </button>
-      </div>
-
-      {/* 3. Withdrawal Limit Pass Mission (30 daily / 100 weekly) */}
-      <div className="bg-neutral-900/90 border border-neutral-800 hover:border-cyan-500/30 rounded-2xl p-3.5 flex items-center justify-between text-white transition-all">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-              <Zap className="w-3.5 h-3.5" />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <h4 className="font-bold text-xs">Withdrawal Limit Pass</h4>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                1/day • 5/week
-              </span>
-            </div>
-            {adStatus.withdrawalLimits && (
-              <span className="text-[10px] font-mono text-neutral-400">
-                (Daily: {adStatus.withdrawalLimits.daily.adsWatched}/30 • Weekly: {adStatus.withdrawalLimits.weekly.adsWatched}/100)
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 text-xs font-mono pl-7.5">
-            <span className="text-yellow-400 font-bold flex items-center gap-1">
-              <NcIcon className="w-3.5 h-3.5" /> +200 NC
-            </span>
-            <span className="text-cyan-400 font-bold flex items-center gap-1">
-              <TonIcon className="w-3.5 h-3.5" /> +0.00025 TON
-            </span>
-          </div>
-          <p className="text-[9.5px] text-amber-400/90 font-mono pl-7.5">
-            * Independent views - does not count towards the 4 Monetag gate
-          </p>
-        </div>
-
-        <button
-          onClick={handleWatchLimitAd}
-          disabled={loading || adCooldown > 0}
-          className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-bold text-xs rounded-xl transition shadow-md shadow-cyan-500/10 active:scale-95 min-w-[85px] text-center shrink-0"
-        >
-          {adCooldown > 0 ? `Wait (${adCooldown}s)` : "Watch"}
-        </button>
-      </div>
+      )}
     </div>
   );
 };
-
-export default AdMissionsSection;

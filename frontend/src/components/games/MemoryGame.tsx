@@ -84,8 +84,14 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished, user
       setTimeLeft(45);
       isLockedRef.current = false;
 
-      const res = await api.startGame('game_memory');
-      setSessionId(res.sessionId);
+      let sid = `memory_${Date.now()}`;
+      try {
+        const res = await api.startGame('game_memory');
+        if (res?.sessionId) sid = res.sessionId;
+      } catch (err) {
+        console.warn('MemoryGame session start note:', err);
+      }
+      setSessionId(sid);
       startTimeRef.current = Date.now();
       setGameState('playing');
     } catch (err) {
@@ -149,10 +155,17 @@ export const MemoryGame: React.FC<MemoryGameProps> = ({ onBack, onFinished, user
 
       // Calculate score based on time remaining and moves
       const finalScore = Math.max(10, timeLeft * 10 - moves * 2);
-      const res = await api.finishGame(sessionId, finalScore);
+      let res: any = null;
+      if (sessionId) {
+        try {
+          res = await api.finishGame(sessionId, finalScore);
+        } catch (apiErr) {
+          console.warn('MemoryGame finish API note:', apiErr);
+        }
+      }
 
-      const nc = res.reward?.nc ?? res.ncAwarded ?? 45;
-      const ton = res.reward?.ton ?? res.tonAwarded ?? '0.000015';
+      const nc = res?.reward?.nc ?? res?.ncAwarded ?? 45;
+      const ton = res?.reward?.ton ?? res?.tonAwarded ?? '0.000015';
 
       setRewardClaim({ nc, ton });
       setGameState('won');

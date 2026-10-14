@@ -146,12 +146,12 @@ export const App: React.FC = () => {
   // Loading Splash
   if (authLoading || membershipVerified === null) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 text-center">
-        <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 mb-4 shadow-[0_0_20px_rgba(6,182,212,0.3)] animate-pulse">
+      <div className="min-h-screen bg-[#F4F7FB] flex flex-col items-center justify-center p-4 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-[#EFF6FF] border border-blue-200 flex items-center justify-center text-[#2563EB] mb-4 shadow-sm animate-pulse">
           <Loader2 size={32} className="animate-spin" />
         </div>
-        <h2 className="text-xl font-bold text-white tracking-tight">INITIALIZING MINING RIG</h2>
-        <p className="text-xs text-neutral-400 mt-1 font-mono">Verifying security clearance...</p>
+        <h2 className="text-xl font-black text-slate-900 tracking-tight">INITIALIZING MINING RIG</h2>
+        <p className="text-xs text-slate-500 mt-1 font-mono">Verifying security clearance...</p>
       </div>
     );
   }
@@ -169,9 +169,9 @@ export const App: React.FC = () => {
 
   return (
     <TonConnectUIProvider manifestUrl={manifestUrl}>
-      <div className="min-h-screen bg-cyber-bg text-slate-100 flex flex-col">
-        {/* Sticky Profile Header — spec: bg-neutral-900/80, full-width, profile left, online badge right */}
-        <header className="sticky top-0 z-20 w-full bg-neutral-900/80 backdrop-blur-md border-b border-neutral-800/80 px-4 py-2.5 shadow-sm">
+      <div className="min-h-screen bg-[#F4F7FB] text-slate-800 flex flex-col selection:bg-[#10B981] selection:text-white">
+        {/* Sticky Profile Header — Daylight Neo-Mint & Cobalt Theme */}
+        <header className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] px-4 py-2.5 shadow-xs">
           <div className="w-full max-w-md mx-auto flex items-center justify-between gap-3">
             {/* Real Telegram Profile Bar */}
             <UserProfileHeader

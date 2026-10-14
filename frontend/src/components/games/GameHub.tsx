@@ -1,187 +1,230 @@
 import React from 'react';
 import { ActiveGameType } from '../../types/index.js';
-import { Brain, Grid2X2, Car, TestTubes, Sparkles, Trophy, ArrowRight, ShieldAlert, LucideIcon } from 'lucide-react';
+import { Brain, Grid2X2, Car, TestTubes, Sparkles, Trophy, ArrowRight, ShieldAlert } from 'lucide-react';
 import { TonIcon, NcIcon } from '../icons/index.js';
 
 interface GameHubProps {
   onSelectGame: (gameType: ActiveGameType) => void;
 }
 
-interface GameCardInfo {
-  type: ActiveGameType;
-  title: string;
-  badge: string;
-  badgeColor: string;
-  description: string;
-  icon: LucideIcon;
-  accentColor: string;
-  glowClass: string;
-  borderClass: string;
-  ncReward: number;
-  tonReward: string;
-  rules: string[];
-}
-
-const ARCADE_GAMES: GameCardInfo[] = [
-  {
-    type: 'game_tubesort',
-    title: 'Color Tube Sort',
-    badge: 'LOGIC SORT',
-    badgeColor: 'text-amber-400 bg-amber-500/15 border-amber-500/30',
-    description: 'Segregate mixed chemical isotopes into matching color flasks before the 1-minute countdown ends. Utilize buffer tubes and fluid pouring mechanics.',
-    icon: TestTubes,
-    accentColor: 'text-amber-400',
-    glowClass: 'shadow-amber-500/20',
-    borderClass: 'hover:border-amber-500/60 group-hover:shadow-amber-500/30',
-    ncReward: 55,
-    tonReward: '0.000020',
-    rules: ['6 Flasks Matrix', '60s Countdown', 'Min. 15s Anti-Cheat'],
-  },
-  {
-    type: 'game_memory',
-    title: 'Memory Matrix',
-    badge: 'PUZZLE REFLEX',
-    badgeColor: 'text-cyber-cyan bg-cyber-cyan/15 border-cyber-cyan/30',
-    description: 'Find and match all 6 cryptographic symbol pairs in the 12-card matrix before the 45-second timer runs out.',
-    icon: Brain,
-    accentColor: 'text-cyber-cyan',
-    glowClass: 'shadow-glow-cyan/20',
-    borderClass: 'hover:border-cyber-cyan/60 group-hover:shadow-glow-cyan/30',
-    ncReward: 45,
-    tonReward: '0.000015',
-    rules: ['12 Cards Grid', '45s Countdown', 'Min. 10s Anti-Cheat'],
-  },
-  {
-    type: 'game_2048',
-    title: '2048 Crypto Tile',
-    badge: 'LOGIC MERGE',
-    badgeColor: 'text-purple-400 bg-purple-500/15 border-purple-500/30',
-    description: 'Swipe or use arrow keys to merge matching power tiles. Reach 1,000 points or highest merge to claim rewards.',
-    icon: Grid2X2,
-    accentColor: 'text-purple-400',
-    glowClass: 'shadow-purple-500/20',
-    borderClass: 'hover:border-purple-500/60 group-hover:shadow-purple-500/30',
-    ncReward: 60,
-    tonReward: '0.000020',
-    rules: ['4x4 Matrix', 'Swipe / Arrow Keys', 'Min. 20s Anti-Cheat'],
-  },
-  {
-    type: 'game_carrace',
-    title: 'Cyber Car Race',
-    badge: '3D SPEEDWAY',
-    badgeColor: 'text-cyber-gold bg-cyber-gold/15 border-cyber-gold/30',
-    description: 'Steer your cyber cruiser across 3 neon lanes. Avoid red traffic obstacles and collect yellow battery cells to survive 30s.',
-    icon: Car,
-    accentColor: 'text-cyber-gold',
-    glowClass: 'shadow-glow-gold/20',
-    borderClass: 'hover:border-cyber-gold/60 group-hover:shadow-glow-gold/30',
-    ncReward: 50,
-    tonReward: '0.000025',
-    rules: ['3-Lane Highway', '30s Survival', 'Min. 28s Anti-Cheat'],
-  },
-];
-
 export const GameHub: React.FC<GameHubProps> = ({ onSelectGame }) => {
   return (
-    <div className="w-full flex flex-col items-center space-y-4">
+    <div className="w-full flex flex-col items-center space-y-3.5 pb-4">
       {/* Header Banner */}
       <div className="w-full flex items-center justify-between py-1">
         <div className="flex items-center space-x-2.5">
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-cyber-cyan via-purple-500 to-cyber-gold p-0.5 shadow-glow-cyan/40">
-            <div className="w-full h-full bg-cyber-bg rounded-2xl flex items-center justify-center text-cyber-cyan">
-              <Trophy size={18} />
-            </div>
+          <div className="w-9 h-9 rounded-2xl bg-[#EFF6FF] border border-blue-200 flex items-center justify-center text-[#2563EB] shadow-xs">
+            <Trophy size={18} />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white tracking-wide">NC ARCADE ZONE</h2>
-            <p className="text-[11px] font-mono text-slate-400">Play games, claim instant NC + TON</p>
+            <h2 className="text-base font-bold text-slate-900 tracking-wide">NC ARCADE ZONE</h2>
+            <p className="text-[11px] font-mono text-slate-500">Play games, claim instant NC + TON</p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-cyber-card border border-cyber-border text-xs">
-          <Sparkles size={13} className="text-cyber-gold" />
-          <span className="font-mono text-slate-300 font-bold">4 ACTIVE</span>
+        <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-white border border-[#E2E8F0] text-xs shadow-2xs">
+          <Sparkles size={13} className="text-[#10B981]" />
+          <span className="font-mono text-slate-700 font-bold">3 ARENAS ACTIVE</span>
         </div>
       </div>
 
       {/* Anti-Cheat Banner */}
-      <div className="w-full bg-cyber-blue/10 border border-cyber-blue/30 rounded-xl p-2.5 flex items-center space-x-2.5 text-[11px] text-slate-300">
-        <ShieldAlert size={16} className="text-cyber-blue shrink-0" />
+      <div className="w-full bg-[#EFF6FF] border border-blue-200 rounded-xl p-2.5 flex items-center space-x-2.5 text-[11px] text-blue-900 shadow-2xs">
+        <ShieldAlert size={16} className="text-[#2563EB] shrink-0" />
         <span>
-          Server-enforced session verification active. Complete full challenge objectives to unlock token claims.
+          Server-enforced session verification active. Complete challenges to trigger reward payouts.
         </span>
       </div>
 
-      {/* Game Cards List */}
-      <div className="w-full space-y-3.5">
-        {ARCADE_GAMES.map((game) => {
-          const IconComp = game.icon;
-          return (
-            <div
-              key={game.type}
-              className={`w-full glass-panel p-4 rounded-2xl border border-cyber-border transition-all duration-300 group ${game.borderClass} flex flex-col justify-between`}
-            >
-              {/* Top Row: Icon, Title, Badge */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-11 h-11 rounded-xl bg-cyber-bg/80 border border-cyber-border flex items-center justify-center ${game.accentColor} shadow-md ${game.glowClass}`}
-                  >
-                    <IconComp size={22} />
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-sm font-bold text-white tracking-wide">{game.title}</h3>
-                    </div>
-                    <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded-md border font-semibold inline-block mt-0.5 ${game.badgeColor}`}
-                    >
-                      {game.badge}
-                    </span>
-                  </div>
-                </div>
+      {/* FEATURED: Dark-Navy Card for "COLOR TUBE SORT" */}
+      <div className="w-full bg-[#0A1128] border border-slate-700/80 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden group">
+        {/* Ambient Glows */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-[#10B981]/15 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#2563EB]/20 rounded-full blur-2xl pointer-events-none" />
 
-                {/* Reward Pill */}
-                <div className="flex flex-col items-end space-y-1">
-                  <div className="flex items-center space-x-1.5 text-xs font-bold font-mono text-cyber-gold">
-                    <NcIcon className="w-3.5 h-3.5" />
-                    <span>+{game.ncReward} NC</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5 text-[10px] font-mono text-cyber-cyan font-bold">
-                    <TonIcon className="w-3.5 h-3.5" />
-                    <span>+{game.tonReward} TON</span>
-                  </div>
-                </div>
-              </div>
+        {/* Top Badges & Rewards */}
+        <div className="flex items-center justify-between relative z-10 mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#10B981]/20 border border-[#10B981]/40 text-[#10B981] font-bold">
+              FEATURED
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-400/30 text-blue-300 font-semibold">
+              LOGIC SORT
+            </span>
+          </div>
 
-              {/* Description */}
-              <p className="text-xs text-slate-300 mt-2.5 leading-relaxed font-sans">
-                {game.description}
-              </p>
-
-              {/* Rules / Tags */}
-              <div className="flex flex-wrap gap-1.5 mt-3 pt-2.5 border-t border-cyber-border/40">
-                {game.rules.map((rule, idx) => (
-                  <span
-                    key={idx}
-                    className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyber-bg/60 text-slate-400 border border-cyber-border/50"
-                  >
-                    {rule}
-                  </span>
-                ))}
-              </div>
-
-              {/* Action Button */}
-              <button
-                onClick={() => onSelectGame(game.type)}
-                className="mt-3.5 w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyber-cyan/20 to-cyber-blue/20 hover:from-cyber-cyan/30 hover:to-cyber-blue/30 border border-cyber-cyan/40 hover:border-cyber-cyan text-white text-xs font-bold flex items-center justify-center space-x-2 transition-all active:scale-98 shadow-glow-cyan/20"
-              >
-                <span>ENTER ARENA</span>
-                <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-              </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-xs font-mono font-bold text-[#10B981]">
+              <NcIcon className="w-3.5 h-3.5" />
+              <span>+55 NC</span>
             </div>
-          );
-        })}
+            <div className="flex items-center gap-1 text-[11px] font-mono font-bold text-blue-300">
+              <TonIcon className="w-3.5 h-3.5" />
+              <span>+0.000020 TON</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Title & Description */}
+        <div className="relative z-10 mb-3">
+          <h3 className="text-base font-black tracking-wide text-white flex items-center gap-2">
+            <TestTubes className="w-4 h-4 text-[#10B981]" />
+            COLOR TUBE SORT
+          </h3>
+          <p className="text-[11px] text-slate-300 leading-relaxed font-sans mt-0.5">
+            Segregate mixed chemical isotopes into matching color flasks before the 60s timer expires.
+          </p>
+        </div>
+
+        {/* 4 Vertical Glass Test Tubes Display */}
+        <div className="relative z-10 py-3 px-4 bg-white/[0.04] rounded-xl border border-white/10 my-3 flex items-end justify-center gap-5">
+          {/* Tube 1 */}
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-22 rounded-b-2xl rounded-t-sm border-2 border-white/40 bg-white/5 backdrop-blur-xs relative overflow-hidden flex flex-col justify-end p-0.5 shadow-inner">
+              <div className="absolute top-0 left-1 w-0.5 h-full bg-white/30 rounded-full" />
+              <div className="h-4 w-full bg-[#8B5CF6] rounded-t-xs mb-0.5" />
+              <div className="h-4 w-full bg-[#F59E0B] mb-0.5" />
+              <div className="h-4 w-full bg-[#2563EB] mb-0.5" />
+              <div className="h-5 w-full bg-[#10B981] rounded-b-xl" />
+            </div>
+            <span className="text-[9px] font-mono text-slate-400 mt-1">Tube 1</span>
+          </div>
+
+          {/* Tube 2 */}
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-22 rounded-b-2xl rounded-t-sm border-2 border-white/40 bg-white/5 backdrop-blur-xs relative overflow-hidden flex flex-col justify-end p-0.5 shadow-inner">
+              <div className="absolute top-0 left-1 w-0.5 h-full bg-white/30 rounded-full" />
+              <div className="h-4 w-full bg-[#10B981] rounded-t-xs mb-0.5" />
+              <div className="h-4 w-full bg-[#10B981] mb-0.5" />
+              <div className="h-4 w-full bg-[#8B5CF6] mb-0.5" />
+              <div className="h-5 w-full bg-[#2563EB] rounded-b-xl" />
+            </div>
+            <span className="text-[9px] font-mono text-slate-400 mt-1">Tube 2</span>
+          </div>
+
+          {/* Tube 3 */}
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-22 rounded-b-2xl rounded-t-sm border-2 border-white/40 bg-white/5 backdrop-blur-xs relative overflow-hidden flex flex-col justify-end p-0.5 shadow-inner">
+              <div className="absolute top-0 left-1 w-0.5 h-full bg-white/30 rounded-full" />
+              <div className="h-4 w-full bg-[#F59E0B] rounded-t-xs mb-0.5" />
+              <div className="h-4 w-full bg-[#2563EB] mb-0.5" />
+              <div className="h-4 w-full bg-[#F59E0B] mb-0.5" />
+              <div className="h-5 w-full bg-[#8B5CF6] rounded-b-xl" />
+            </div>
+            <span className="text-[9px] font-mono text-slate-400 mt-1">Tube 3</span>
+          </div>
+
+          {/* Tube 4 (Buffer / Empty top) */}
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-22 rounded-b-2xl rounded-t-sm border-2 border-white/40 bg-white/5 backdrop-blur-xs relative overflow-hidden flex flex-col justify-end p-0.5 shadow-inner">
+              <div className="absolute top-0 left-1 w-0.5 h-full bg-white/30 rounded-full" />
+              <div className="h-4 w-full bg-[#2563EB] rounded-t-xs mb-0.5 opacity-90" />
+              <div className="h-5 w-full bg-[#10B981] rounded-b-xl" />
+            </div>
+            <span className="text-[9px] font-mono text-emerald-400 mt-1">Buffer</span>
+          </div>
+        </div>
+
+        {/* Solid Neo-Mint Button */}
+        <button
+          onClick={() => onSelectGame('game_tubesort')}
+          className="relative z-10 w-full py-3 px-4 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all active:scale-98 shadow-md shadow-emerald-500/25 cursor-pointer"
+        >
+          <span>PLAY COLOR TUBE SORT</span>
+          <ArrowRight size={15} />
+        </button>
+      </div>
+
+      {/* 2-COLUMN GRID: "Memory Matrix" & "Cyber Car Race" */}
+      <div className="w-full grid grid-cols-2 gap-3">
+        {/* Game 1: Memory Matrix */}
+        <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-xs flex flex-col justify-between hover:border-blue-300 transition-all">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl bg-[#EFF6FF] border border-blue-200 flex items-center justify-center text-[#2563EB]">
+                <Brain size={18} />
+              </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#EFF6FF] border border-blue-200 text-[#2563EB] font-bold">
+                REFLEX
+              </span>
+            </div>
+
+            <h4 className="text-xs font-black text-slate-900 tracking-tight">Memory Matrix</h4>
+            <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+              Match 6 cryptographic pairs in 45s.
+            </p>
+
+            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono">
+              <span className="text-[#10B981] font-bold">+45 NC</span>
+              <span className="text-[#2563EB] font-bold">+0.000015 TON</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onSelectGame('game_memory')}
+            className="mt-3 w-full py-2 px-2.5 rounded-xl bg-[#2563EB] hover:bg-blue-700 text-white text-[11px] font-extrabold uppercase tracking-wider flex items-center justify-center space-x-1.5 transition active:scale-98 cursor-pointer shadow-xs"
+          >
+            <span>PLAY MATRIX</span>
+            <ArrowRight size={13} />
+          </button>
+        </div>
+
+        {/* Game 2: Cyber Car Race */}
+        <div className="bg-white p-3.5 rounded-2xl border border-[#E2E8F0] shadow-xs flex flex-col justify-between hover:border-emerald-300 transition-all">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 rounded-xl bg-[#ECFDF5] border border-emerald-200 flex items-center justify-center text-[#10B981]">
+                <Car size={18} />
+              </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#ECFDF5] border border-emerald-200 text-[#10B981] font-bold">
+                SPEEDWAY
+              </span>
+            </div>
+
+            <h4 className="text-xs font-black text-slate-900 tracking-tight">Cyber Car Race</h4>
+            <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+              3-lane highway, avoid obstacles for 30s.
+            </p>
+
+            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono">
+              <span className="text-[#10B981] font-bold">+50 NC</span>
+              <span className="text-[#2563EB] font-bold">+0.000025 TON</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onSelectGame('game_carrace')}
+            className="mt-3 w-full py-2 px-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white text-[11px] font-extrabold uppercase tracking-wider flex items-center justify-center space-x-1.5 transition active:scale-98 cursor-pointer shadow-xs"
+          >
+            <span>PLAY RACE</span>
+            <ArrowRight size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bonus Arena: 2048 Crypto Tile */}
+      <div className="w-full bg-white p-3 rounded-2xl border border-[#E2E8F0] shadow-2xs flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
+            <Grid2X2 size={16} />
+          </div>
+          <div>
+            <h5 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <span>2048 Crypto Tile</span>
+              <span className="text-[9px] font-mono text-purple-700 bg-purple-50 border border-purple-200 px-1 rounded">
+                +60 NC • TON
+              </span>
+            </h5>
+            <p className="text-[10px] text-slate-400 font-mono">Swipe to merge 1,000 pts</p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onSelectGame('game_2048')}
+          className="py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition active:scale-95 cursor-pointer"
+        >
+          Play 2048
+        </button>
       </div>
     </div>
   );

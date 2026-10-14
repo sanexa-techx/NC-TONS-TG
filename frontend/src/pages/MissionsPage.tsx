@@ -75,18 +75,18 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
       {/* Header */}
       <div className="w-full flex items-center justify-between py-2 mb-3">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-xl bg-cyber-gold/20 flex items-center justify-center text-cyber-gold">
+          <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#10B981]">
             <Target size={18} />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">Missions Marketplace</h2>
-            <p className="text-[11px] text-slate-400">Complete tasks or promote channels</p>
+            <h2 className="text-base font-bold text-slate-900">Missions Marketplace</h2>
+            <p className="text-[11px] text-slate-500">Complete tasks or promote channels</p>
           </div>
         </div>
 
         <button
           onClick={() => setCreateModalOpen(true)}
-          className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-cyber-gold/20 to-cyber-gold/10 border border-cyber-gold/40 text-cyber-gold text-xs font-bold flex items-center space-x-1.5 active:scale-95 transition-all shadow-glow-gold/10"
+          className="py-1.5 px-3 rounded-xl bg-[#EFF6FF] hover:bg-blue-100 border border-blue-200 text-[#2563EB] text-xs font-bold flex items-center space-x-1.5 active:scale-95 transition-all shadow-2xs"
         >
           <PlusCircle size={14} />
           <span>Promote</span>
@@ -105,15 +105,15 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
       </div>
 
       {/* Category Tabs */}
-      <div className="w-full flex space-x-1.5 p-1 rounded-xl bg-cyber-surface border border-cyber-border mb-4">
+      <div className="w-full flex space-x-1.5 p-1 rounded-xl bg-white border border-[#E2E8F0] shadow-2xs mb-4">
         {categories.map((c) => (
           <button
             key={c.id}
             onClick={() => setCategory(c.id)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               category === c.id
-                ? 'bg-cyber-card text-cyber-cyan border border-cyber-cyan/30 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-blue-200 shadow-2xs'
+                : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             {c.label}

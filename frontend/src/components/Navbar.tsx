@@ -20,7 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, isAdmin
   ] as const;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-cyber-surface/95 backdrop-blur-md border-t border-cyber-border py-2 px-3">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E2E8F0] py-1.5 px-3 shadow-lg">
       <div className="max-w-md mx-auto flex items-center justify-around">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -29,16 +29,16 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, isAdmin
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id as any)}
-              className={`flex flex-col items-center justify-center flex-1 py-1 transition-all duration-200 ${
+              className={`flex flex-col items-center justify-center flex-1 py-1 transition-all duration-200 cursor-pointer ${
                 isActive
-                  ? 'text-cyber-cyan font-semibold scale-105'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'text-[#2563EB] font-bold scale-105'
+                  : 'text-slate-400 hover:text-slate-600 font-medium'
               }`}
             >
-              <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-cyber-cyan/15 shadow-glow-cyan' : ''}`}>
-                <Icon size={22} className={isActive ? 'text-cyber-cyan' : 'text-slate-400'} />
+              <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-[#EFF6FF]' : ''}`}>
+                <Icon size={20} className={isActive ? 'text-[#2563EB]' : 'text-slate-400'} />
               </div>
-              <span className="text-[11px] mt-1 tracking-tight">{item.label}</span>
+              <span className="text-[10px] mt-0.5 tracking-tight">{item.label}</span>
             </button>
           );
         })}

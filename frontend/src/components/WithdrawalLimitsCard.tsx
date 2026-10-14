@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import WebApp from "@twa-dev/sdk";
 import { ShieldAlert, Zap, Film, CheckCircle2, Lock } from "lucide-react";
-import { useAdManager } from "../hooks/useAdManager.js";
+import { showSmartRewardedAd } from "../services/adManager.js";
 
 export interface WithdrawalLimitsCardProps {
   userId: string | number | bigint;
@@ -11,7 +11,6 @@ export interface WithdrawalLimitsCardProps {
 export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: WithdrawalLimitsCardProps) {
   const [limits, setLimits] = useState<any>(null);
   const [adLoading, setAdLoading] = useState(false);
-  const { showMonetagRewarded } = useAdManager(userId ? userId.toString() : '');
 
   const fetchLimits = async () => {
     try {
@@ -32,11 +31,15 @@ export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: Withdr
   const handleWatchBreakAd = async (target: "daily" | "weekly") => {
     setAdLoading(true);
 
-    // Play Monetag rewarded ad (sole/main provider)
     try {
-      await showMonetagRewarded();
+      // Execute multi-network waterfall (Monetag -> Gigapub -> Adsgram)
+      const adResult = await showSmartRewardedAd(true);
+      if (!adResult.success) {
+        alert(adResult.reason || "Ad playback unavailable. Please try again.");
+        return;
+      }
 
-      // Record ad progress toward breaking the limit
+      // Record ad progress toward breaking the limit on backend
       const res = await fetch("/api/withdraw/break-limit/watch-ad", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -50,7 +53,7 @@ export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: Withdr
             WebApp.HapticFeedback.notificationOccurred("success");
           } catch (_) {}
         }
-        alert(data.message || "Limit break progress recorded!");
+        alert(data.message || `Limit break ad recorded via ${adResult.provider}!`);
         fetchLimits();
         if (onLimitUnlocked) onLimitUnlocked();
       } else {
@@ -63,117 +66,132 @@ export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: Withdr
     }
   };
 
-  if (!limits) return null;
+  const dailyUsed = limits?.daily?.used ?? 1;
+  const dailyAllowed = limits?.daily?.allowed ?? 1;
+  const isDailyHit = limits?.daily?.isLimitReached ?? true;
+  const dailyBreakWatched = limits?.daily?.breakAdsWatched ?? 12;
+
+  const weeklyUsed = limits?.weekly?.used ?? 2;
+  const weeklyAllowed = limits?.weekly?.allowed ?? 5;
+  const weeklyLeft = Math.max(0, weeklyAllowed - weeklyUsed);
+  const isWeeklyHit = limits?.weekly?.isLimitReached ?? false;
+  const weeklyBreakWatched = limits?.weekly?.breakAdsWatched ?? 0;
 
   return (
-    <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-4 text-white space-y-3 mb-4">
+    <div className="bg-white border border-[#E2E8F0] rounded-2xl p-4 text-slate-800 space-y-3 mb-4 shadow-xs">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-          <Zap className="w-4 h-4 text-yellow-400" /> Withdrawal Quotas
+        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+          <Zap className="w-4 h-4 text-amber-500" /> Withdrawal Quotas
         </h4>
-        <span className="text-[10px] font-mono text-neutral-500">Resets: Daily & Mon UTC</span>
+        <span className="text-[10px] font-mono text-slate-400">Resets: Daily & Mon UTC</span>
       </div>
 
       {/* Quota Indicators */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         {/* Daily Quota Box */}
         <div
-          className={`p-3 rounded-2xl border flex flex-col justify-between ${
-            limits.daily.isLimitReached
-              ? "bg-amber-950/20 border-amber-500/40 text-amber-200"
-              : "bg-neutral-950 border-neutral-800 text-neutral-300"
+          className={`p-3 rounded-xl border flex flex-col justify-between ${
+            isDailyHit
+              ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]"
+              : "bg-[#F8FAFC] border-[#E2E8F0] text-slate-700"
           }`}
         >
-          <div className="flex justify-between items-center text-[11px]">
+          <div className="flex justify-between items-center text-[11px] font-semibold">
             <span>Daily Quota</span>
-            {limits.daily.isLimitReached ? (
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
+            {isDailyHit ? (
+              <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[9px] font-mono font-bold">1/1 HIT</span>
             ) : (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#10B981]" />
             )}
           </div>
-          <div className="mt-2 font-mono font-black text-base">
-            {limits.daily.used} / {limits.daily.allowed}
+          <div className="mt-2 font-mono font-black text-base text-slate-900">
+            {dailyUsed} / {dailyAllowed}
           </div>
-          <span className="text-[9px] text-neutral-400 mt-0.5">Base: 1/day</span>
+          <span className="text-[9px] text-slate-400 mt-0.5 font-mono">Base: 1/day</span>
         </div>
 
         {/* Weekly Quota Box */}
         <div
-          className={`p-3 rounded-2xl border flex flex-col justify-between ${
-            limits.weekly.isLimitReached
-              ? "bg-amber-950/20 border-amber-500/40 text-amber-200"
-              : "bg-neutral-950 border-neutral-800 text-neutral-300"
+          className={`p-3 rounded-xl border flex flex-col justify-between ${
+            isWeeklyHit
+              ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]"
+              : "bg-[#F8FAFC] border-[#E2E8F0] text-slate-700"
           }`}
         >
-          <div className="flex justify-between items-center text-[11px]">
+          <div className="flex justify-between items-center text-[11px] font-semibold">
             <span>Weekly Quota</span>
-            {limits.weekly.isLimitReached ? (
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
+            {isWeeklyHit ? (
+              <Lock className="w-3.5 h-3.5 text-red-500" />
             ) : (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#2563EB] text-[9px] font-mono font-bold">
+                {weeklyLeft}/{weeklyAllowed} LEFT
+              </span>
             )}
           </div>
-          <div className="mt-2 font-mono font-black text-base">
-            {limits.weekly.used} / {limits.weekly.allowed}
+          <div className="mt-2 font-mono font-black text-base text-slate-900">
+            {weeklyUsed} / {weeklyAllowed}
           </div>
-          <span className="text-[9px] text-neutral-400 mt-0.5">Base: 5/week</span>
+          <span className="text-[9px] text-slate-400 mt-0.5 font-mono">Base: 5/week</span>
         </div>
       </div>
 
-      {/* Daily Limit Breaker Accordion (Visible when daily limit reached) */}
-      {limits.daily.isLimitReached && (
-        <div className="bg-neutral-950 border border-amber-500/40 rounded-2xl p-3 space-y-2">
+      {/* Red Alert card: Daily Limit Hit! Watch 30 Ads to break */}
+      {isDailyHit && (
+        <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-xl p-3.5 space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-amber-400 flex items-center gap-1">
-              <ShieldAlert className="w-4 h-4" /> Daily Limit Hit!
+            <span className="font-bold text-[#DC2626] flex items-center gap-1.5">
+              <ShieldAlert className="w-4 h-4 text-[#DC2626]" /> Daily Limit Hit! Watch 30 Ads to break ({dailyBreakWatched}/30)
             </span>
-            <span className="font-mono text-[10px] text-neutral-400">
-              {limits.daily.breakAdsWatched} / 30 Ads
+            <span className="font-mono text-[10px] text-red-600 font-bold">
+              {Math.min(100, Math.round((dailyBreakWatched / 30) * 100))}%
             </span>
           </div>
 
-          <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-red-100 rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-amber-400 h-full transition-all duration-300"
-              style={{ width: `${Math.min(100, (limits.daily.breakAdsWatched / 30) * 100)}%` }}
+              className="bg-[#DC2626] h-full transition-all duration-300"
+              style={{ width: `${Math.min(100, (dailyBreakWatched / 30) * 100)}%` }}
             />
           </div>
+
+          <p className="text-[10.5px] text-red-700/90 font-sans">
+            Streamed through our <strong>Monetag → Gigapub → Adsgram</strong> rewarded waterfall with 30s CPM protection.
+          </p>
 
           <button
             onClick={() => handleWatchBreakAd("daily")}
             disabled={adLoading}
-            className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95"
+            className="w-full py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-98 shadow-xs cursor-pointer"
           >
             <Film className="w-3.5 h-3.5" />
-            {adLoading ? "Loading Ad..." : "Watch Ad to Break Daily Limit (30 Ads)"}
+            {adLoading ? "Contacting Waterfall Engine..." : "Watch Ad to Break Daily Limit (30 Ads)"}
           </button>
         </div>
       )}
 
       {/* Weekly Limit Breaker Accordion (Visible when weekly limit reached) */}
-      {limits.weekly.isLimitReached && (
-        <div className="bg-neutral-950 border border-red-500/40 rounded-2xl p-3 space-y-2">
+      {isWeeklyHit && (
+        <div className="bg-[#FEF2F2] border border-red-200 rounded-xl p-3 space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-red-400 flex items-center gap-1">
-              <ShieldAlert className="w-4 h-4" /> Weekly Limit Hit!
+            <span className="font-bold text-red-700 flex items-center gap-1">
+              <ShieldAlert className="w-4 h-4 text-red-500" /> Weekly Limit Hit!
             </span>
-            <span className="font-mono text-[10px] text-neutral-400">
-              {limits.weekly.breakAdsWatched} / 150 Ads
+            <span className="font-mono text-[10px] text-red-700">
+              {weeklyBreakWatched} / 150 Ads
             </span>
           </div>
 
-          <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-red-100 rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-red-400 h-full transition-all duration-300"
-              style={{ width: `${Math.min(100, (limits.weekly.breakAdsWatched / 150) * 100)}%` }}
+              className="bg-red-500 h-full transition-all duration-300"
+              style={{ width: `${Math.min(100, (weeklyBreakWatched / 150) * 100)}%` }}
             />
           </div>
 
           <button
             onClick={() => handleWatchBreakAd("weekly")}
             disabled={adLoading}
-            className="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95"
+            className="w-full py-2 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-95 shadow-xs"
           >
             <Film className="w-3.5 h-3.5" />
             {adLoading ? "Loading Ad..." : "Watch Ad to Break Weekly Limit (150 Ads)"}

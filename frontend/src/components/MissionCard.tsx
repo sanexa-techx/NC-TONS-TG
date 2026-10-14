@@ -91,32 +91,32 @@ export const MissionCard: React.FC<MissionCardProps> = ({
   const isSoldOut = mission.isSoldOut;
 
   return (
-    <div className={`glass-panel p-4 rounded-2xl border transition-all mb-3 relative overflow-hidden ${
+    <div className={`p-4 rounded-2xl border transition-all mb-3 relative overflow-hidden ${
       isCompleted
-        ? 'border-cyber-green/30 bg-cyber-green/5'
+        ? 'border-emerald-200 bg-[#ECFDF5] shadow-xs'
         : isSoldOut
-        ? 'border-cyber-border opacity-60'
-        : 'border-cyber-border hover:border-cyber-cyan/40 shadow-sm'
+        ? 'border-[#E2E8F0] bg-slate-50 opacity-60'
+        : 'bg-white border-[#E2E8F0] hover:border-blue-300 shadow-xs'
     }`}>
       {/* Category Pill */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-2">
-          <div className="p-1.5 rounded-lg bg-cyber-surface border border-cyber-border">
+          <div className="p-1.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
             {getTaskIcon()}
           </div>
-          <span className="text-[11px] font-mono uppercase text-slate-400">
+          <span className="text-[11px] font-mono uppercase text-slate-500 font-semibold">
             {mission.category}
           </span>
         </div>
 
         {/* Dual Reward Badges */}
         <div className="flex items-center space-x-1.5">
-          <div className="px-2 py-0.5 rounded-full bg-cyber-gold/15 border border-cyber-gold/30 text-[11px] font-mono font-bold text-cyber-gold flex items-center space-x-1">
+          <div className="px-2 py-0.5 rounded-full bg-[#ECFDF5] border border-emerald-200 text-[11px] font-mono font-bold text-[#10B981] flex items-center space-x-1">
             <NcIcon className="w-4 h-4" />
             <span>+{mission.ncReward} NC</span>
           </div>
           {parseFloat(mission.tonReward) > 0 && (
-            <div className="px-2 py-0.5 rounded-full bg-cyber-cyan/15 border border-cyber-cyan/30 text-[11px] font-mono font-bold text-cyber-cyan flex items-center space-x-1">
+            <div className="px-2 py-0.5 rounded-full bg-[#EFF6FF] border border-blue-200 text-[11px] font-mono font-bold text-[#2563EB] flex items-center space-x-1">
               <TonIcon className="w-4 h-4" />
               <span>+{mission.tonReward} TON</span>
             </div>
@@ -125,8 +125,8 @@ export const MissionCard: React.FC<MissionCardProps> = ({
       </div>
 
       {/* Title & Description */}
-      <h4 className="text-sm font-bold text-white mb-1">{mission.title}</h4>
-      <p className="text-xs text-slate-400 mb-3 line-clamp-2">{mission.description}</p>
+      <h4 className="text-sm font-bold text-slate-900 mb-1">{mission.title}</h4>
+      <p className="text-xs text-slate-500 mb-3 line-clamp-2">{mission.description}</p>
 
       {/* Quota Progress */}
       {mission.targetUsers && (
@@ -137,9 +137,9 @@ export const MissionCard: React.FC<MissionCardProps> = ({
               {mission.completedCount} / {mission.targetUsers}
             </span>
           </div>
-          <div className="w-full bg-cyber-bg rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-cyber-cyan h-1.5 rounded-full"
+              className="bg-[#2563EB] h-1.5 rounded-full"
               style={{
                 width: `${Math.min(100, (mission.completedCount / mission.targetUsers) * 100)}%`,
               }}
@@ -150,17 +150,17 @@ export const MissionCard: React.FC<MissionCardProps> = ({
 
       {/* Action Buttons */}
       {isCompleted ? (
-        <div className="w-full py-2 px-3 rounded-xl bg-cyber-green/10 border border-cyber-green/30 text-cyber-green text-xs font-bold flex items-center justify-center space-x-1.5">
+        <div className="w-full py-2 px-3 rounded-xl bg-emerald-100 border border-emerald-300 text-[#059669] text-xs font-bold flex items-center justify-center space-x-1.5">
           <CheckCircle2 size={16} />
           <span>Completed & Claimed</span>
         </div>
       ) : isSoldOut ? (
-        <div className="w-full py-2 px-3 rounded-xl bg-cyber-surface text-slate-500 text-xs font-semibold text-center">
+        <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold text-center">
           Reward Budget Exhausted
         </div>
       ) : isScreenshotTask ? (
         mission.proofStatus === 'PENDING_REVIEW' ? (
-          <div className="w-full py-2 px-3 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-xs font-bold flex items-center justify-center space-x-1.5">
+          <div className="w-full py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold flex items-center justify-center space-x-1.5">
             <Clock size={16} className="animate-spin" />
             <span>⏳ Screenshot In Review</span>
           </div>
@@ -168,14 +168,14 @@ export const MissionCard: React.FC<MissionCardProps> = ({
           <div className="flex items-center space-x-2">
             <button
               onClick={handleActionClick}
-              className="flex-1 py-2 px-3 rounded-xl bg-cyber-surface hover:bg-cyber-card border border-cyber-border text-xs font-semibold text-slate-200 flex items-center justify-center space-x-1 transition-all active:scale-95"
+              className="flex-1 py-2 px-3 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 flex items-center justify-center space-x-1 transition-all active:scale-95"
             >
               <span>Open Link</span>
-              <ArrowUpRight size={14} className="text-cyber-cyan" />
+              <ArrowUpRight size={14} className="text-[#2563EB]" />
             </button>
             <button
               onClick={() => setProofModalOpen(true)}
-              className="flex-1 py-2 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95"
+              className="flex-1 py-2 px-3 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95"
             >
               <Camera size={14} />
               <span>Retry Proof</span>
@@ -185,14 +185,14 @@ export const MissionCard: React.FC<MissionCardProps> = ({
           <div className="flex items-center space-x-2">
             <button
               onClick={handleActionClick}
-              className="flex-1 py-2 px-3 rounded-xl bg-cyber-surface hover:bg-cyber-card border border-cyber-border text-xs font-semibold text-slate-200 flex items-center justify-center space-x-1 transition-all active:scale-95"
+              className="flex-1 py-2 px-3 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 flex items-center justify-center space-x-1 transition-all active:scale-95"
             >
               <span>Open Link</span>
-              <ArrowUpRight size={14} className="text-cyber-cyan" />
+              <ArrowUpRight size={14} className="text-[#2563EB]" />
             </button>
             <button
               onClick={() => setProofModalOpen(true)}
-              className="flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all active:scale-95 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black shadow-lg shadow-yellow-500/20 font-extrabold"
+              className="flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all active:scale-95 bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xs"
             >
               <Camera size={14} />
               <span>Submit Proof</span>
@@ -203,10 +203,10 @@ export const MissionCard: React.FC<MissionCardProps> = ({
         <div className="flex items-center space-x-2">
           <button
             onClick={handleActionClick}
-            className="flex-1 py-2 px-3 rounded-xl bg-cyber-surface hover:bg-cyber-card border border-cyber-border text-xs font-semibold text-slate-200 flex items-center justify-center space-x-1 transition-all active:scale-95"
+            className="flex-1 py-2 px-3 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 flex items-center justify-center space-x-1 transition-all active:scale-95"
           >
             <span>{visited ? 'Re-open Link' : 'Open Link'}</span>
-            <ArrowUpRight size={14} className="text-cyber-cyan" />
+            <ArrowUpRight size={14} className="text-[#2563EB]" />
           </button>
 
           <button
@@ -214,10 +214,10 @@ export const MissionCard: React.FC<MissionCardProps> = ({
             disabled={claiming || !visited || countdown > 0}
             className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95 ${
               !visited
-                ? 'bg-cyber-surface border border-cyber-border/40 text-slate-500 cursor-not-allowed opacity-60'
+                ? 'bg-slate-100 border border-[#E2E8F0] text-slate-400 cursor-not-allowed opacity-75'
                 : countdown > 0
-                ? 'bg-amber-500/15 border border-amber-500/40 text-amber-300 cursor-wait shadow-sm'
-                : 'bg-gradient-to-r from-cyber-cyan to-cyber-blue text-cyber-bg shadow-glow-cyan font-extrabold'
+                ? 'bg-amber-50 border border-amber-300 text-amber-800 cursor-wait shadow-xs'
+                : 'bg-[#10B981] hover:bg-[#059669] text-white shadow-xs font-extrabold'
             }`}
           >
             {claiming ? (
@@ -227,7 +227,7 @@ export const MissionCard: React.FC<MissionCardProps> = ({
               </>
             ) : countdown > 0 ? (
               <>
-                <Clock size={14} className="animate-pulse text-amber-400" />
+                <Clock size={14} className="animate-pulse text-amber-600" />
                 <span>Visiting ({countdown}s)</span>
               </>
             ) : (

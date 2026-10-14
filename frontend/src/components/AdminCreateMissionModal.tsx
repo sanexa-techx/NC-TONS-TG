@@ -79,25 +79,25 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
-      <div className="glass-panel w-full max-w-md rounded-3xl p-5 border border-cyber-cyan/30 shadow-glow-cyan relative my-8 text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white w-full max-w-md rounded-3xl p-5 border border-[#E2E8F0] shadow-xl relative my-8 text-slate-800">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-full transition"
         >
-          <X size={20} />
+          <X size={18} />
         </button>
 
-        <div className="flex items-center space-x-2 text-cyber-cyan mb-1">
-          <Sparkles size={22} />
-          <h3 className="text-lg font-bold">Create Dynamic Mission</h3>
+        <div className="flex items-center space-x-2 text-[#2563EB] mb-1">
+          <Sparkles size={20} />
+          <h3 className="text-base font-bold text-slate-900">Create Dynamic Mission</h3>
         </div>
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-slate-500 mb-4">
           Publish a priority verified campaign or external social proof mission.
         </p>
 
         {error && (
-          <div className="p-3 mb-4 rounded-xl bg-cyber-red/15 border border-cyber-red/30 text-xs text-cyber-red flex items-center space-x-2">
+          <div className="p-3 mb-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-600 flex items-center space-x-2">
             <AlertCircle size={16} />
             <span>{error}</span>
           </div>
@@ -105,14 +105,14 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
 
         {success ? (
           <div className="py-8 flex flex-col items-center justify-center text-center">
-            <CheckCircle2 size={48} className="text-cyber-green mb-3 animate-bounce" />
-            <h4 className="text-lg font-bold text-white mb-1">Mission Published!</h4>
-            <p className="text-xs text-slate-300">Campaign is now live in the mission marketplace.</p>
+            <CheckCircle2 size={48} className="text-[#10B981] mb-3 animate-bounce" />
+            <h4 className="text-base font-bold text-slate-900 mb-1">Mission Published!</h4>
+            <p className="text-xs text-slate-500">Campaign is now live in the mission marketplace.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Task Verification Type
               </label>
               <select
@@ -124,7 +124,7 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                   else if (val === 'telegram_join') setCategory('telegram');
                   else if (val === 'bot_launch') setCategory('partner');
                 }}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-cyber-cyan"
+                className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl p-2.5 text-slate-800 text-xs focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               >
                 <option value="telegram_join">Telegram Channel (Auto-Verify via Bot)</option>
                 <option value="screenshot_social">Social Follow / YouTube Subscribe (Screenshot Proof)</option>
@@ -134,7 +134,7 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
             </div>
 
             <div>
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Campaign Title *
               </label>
               <input
@@ -143,12 +143,12 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Subscribe to NC TONs YouTube Channel"
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Description *
               </label>
               <textarea
@@ -157,12 +157,12 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                 placeholder="Instructions for miners..."
                 rows={2}
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Action / Channel URL *
               </label>
               <input
@@ -171,13 +171,13 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                 onChange={(e) => setActionUrl(e.target.value)}
                 placeholder="https://youtube.com/@channel or https://instagram.com/profile"
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
               />
             </div>
 
             {taskType === 'telegram_join' && (
               <div>
-                <label className="block text-[11px] font-mono text-slate-300 uppercase mb-1">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Telegram Username or Chat ID (for bot verification)
                 </label>
                 <input
@@ -185,18 +185,18 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                   value={telegramChatId}
                   onChange={(e) => setTelegramChatId(e.target.value)}
                   placeholder="@your_channel"
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyber-cyan"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] focus:bg-white transition"
                 />
               </div>
             )}
 
             {taskType === 'screenshot_social' && (
-              <div className="p-3 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-1.5">
-                <div className="flex items-center space-x-1.5 text-yellow-400 text-xs font-semibold">
+              <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200/80 space-y-1.5">
+                <div className="flex items-center space-x-1.5 text-amber-800 text-xs font-bold">
                   <Camera size={14} />
                   <span>Screenshot Proof Settings</span>
                 </div>
-                <label className="block text-[10px] font-mono text-slate-400 uppercase">
+                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   Proof Instructions for Miner
                 </label>
                 <input
@@ -204,9 +204,9 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                   value={proofInstructions}
                   onChange={(e) => setProofInstructions(e.target.value)}
                   placeholder="Upload screenshot showing you followed/subscribed"
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-yellow-400"
+                  className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB]"
                 />
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-slate-500">
                   Screenshots are streamed directly to your Telegram Admin Channel for 1-tap review.
                 </p>
               </div>
@@ -214,7 +214,7 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
 
             <div className="grid grid-cols-4 gap-2">
               <div>
-                <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-300 uppercase mb-1">
+                <label className="flex items-center space-x-1 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   <NcIcon className="w-3.5 h-3.5" />
                   <span>NC</span>
                 </label>
@@ -224,11 +224,11 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                   step="50"
                   value={ncReward}
                   onChange={(e) => setNcReward(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyber-gold"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-2 py-1.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#10B981] focus:bg-white"
                 />
               </div>
               <div>
-                <label className="flex items-center space-x-1 text-[10px] font-mono text-slate-300 uppercase mb-1">
+                <label className="flex items-center space-x-1 text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   <TonIcon className="w-3.5 h-3.5" />
                   <span>TON</span>
                 </label>
@@ -236,11 +236,11 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                   type="text"
                   value={tonReward}
                   onChange={(e) => setTonReward(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyber-cyan"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-2 py-1.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#2563EB] focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-mono text-slate-300 uppercase mb-1">
+                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Target
                 </label>
                 <input
@@ -248,18 +248,18 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
                   min="10"
                   value={targetUsers}
                   onChange={(e) => setTargetUsers(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyber-cyan"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-2 py-1.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#2563EB] focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-mono text-slate-300 uppercase mb-1">
+                <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Priority
                 </label>
                 <input
                   type="number"
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyber-cyan"
+                  className="w-full bg-slate-50 border border-[#E2E8F0] rounded-xl px-2 py-1.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#2563EB] focus:bg-white"
                 />
               </div>
             </div>
@@ -267,7 +267,7 @@ export const AdminCreateMissionModal: React.FC<AdminCreateMissionModalProps> = (
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-xl bg-cyber-cyan hover:bg-cyber-cyan/90 text-black font-bold text-xs uppercase tracking-wide active:scale-98 transition-all flex items-center justify-center space-x-1.5 mt-2"
+              className="w-full py-3 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs uppercase tracking-wide active:scale-98 transition-all flex items-center justify-center space-x-1.5 mt-2 shadow-md shadow-blue-500/20"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <span>Publish Mission</span>}
             </button>

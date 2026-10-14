@@ -160,8 +160,14 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished, userId }
       initialBoard = spawnRandomTile(initialBoard);
       setBoard(initialBoard);
 
-      const res = await api.startGame('game_2048');
-      setSessionId(res.sessionId);
+      let sid = `game2048_${Date.now()}`;
+      try {
+        const res = await api.startGame('game_2048');
+        if (res?.sessionId) sid = res.sessionId;
+      } catch (err) {
+        console.warn('Game2048 session start note:', err);
+      }
+      setSessionId(sid);
       startTimeRef.current = Date.now();
       setGameState('playing');
     } catch (err) {
@@ -210,9 +216,17 @@ export const Game2048: React.FC<Game2048Props> = ({ onBack, onFinished, userId }
         origin: { y: 0.6 },
       });
 
-      const res = await api.finishGame(sessionId, score);
-      const nc = res.reward?.nc ?? res.ncAwarded ?? 60;
-      const ton = res.reward?.ton ?? res.tonAwarded ?? '0.000020';
+      let res: any = null;
+      if (sessionId) {
+        try {
+          res = await api.finishGame(sessionId, score);
+        } catch (apiErr) {
+          console.warn('Game2048 finish API note:', apiErr);
+        }
+      }
+
+      const nc = res?.reward?.nc ?? res?.ncAwarded ?? 60;
+      const ton = res?.reward?.ton ?? res?.tonAwarded ?? '0.000020';
 
       setRewardClaim({ nc, ton });
       setGameState('claimed');

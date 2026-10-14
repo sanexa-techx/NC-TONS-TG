@@ -124,8 +124,14 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished, us
       roadOffsetRef.current = 0;
       lastSpawnRef.current = Date.now();
 
-      const res = await api.startGame('game_carrace');
-      setSessionId(res.sessionId);
+      let sid = `carrace_${Date.now()}`;
+      try {
+        const res = await api.startGame('game_carrace');
+        if (res?.sessionId) sid = res.sessionId;
+      } catch (err) {
+        console.warn('CarRaceGame session start note:', err);
+      }
+      setSessionId(sid);
       startTimeRef.current = Date.now();
       setGameState('playing');
     } catch (err) {
@@ -163,10 +169,17 @@ export const CarRaceGame: React.FC<CarRaceGameProps> = ({ onBack, onFinished, us
       });
 
       const finalScore = scoreRef.current + Math.round(fuelRef.current);
-      const res = await api.finishGame(sessionId, finalScore);
+      let res: any = null;
+      if (sessionId) {
+        try {
+          res = await api.finishGame(sessionId, finalScore);
+        } catch (apiErr) {
+          console.warn('CarRaceGame finish API note:', apiErr);
+        }
+      }
 
-      const nc = res.reward?.nc ?? res.ncAwarded ?? 50;
-      const ton = res.reward?.ton ?? res.tonAwarded ?? '0.000025';
+      const nc = res?.reward?.nc ?? res?.ncAwarded ?? 50;
+      const ton = res?.reward?.ton ?? res?.tonAwarded ?? '0.000025';
 
       setRewardClaim({ nc, ton });
       setGameState('survived');
