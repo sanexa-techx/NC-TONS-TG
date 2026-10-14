@@ -13,7 +13,7 @@ console.log('2. Creating deploy archive...');
 const zipFile = path.join(__dirname, '..', 'deploy.zip');
 if (fs.existsSync(zipFile)) fs.unlinkSync(zipFile);
 
-execSync(`powershell -Command "Compress-Archive -Path 'frontend/dist/*' -DestinationPath 'deploy.zip' -Force"`, {
+execSync(`python -c "import zipfile, os; zipf = zipfile.ZipFile('deploy.zip', 'w', zipfile.ZIP_DEFLATED); [zipf.write(os.path.join(r, f), os.path.relpath(os.path.join(r, f), 'frontend/dist').replace(os.path.sep, '/')) for r, d, fs in os.walk('frontend/dist') for f in fs]; zipf.close()"`, {
   cwd: path.join(__dirname, '..'),
   stdio: 'inherit'
 });
