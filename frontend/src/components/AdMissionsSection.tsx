@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { ShieldCheck, Lock, Video, Clock, ExternalLink, ArrowRight, CheckCircle2, Play } from "lucide-react";
+import { ShieldCheck, Lock, Video, Clock, ExternalLink, ArrowRight, CheckCircle2, Play, Sparkles } from "lucide-react";
 import { TonIcon, NcIcon } from "./icons/index.js";
-import { showSmartRewardedAd, getAdManagerStats, AD_STATE } from "../services/adManager.js";
+import { showSmartRewardedAd, showSpecificRewardedAd, getAdManagerStats, AD_STATE } from "../services/adManager.js";
 import { api } from "../services/api.js";
 import { DailyAdStatusResponse } from "../types/index.js";
 import confetti from "canvas-confetti";
@@ -17,6 +17,7 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
 }) => {
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [activeProviderLoading, setActiveProviderLoading] = useState<string | null>(null);
   const [adFeedback, setAdFeedback] = useState<string | null>(null);
 
   // Dwell partner link state: 15s countdown with 11s left default
@@ -24,10 +25,21 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
   const [isDwelling, setIsDwelling] = useState<boolean>(false);
   const [dwellClaimed, setDwellClaimed] = useState<boolean>(false);
 
-  // Ad cooldown state (30s cooldown between rewarded ads)
+  // Global & Provider-specific 30s cooldowns
   const [adCooldown, setAdCooldown] = useState<number>(() => {
     const stats = getAdManagerStats();
     return stats.rewardedCooldownLeft;
+  });
+
+  const [providerCooldowns, setProviderCooldowns] = useState(() => {
+    const stats = getAdManagerStats();
+    return (
+      stats.providerCooldowns || {
+        monetag: 0,
+        gigapub: 0,
+        adsgram: 0,
+      }
+    );
   });
 
   const [liveCounts, setLiveCounts] = useState(() => ({
@@ -36,11 +48,14 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     adsgram: AD_STATE.counts.adsgram,
   }));
 
-  // Countdown loop for cooldown
+  // Countdown loop for cooldowns (ticks every 1s)
   useEffect(() => {
     const timer = setInterval(() => {
       const stats = getAdManagerStats();
       setAdCooldown(stats.rewardedCooldownLeft);
+      if (stats.providerCooldowns) {
+        setProviderCooldowns(stats.providerCooldowns);
+      }
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -83,13 +98,63 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     fetchStatus();
   }, [fetchStatus]);
 
+  // Handler for separate ad provider buttons (Monetag, Gigapub, Adsgram)
+  const handleWatchProviderAd = async (provider: "monetag" | "gigapub" | "adsgram") => {
+    if (providerCooldowns[provider] > 0 || activeProviderLoading || loading) return;
+    setActiveProviderLoading(provider);
+    setAdFeedback(null);
+
+    try {
+      const res = await showSpecificRewardedAd(provider, false);
+      if (res.success) {
+        setLiveCounts({
+          monetag: AD_STATE.counts.monetag,
+          gigapub: AD_STATE.counts.gigapub,
+          adsgram: AD_STATE.counts.adsgram,
+        });
+
+        const stats = getAdManagerStats();
+        if (stats.providerCooldowns) {
+          setProviderCooldowns(stats.providerCooldowns);
+        }
+
+        try {
+          const confettiColors =
+            provider === "monetag"
+              ? ["#10B981", "#34D399", "#A7F3D0"]
+              : provider === "gigapub"
+              ? ["#2563EB", "#60A5FA", "#BFDBFE"]
+              : ["#9333EA", "#C084FC", "#E9D5FF"];
+          confetti({
+            particleCount: 95,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: confettiColors,
+          });
+        } catch (_) {}
+
+        setAdFeedback(
+          `🎉 ${res.provider} ad completed! Earned +${res.reward?.nc} NC & +${res.reward?.ton} TON (${res.reward?.tier})`
+        );
+        fetchStatus();
+        if (onRewardClaimed) onRewardClaimed();
+      } else {
+        setAdFeedback(res.reason || `${provider.toUpperCase()} ad could not be displayed.`);
+      }
+    } catch (err: any) {
+      setAdFeedback(err.message || `Failed to trigger ${provider} ad.`);
+    } finally {
+      setActiveProviderLoading(null);
+    }
+  };
+
+  // Handler for global auto-waterfall ad
   const handleWatchSmartAd = async () => {
-    if (adCooldown > 0 || loading) return;
+    if (adCooldown > 0 || loading || activeProviderLoading) return;
     setLoading(true);
     setAdFeedback(null);
 
     try {
-      // Execute Priority Waterfall Queue (1. Monetag -> 2. Gigapub -> 3. Adsgram)
       const res = await showSmartRewardedAd(false);
       if (res.success) {
         setLiveCounts({
@@ -98,17 +163,22 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
           adsgram: AD_STATE.counts.adsgram,
         });
 
+        const stats = getAdManagerStats();
+        if (stats.providerCooldowns) {
+          setProviderCooldowns(stats.providerCooldowns);
+        }
+
         try {
           confetti({
             particleCount: 90,
             spread: 70,
             origin: { y: 0.6 },
-            colors: ["#10B981", "#2563EB", "#F59E0B"],
+            colors: ["#10B981", "#2563EB", "#9333EA"],
           });
         } catch (_) {}
 
         setAdFeedback(
-          `Ad delivered via ${res.provider}! Rewarded: +${res.reward?.nc} NC & +${res.reward?.ton} TON (${res.reward?.tier})`
+          `🎉 Ad delivered via ${res.provider}! Earned +${res.reward?.nc} NC & +${res.reward?.ton} TON (${res.reward?.tier})`
         );
         fetchStatus();
         if (onRewardClaimed) onRewardClaimed();
@@ -266,110 +336,230 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
           </div>
         </div>
 
-        {/* Live Provider Status Rows */}
-        <div className="space-y-2 pt-1 border-t border-slate-100">
-          <div className="text-[10px] font-mono font-bold text-slate-500 uppercase">
-            Live Provider Progress
+        {/* Separate Ad Provider Cards & Dedicated Buttons with 30s Cooldown */}
+        <div className="space-y-3 pt-1 border-t border-slate-100">
+          <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-600 uppercase">
+            <span>Choose Ad Provider</span>
+            <span className="text-[10px] text-slate-400 font-normal">30s cooldown per ad</span>
           </div>
 
-          {/* Monetag Row */}
-          <div className="p-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#10B981] inline-block" />
-                Monetag (Priority #1)
-              </span>
-              <span className="font-bold text-[#10B981]">
-                {liveCounts.monetag} / {AD_STATE.dailyCaps.monetag}
-              </span>
+          {/* 1. MONETAG DEDICATED CARD & BUTTON */}
+          <div className="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] shadow-2xs space-y-2.5 hover:border-emerald-300 transition-all">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#10B981]">
+                  <Video size={14} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-slate-900 tracking-wide">
+                      MONETAG
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      Priority #1
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">High-CPM Rewarded Video</span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-xs font-mono font-black text-[#10B981]">
+                  {liveCounts.monetag} / {AD_STATE.dailyCaps.monetag}
+                </span>
+                <span className="text-[9px] text-slate-400 block font-mono">Daily Cap</span>
+              </div>
             </div>
-            <div className="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
+
+            {/* Progress Bar */}
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200/60">
               <div
-                className="bg-[#10B981] h-full rounded-full"
+                className="bg-[#10B981] h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${Math.min(100, (liveCounts.monetag / AD_STATE.dailyCaps.monetag) * 100)}%`,
                 }}
               />
             </div>
+
+            {/* Monetag Dedicated 30s Cooldown & Action Button */}
+            {providerCooldowns.monetag > 0 ? (
+              <button
+                disabled
+                className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed animate-pulse shadow-2xs"
+              >
+                <Clock size={13} className="text-[#10B981] animate-spin" />
+                <span>MONETAG COOLDOWN: {providerCooldowns.monetag}s REMAINING</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleWatchProviderAd("monetag")}
+                disabled={activeProviderLoading !== null || loading || liveCounts.monetag >= AD_STATE.dailyCaps.monetag}
+                className="w-full py-2.5 px-3 rounded-xl bg-[#10B981] hover:bg-[#059669] disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-sm shadow-emerald-500/20 cursor-pointer"
+              >
+                {activeProviderLoading === "monetag" ? (
+                  <span>DELIVERING MONETAG AD...</span>
+                ) : liveCounts.monetag >= AD_STATE.dailyCaps.monetag ? (
+                  <span>MONETAG DAILY CAP REACHED (80/80)</span>
+                ) : (
+                  <>
+                    <Play size={13} className="fill-white" />
+                    <span>WATCH MONETAG AD (+NC & TON)</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
-          {/* Gigapub Row */}
-          <div className="p-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#2563EB] inline-block" />
-                Gigapub (Priority #2)
-              </span>
-              <span className="font-bold text-[#2563EB]">
-                {liveCounts.gigapub} / {AD_STATE.dailyCaps.gigapub}
-              </span>
+          {/* 2. GIGAPUB DEDICATED CARD & BUTTON */}
+          <div className="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] shadow-2xs space-y-2.5 hover:border-blue-300 transition-all">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-[#2563EB]">
+                  <Video size={14} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-slate-900 tracking-wide">
+                      GIGAPUB
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                      Priority #2 • showGiga
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">Telegram Native Rewarded</span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-xs font-mono font-black text-[#2563EB]">
+                  {liveCounts.gigapub} / {AD_STATE.dailyCaps.gigapub}
+                </span>
+                <span className="text-[9px] text-slate-400 block font-mono">Daily Cap</span>
+              </div>
             </div>
-            <div className="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
+
+            {/* Progress Bar */}
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200/60">
               <div
-                className="bg-[#2563EB] h-full rounded-full"
+                className="bg-[#2563EB] h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${Math.min(100, (liveCounts.gigapub / AD_STATE.dailyCaps.gigapub) * 100)}%`,
                 }}
               />
             </div>
+
+            {/* Gigapub Dedicated 30s Cooldown & Action Button */}
+            {providerCooldowns.gigapub > 0 ? (
+              <button
+                disabled
+                className="w-full py-2.5 px-3 rounded-xl bg-blue-50 border border-blue-300 text-blue-800 font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed animate-pulse shadow-2xs"
+              >
+                <Clock size={13} className="text-[#2563EB] animate-spin" />
+                <span>GIGAPUB COOLDOWN: {providerCooldowns.gigapub}s REMAINING</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleWatchProviderAd("gigapub")}
+                disabled={activeProviderLoading !== null || loading || liveCounts.gigapub >= AD_STATE.dailyCaps.gigapub}
+                className="w-full py-2.5 px-3 rounded-xl bg-[#2563EB] hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-sm shadow-blue-500/20 cursor-pointer"
+              >
+                {activeProviderLoading === "gigapub" ? (
+                  <span>DELIVERING GIGAPUB AD (showGiga)...</span>
+                ) : liveCounts.gigapub >= AD_STATE.dailyCaps.gigapub ? (
+                  <span>GIGAPUB DAILY CAP REACHED (70/70)</span>
+                ) : (
+                  <>
+                    <Play size={13} className="fill-white" />
+                    <span>WATCH GIGAPUB AD (+NC & TON)</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
-          {/* Adsgram Row */}
-          <div className="p-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
-                Adsgram (Priority #3)
-              </span>
-              <span className="font-bold text-purple-600">
-                {liveCounts.adsgram} / {AD_STATE.dailyCaps.adsgram}
-              </span>
+          {/* 3. ADSGRAM DEDICATED CARD & BUTTON */}
+          <div className="p-3.5 rounded-2xl bg-white border border-[#E2E8F0] shadow-2xs space-y-2.5 hover:border-purple-300 transition-all">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
+                  <Video size={14} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-slate-900 tracking-wide">
+                      ADSGRAM
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                      Priority #3
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">Telegram Adsgram Network</span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-xs font-mono font-black text-purple-600">
+                  {liveCounts.adsgram} / {AD_STATE.dailyCaps.adsgram}
+                </span>
+                <span className="text-[9px] text-slate-400 block font-mono">Daily Cap</span>
+              </div>
             </div>
-            <div className="w-full bg-slate-200 rounded-full h-1 overflow-hidden">
+
+            {/* Progress Bar */}
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200/60">
               <div
-                className="bg-purple-500 h-full rounded-full"
+                className="bg-purple-500 h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${Math.min(100, (liveCounts.adsgram / AD_STATE.dailyCaps.adsgram) * 100)}%`,
                 }}
               />
             </div>
+
+            {/* Adsgram Dedicated 30s Cooldown & Action Button */}
+            {providerCooldowns.adsgram > 0 ? (
+              <button
+                disabled
+                className="w-full py-2.5 px-3 rounded-xl bg-purple-50 border border-purple-300 text-purple-800 font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed animate-pulse shadow-2xs"
+              >
+                <Clock size={13} className="text-purple-600 animate-spin" />
+                <span>ADSGRAM COOLDOWN: {providerCooldowns.adsgram}s REMAINING</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleWatchProviderAd("adsgram")}
+                disabled={activeProviderLoading !== null || loading || liveCounts.adsgram >= AD_STATE.dailyCaps.adsgram}
+                className="w-full py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-sm shadow-purple-500/20 cursor-pointer"
+              >
+                {activeProviderLoading === "adsgram" ? (
+                  <span>DELIVERING ADSGRAM AD...</span>
+                ) : liveCounts.adsgram >= AD_STATE.dailyCaps.adsgram ? (
+                  <span>ADSGRAM DAILY CAP REACHED (50/50)</span>
+                ) : (
+                  <>
+                    <Play size={13} className="fill-white" />
+                    <span>WATCH ADSGRAM AD (+NC & TON)</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 30-Second Cooldown Status */}
-        {adCooldown > 0 && (
-          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-between text-xs animate-pulse">
-            <div className="flex items-center gap-2">
-              <Clock size={14} className="text-amber-600" />
-              <span className="font-mono text-[11px] font-semibold">
-                30s Cooldown Active (CPM Protection)
-              </span>
-            </div>
-            <span className="font-mono font-black bg-white px-2 py-0.5 rounded border border-amber-300">
-              {adCooldown}s
+        {/* Global Auto Waterfall Quick Button */}
+        <div className="pt-1 border-t border-slate-100">
+          <button
+            onClick={handleWatchSmartAd}
+            disabled={loading || activeProviderLoading !== null || adCooldown > 0 || totalWatched >= totalMax}
+            className="w-full py-2.5 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 disabled:bg-slate-50 disabled:text-slate-400 text-slate-700 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer"
+          >
+            <Sparkles size={14} className="text-amber-500" />
+            <span>
+              {adCooldown > 0
+                ? `AUTO-WATERFALL COOLDOWN (${adCooldown}s)`
+                : "AUTO-WATERFALL (PLAY ANY AVAILABLE AD)"}
             </span>
-          </div>
-        )}
-
-        {/* Primary Action Button: Solid Neo-Mint */}
-        <button
-          onClick={handleWatchSmartAd}
-          disabled={loading || adCooldown > 0 || totalWatched >= totalMax}
-          className="w-full py-3.5 px-4 rounded-xl bg-[#10B981] hover:bg-[#059669] disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all active:scale-98 shadow-md shadow-emerald-500/20 cursor-pointer"
-        >
-          {loading ? (
-            <span>DELIVERING AD VIA WATERFALL...</span>
-          ) : adCooldown > 0 ? (
-            <span>COOLDOWN ACTIVE ({adCooldown}s LEFT)</span>
-          ) : totalWatched >= totalMax ? (
-            <span>200 DAILY ADS COMPLETED</span>
-          ) : (
-            <>
-              <Play size={15} className="fill-white" />
-              <span>WATCH REWARDED AD (WATERFALL)</span>
-            </>
-          )}
-        </button>
+          </button>
+        </div>
 
         {adFeedback && (
           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-mono text-center flex items-center justify-center gap-1.5">
