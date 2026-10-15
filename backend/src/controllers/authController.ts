@@ -77,6 +77,8 @@ export async function verifyAuth(req: Request, res: Response) {
         photoUrl: activePhoto ? (activePhoto.startsWith('http') ? activePhoto : `/api/user/avatar/${user.id.toString()}`) : null,
         minerLevel: user.miner_level || 1,
         isAdmin: isAdmin(userId),
+        isVerified: Boolean((user as any).is_verified),
+        verifiedAt: (user as any).verified_at || null,
       },
       mining: miningState,
       botUsername,

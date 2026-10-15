@@ -3,6 +3,8 @@ export interface UserProfile {
   firstName: string;
   username?: string | null;
   isAdmin: boolean;
+  isVerified?: boolean;
+  verifiedAt?: string | null;
   photoUrl?: string | null;
   minerLevel?: number;
   tonBalance?: string;
@@ -284,4 +286,19 @@ export interface LevelUpgradeResponse {
   newHashrate: string;
   bonusNc: number;
   canWithdrawOverHalfTon: boolean;
+}
+
+export interface AccountVerificationStatusResponse {
+  isVerified: boolean;
+  verifiedAt: string | null;
+  feeTon: string;
+  feeNano: string;
+  adminReceiverWallet: string;
+}
+
+export interface AccountVerificationResult {
+  success: boolean;
+  message: string;
+  isVerified: boolean;
+  verifiedAt: string;
 }

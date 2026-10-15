@@ -218,6 +218,127 @@ router.post("/break-limit/watch-ad", async (req, res) => {
   }
 });
 
+// 2b. GET ACCOUNT VERIFICATION STATUS (0.05 TON Anti-Bot Verification)
+router.get("/verification-status", async (req, res) => {
+  const rawUserId =
+    req.query.userId ||
+    req.telegramUser?.id ||
+    req.headers["x-telegram-user-id"] ||
+    req.headers["x-dev-telegram-id"];
+  if (!rawUserId) return res.status(400).json({ error: "Missing userId" });
+  const userId = rawUserId.toString();
+
+  const client = await pool.connect();
+  try {
+    const userRes = await client.query(
+      `SELECT id, is_verified, verified_at FROM users WHERE id = $1`,
+      [userId]
+    );
+    const user = userRes.rows[0];
+    const adminWallet =
+      process.env.ADMIN_RECEIVER_WALLET ||
+      process.env.ADMIN_WALLET_ADDRESS ||
+      "UQD-1VqX4bF-8VfR8zL4wR9Yv9_6xK7uP4bT2hQ9wY7eN8mK";
+
+    return res.json({
+      isVerified: Boolean(user?.is_verified),
+      verifiedAt: user?.verified_at || null,
+      feeTon: "0.05",
+      feeNano: "50000000",
+      adminReceiverWallet: adminWallet,
+    });
+  } catch (err) {
+    console.error("Error fetching verification status:", err);
+    return res.status(500).json({ error: "Failed to fetch verification status" });
+  } finally {
+    client.release();
+  }
+});
+
+// 2c. VERIFY ACCOUNT VIA BOC PROOF (0.05 TON Anti-Bot Fee)
+router.post("/verify-account", async (req, res) => {
+  const rawUserId =
+    req.body.userId ||
+    req.telegramUser?.id ||
+    req.headers["x-telegram-user-id"] ||
+    req.headers["x-dev-telegram-id"];
+  if (!rawUserId) return res.status(400).json({ error: "Missing userId" });
+  const userId = rawUserId.toString();
+
+  const { boc, senderAddress } = req.body;
+  if (!boc || typeof boc !== "string" || boc.trim().length < 20) {
+    return res.status(400).json({ error: "Invalid or missing TON transaction BOC proof" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Check if user exists
+    const userRes = await client.query(
+      `SELECT id, is_verified, verified_at, username, first_name FROM users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+    const user = userRes.rows[0];
+    if (!user) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.is_verified) {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: true,
+        message: "Account is already verified! All withdrawal locks are removed.",
+        isVerified: true,
+        verifiedAt: user.verified_at,
+      });
+    }
+
+    // Update user record: is_verified = TRUE, verified_at = NOW(), verification_boc = boc
+    const updateRes = await client.query(
+      `UPDATE users 
+       SET is_verified = TRUE, 
+           verified_at = NOW(), 
+           verification_boc = $1 
+       WHERE id = $2 
+       RETURNING id, is_verified, verified_at`,
+      [boc.trim(), userId]
+    );
+
+    const updatedUser = updateRes.rows[0];
+
+    const adminWallet =
+      process.env.ADMIN_RECEIVER_WALLET ||
+      process.env.ADMIN_WALLET_ADDRESS ||
+      "UQD-1VqX4bF-8VfR8zL4wR9Yv9_6xK7uP4bT2hQ9wY7eN8mK";
+
+    // Record in wallet_verifications audit table
+    await client.query(
+      `INSERT INTO wallet_verifications (user_id, amount_nano, amount_ton, boc, receiver_wallet, sender_wallet, created_at)
+       VALUES ($1, '50000000', 0.05, $2, $3, $4, NOW())`,
+      [userId, boc.trim(), adminWallet, senderAddress || null]
+    );
+
+    await client.query("COMMIT");
+
+    console.log(`[Verification] User ${userId} successfully verified with 0.05 TON BOC proof!`);
+
+    return res.json({
+      success: true,
+      message: "Account verified successfully! 0.05 TON fee verified and withdrawal locks removed.",
+      isVerified: true,
+      verifiedAt: updatedUser.verified_at,
+    });
+  } catch (err: any) {
+    await client.query("ROLLBACK");
+    console.error("Account verification failed:", err);
+    return res.status(500).json({ error: "Failed to process verification proof", details: err?.message });
+  } finally {
+    client.release();
+  }
+});
+
 // 3. WITHDRAWAL SUBMISSION VERIFICATION (Enforce 1/day & 5/week)
 router.post("/request", async (req, res) => {
   const rawUserId =
@@ -305,7 +426,7 @@ router.post("/request", async (req, res) => {
 
     // D. Check balance & level restriction
     const userRes = await client.query(
-      `SELECT id, ton_balance, miner_level, username, first_name, is_banned, ban_reason, risk_score FROM users WHERE id = $1 FOR UPDATE`,
+      `SELECT id, ton_balance, miner_level, username, first_name, is_banned, ban_reason, risk_score, is_verified FROM users WHERE id = $1 FOR UPDATE`,
       [userId]
     );
     const user = userRes.rows[0];
@@ -320,6 +441,16 @@ router.post("/request", async (req, res) => {
       return res.status(403).json({
         error: "Your account is flagged for security violations.",
         reason: user.ban_reason || "Violation of Fair-Play Security Policy",
+      });
+    }
+
+    // Anti-Bot Account Verification Gate (0.05 TON)
+    if (!user.is_verified) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        error: "0.05 TON account verification required! Complete one-time anti-bot verification to unlock withdrawals.",
+        verificationRequired: true,
+        feeTon: "0.05",
       });
     }
 

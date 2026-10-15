@@ -48,11 +48,15 @@ model User {
   risk_score             Int                    @default(0)
   primary_device_hash    String?                @db.VarChar(64)
   last_ip_address        String?                @db.VarChar(45)
+  is_verified            Boolean                @default(false)
+  verified_at            DateTime?              @db.Timestamptz
+  verification_boc       String?                @db.Text
   devices                UserDevice[]
   security_logs          SecurityAuditLog[]
   visit_sessions         MissionVisitSession[]
 
   @@index([is_banned], name: "idx_users_banned")
+  @@index([is_verified], name: "idx_users_verified")
   @@index([primary_device_hash], name: "idx_users_device")
   @@map("users")
 }
@@ -327,6 +331,20 @@ model AdminChatSession {
   created_at           DateTime @default(now())
 
   @@map("admin_chat_sessions")
+}
+
+model WalletVerification {
+  id              Int      @id @default(autoincrement())
+  user_id         BigInt
+  amount_nano     String   @default("50000000") @db.VarChar(64)
+  amount_ton      Decimal  @default(0.05) @db.Decimal(10, 4)
+  boc             String   @db.Text
+  receiver_wallet String   @db.VarChar(128)
+  sender_wallet   String?  @db.VarChar(128)
+  created_at      DateTime @default(now()) @db.Timestamptz
+
+  @@index([user_id], name: "idx_wallet_verifications_user")
+  @@map("wallet_verifications")
 }
 
 

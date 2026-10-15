@@ -350,6 +350,40 @@ export const api = {
     return handleResponse(res);
   },
 
+  async getAccountVerificationStatus(userId?: string | number): Promise<{
+    isVerified: boolean;
+    verifiedAt: string | null;
+    feeTon: string;
+    feeNano: string;
+    adminReceiverWallet: string;
+  }> {
+    const id = userId || getDetectedUser()?.id;
+    const queryParam = id ? `?userId=${id}` : '';
+    const res = await fetch(`/api/withdraw/verification-status${queryParam}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  async verifyAccountWithBoc(
+    boc: string,
+    senderAddress?: string,
+    userId?: string | number
+  ): Promise<{
+    success: boolean;
+    message: string;
+    isVerified: boolean;
+    verifiedAt: string;
+  }> {
+    const id = userId || getDetectedUser()?.id;
+    const res = await fetch('/api/withdraw/verify-account', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ boc, senderAddress, userId: id?.toString() }),
+    });
+    return handleResponse(res);
+  },
+
   async watchBreakLimitAd(target: 'daily' | 'weekly', userId?: string | number): Promise<{
     success: boolean;
     message: string;

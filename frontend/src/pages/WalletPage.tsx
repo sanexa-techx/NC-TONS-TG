@@ -8,6 +8,7 @@ import { PromoRedeemCard } from '../components/PromoRedeemCard.js';
 import { useAdManager } from '../hooks/useAdManager.js';
 import { LegalModal } from '../components/LegalModal.js';
 import WithdrawalLimitsCard from '../components/WithdrawalLimitsCard.js';
+import { WalletVerificationCard } from '../components/WalletVerificationCard.js';
 
 interface WalletPageProps {
   tonBalance: string;
@@ -33,6 +34,16 @@ export const WalletPage: React.FC<WalletPageProps> = ({
   const [limitsRefreshKey, setLimitsRefreshKey] = useState<number>(0);
   const [levelStatus, setLevelStatus] = useState<LevelStatusResponse | null>(null);
   const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
+  const [isAccountVerified, setIsAccountVerified] = useState<boolean>(false);
+
+  const fetchVerification = useCallback(async () => {
+    try {
+      const data = await api.getAccountVerificationStatus(userId);
+      setIsAccountVerified(Boolean(data.isVerified));
+    } catch (e) {
+      console.warn('Could not fetch account verification status:', e);
+    }
+  }, [userId]);
 
   const fetchWithdrawalStatus = useCallback(() => {
     setLimitsRefreshKey((k) => k + 1);
@@ -87,12 +98,21 @@ export const WalletPage: React.FC<WalletPageProps> = ({
     fetchAdStatus();
     fetchWithdrawalStatus();
     fetchLevelStatus();
-  }, [fetchHistory, fetchAdStatus, fetchWithdrawalStatus, fetchLevelStatus]);
+    fetchVerification();
+  }, [fetchHistory, fetchAdStatus, fetchWithdrawalStatus, fetchLevelStatus, fetchVerification]);
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     triggerInterstitial('withdraw');
     setStatusMessage(null);
+
+    if (!isAccountVerified) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Account verification required! Please pay the one-time 0.05 TON anti-bot fee above to unlock withdrawals.',
+      });
+      return;
+    }
 
     const amountNum = parseFloat(tonAmount);
     if (levelStatus && !levelStatus.canWithdrawOverHalfTon && amountNum > 0.5) {
@@ -348,15 +368,37 @@ export const WalletPage: React.FC<WalletPageProps> = ({
             </div>
           </div>
 
+          {/* Wallet Verification Card: 0.05 TON Anti-Bot Fee & Unlock Gate */}
+          <WalletVerificationCard
+            userId={userId}
+            isVerified={isAccountVerified}
+            onVerificationSuccess={() => {
+              setIsAccountVerified(true);
+              fetchVerification();
+              fetchWithdrawalStatus();
+              onWithdrawalRequested();
+            }}
+            className="my-3"
+          />
+
           <button
             type="submit"
-            disabled={submitting}
-            className="w-full py-3 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-extrabold text-xs uppercase tracking-wider shadow-sm active:scale-98 transition-all flex items-center justify-center space-x-2"
+            disabled={submitting || !isAccountVerified}
+            className={`w-full py-3 px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider shadow-sm active:scale-98 transition-all flex items-center justify-center space-x-2 ${
+              !isAccountVerified
+                ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300/80 shadow-none'
+                : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer shadow-md'
+            }`}
           >
             {submitting ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
                 <span>Processing Request...</span>
+              </>
+            ) : !isAccountVerified ? (
+              <>
+                <Lock size={15} />
+                <span>Locked • Complete 0.05 TON Verification</span>
               </>
             ) : (
               <span>Withdraw TON Now</span>
