@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Mission } from '../types/index.js';
-import { Send, Globe, Bot, CheckCircle2, ArrowUpRight, Loader2, Camera, Clock } from 'lucide-react';
+import { Send, Globe, Bot, CheckCircle2, ArrowUpRight, Loader2, Camera, Clock, Trash2 } from 'lucide-react';
 import { TonIcon, NcIcon } from './icons/index.js';
 import { useTelegram } from '../hooks/useTelegram.js';
 import { api } from '../services/api.js';
@@ -11,6 +11,8 @@ interface MissionCardProps {
   userId?: number | string;
   onClaim: (missionId: number) => Promise<any>;
   onProofSubmitted?: () => void;
+  isAdmin?: boolean;
+  onDelete?: (missionId: number) => void;
 }
 
 export const MissionCard: React.FC<MissionCardProps> = ({
@@ -18,6 +20,8 @@ export const MissionCard: React.FC<MissionCardProps> = ({
   userId,
   onClaim,
   onProofSubmitted,
+  isAdmin,
+  onDelete,
 }) => {
   const { openLink, haptic } = useTelegram();
   const [visited, setVisited] = useState(false);
@@ -109,7 +113,7 @@ export const MissionCard: React.FC<MissionCardProps> = ({
           </span>
         </div>
 
-        {/* Dual Reward Badges */}
+        {/* Dual Reward Badges & Optional Admin Action */}
         <div className="flex items-center space-x-1.5">
           <div className="px-2 py-0.5 rounded-full bg-[#ECFDF5] border border-emerald-200 text-[11px] font-mono font-bold text-[#10B981] flex items-center space-x-1">
             <NcIcon className="w-4 h-4" />
@@ -120,6 +124,19 @@ export const MissionCard: React.FC<MissionCardProps> = ({
               <TonIcon className="w-4 h-4" />
               <span>+{mission.tonReward} TON</span>
             </div>
+          )}
+          {isAdmin && onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(mission.id);
+              }}
+              className="p-1 rounded-lg text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-all ml-1 shadow-2xs"
+              title="Admin: Delete Mission"
+            >
+              <Trash2 size={13} />
+            </button>
           )}
         </div>
       </div>

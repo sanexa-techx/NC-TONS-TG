@@ -443,6 +443,13 @@ export const api = {
     return handleResponse(res);
   },
 
+  async getAdminMissions(): Promise<{ success: boolean; missions: any[] }> {
+    const res = await fetch('/api/admin/missions', {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   async createAdminMission(data: any): Promise<{ success: boolean; mission: any }> {
     const res = await fetch('/api/admin/missions', {
       method: 'POST',
@@ -457,6 +464,14 @@ export const api = {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  async deleteAdminMission(id: number): Promise<{ success: boolean; message?: string }> {
+    const res = await fetch(`/api/admin/missions/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     return handleResponse(res);
   },

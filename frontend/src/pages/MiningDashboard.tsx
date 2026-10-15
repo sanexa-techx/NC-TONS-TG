@@ -4,7 +4,7 @@ import { DualCurrencyBar } from '../components/DualCurrencyBar.js';
 import { CircularBatteryGauge } from '../components/CircularBatteryGauge.js';
 import { RechargeModal } from '../components/RechargeModal.js';
 import DailyCheckInBanner from '../components/DailyCheckInBanner.js';
-import { Gamepad2, Target, ArrowRight, Zap, Tv, ShieldCheck, Lock, Sparkles, Loader2, BatteryCharging, Clock, CheckCircle2 } from 'lucide-react';
+import { Gamepad2, Target, ArrowRight, Zap, Tv, ShieldCheck, Lock, Sparkles, Loader2, BatteryCharging, Clock, CheckCircle2, Gift } from 'lucide-react';
 import { useAdManager } from '../hooks/useAdManager.js';
 import { triggerAlternatingInterstitial } from '../services/adManager.js';
 import { useTelegram } from '../hooks/useTelegram.js';
@@ -107,7 +107,6 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
     } catch {}
 
     try {
-      // Trigger 1:1 alternating interstitial ad after claim (Monetag <-> Gigapub)
       const adRes = await triggerAlternatingInterstitial(true);
       if (adRes.shown) {
         setClaimNotice(`Rewards claimed! Interstitial ad displayed via ${adRes.provider} (1:1 alternating).`);
@@ -133,87 +132,113 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
         isMiningActive={livePowerPercentage > 0}
       />
 
-      {/* Central 8H MINING BATTERY Card */}
-      <div className="w-full bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-sm mb-3">
+      {/* Central 8H MINING BATTERY Card (Obsidian Glassmorphism) */}
+      <div className="w-full obsidian-card p-4 rounded-2xl border border-white/10 shadow-2xl shadow-black/80 mb-3.5 relative overflow-hidden">
+        {/* Ambient Top Glows */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#10B981]">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.35)]">
               <BatteryCharging size={18} />
             </div>
             <div>
-              <h3 className="text-xs font-black tracking-wider uppercase text-slate-800">
+              <h3 className="text-xs font-black tracking-wider uppercase text-white">
                 8H MINING BATTERY
               </h3>
-              <p className="text-[10px] font-mono text-slate-500">Autonomous dual-yield rig</p>
+              <p className="text-[10px] font-mono text-slate-400">Autonomous dual-yield rig</p>
             </div>
           </div>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[#10B981] font-bold">
+          <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full btn-mint-glass font-black">
             66% ACTIVE
           </span>
         </div>
 
-        {/* 66% Neo-Mint Progress Bar */}
-        <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200/80 mb-3">
-          <div
-            className="h-full bg-gradient-to-r from-emerald-400 to-[#10B981] rounded-full transition-all duration-700 shadow-xs relative"
-            style={{ width: '66%' }}
-          >
-            <div className="absolute inset-0 bg-white/20 animate-pulse" />
+        {/* 3D Translucent Glass Battery Cylinder filled to 66% with Glowing Neon-Mint Liquid */}
+        <div className="relative w-full mb-3 flex items-center">
+          <div className="relative flex-1 h-8 bg-slate-950/70 rounded-full border border-white/20 p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] backdrop-blur-md overflow-hidden">
+            {/* Top Specular Sheen Reflection */}
+            <div className="absolute inset-x-2 top-0.5 h-2.5 bg-gradient-to-b from-white/25 to-transparent rounded-t-full pointer-events-none z-10" />
+
+            {/* Glowing Neon-Mint Liquid Fill (66%) */}
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.6)] transition-all duration-700 relative overflow-hidden flex items-center justify-end pr-2"
+              style={{ width: '66%' }}
+            >
+              <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
+              <span className="text-[9px] font-mono font-black text-slate-950 relative z-10 tracking-tight">
+                66%
+              </span>
+            </div>
+          </div>
+          <div className="w-2 h-4 rounded-r-md bg-slate-700 border border-white/20 -ml-0.5 shadow-sm shrink-0" />
+        </div>
+
+        {/* Neon-Mint Digital Countdown Banner: 05:14:12 LEFT */}
+        <div className="mb-3.5 p-2 rounded-xl bg-slate-950/60 border border-emerald-500/30 flex items-center justify-between text-xs backdrop-blur-md">
+          <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-mono uppercase">
+            <Clock className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Time Remaining</span>
+          </div>
+          <span className="font-mono font-black text-emerald-300 text-xs tracking-wider drop-shadow-[0_0_8px_rgba(16,185,129,0.7)]">
+            05:14:12 LEFT
+          </span>
+        </div>
+
+        {/* 3 Smoked-Glass Metric Sub-Cards: OUTPUT: +0.50M, MINED: 63,601, BOOST: x1.5 */}
+        <div className="grid grid-cols-3 gap-2 mb-3.5">
+          <div className="btn-smoked-glass rounded-xl p-2 text-center min-w-0">
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight truncate">OUTPUT</p>
+            <p className="text-[11px] font-black text-emerald-300 font-mono mt-0.5 truncate drop-shadow-[0_0_6px_rgba(16,185,129,0.4)]">
+              +0.50M
+            </p>
+          </div>
+          <div className="btn-smoked-glass rounded-xl p-2 text-center min-w-0">
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight truncate">MINED</p>
+            <p className="text-[11px] font-black text-amber-300 font-mono mt-0.5 truncate drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]">
+              63,601
+            </p>
+          </div>
+          <div className="btn-smoked-glass rounded-xl p-2 text-center min-w-0">
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight truncate">BOOST</p>
+            <p className="text-[11px] font-black text-blue-300 font-mono mt-0.5 truncate drop-shadow-[0_0_6px_rgba(37,99,235,0.4)]">
+              x1.5
+            </p>
           </div>
         </div>
 
-        {/* Telemetry Row: Countdown Timer & Rate */}
-        <div className="grid grid-cols-2 gap-2.5 mb-3.5">
-          <div className="bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E2E8F0] flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono text-slate-400 font-semibold flex items-center gap-1">
-              <Clock size={11} className="text-[#2563EB]" /> Countdown Timer
-            </span>
-            <div className="text-sm font-black font-mono text-slate-900 mt-0.5 tracking-wider">
-              05:14:12
-            </div>
-          </div>
-
-          <div className="bg-[#EFF6FF]/60 p-2.5 rounded-xl border border-blue-100 flex flex-col justify-between">
-            <span className="text-[10px] uppercase font-mono text-slate-400 font-semibold">
-              Mining Rate
-            </span>
-            <div className="text-xs font-bold font-mono text-[#2563EB] mt-0.5 truncate">
-              +0.500M NC / +0.40 TON per hr
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons: ACTIVATE BOOST (outlined cobalt) & CLAIM REWARDS (solid deep-cobalt) */}
-        <div className="grid grid-cols-2 gap-2.5">
+        {/* Full-width glowing Amber Gold ACTIVATE BOOST button stacked above full-width glowing Cobalt Blue CLAIM REWARDS */}
+        <div className="space-y-2">
           <button
             onClick={() => {
               triggerInterstitial('start');
               setRechargeOpen(true);
             }}
-            className="w-full py-3 px-3 rounded-xl border-2 border-[#2563EB] text-[#2563EB] hover:bg-blue-50 font-extrabold text-xs uppercase tracking-wider transition active:scale-98 flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl btn-amber-glass font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_18px_rgba(245,158,11,0.3)] active:scale-[0.98]"
           >
-            <Zap size={14} />
-            <span>ACTIVATE BOOST</span>
+            <Zap size={14} className="fill-amber-300 text-amber-300" />
+            <span>⚡ ACTIVATE BOOST</span>
           </button>
 
           <button
             onClick={handleClaimRewards}
             disabled={claimingRewards}
-            className="w-full py-3 px-3 rounded-xl bg-[#1E3A8A] hover:bg-blue-900 text-white font-extrabold text-xs uppercase tracking-wider transition active:scale-98 shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl btn-cobalt-glass font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-[0.98]"
           >
             {claimingRewards ? (
-              <Loader2 size={14} className="animate-spin text-white" />
+              <Loader2 size={14} className="animate-spin text-blue-200" />
             ) : (
-              <Sparkles size={14} className="text-amber-300" />
+              <Gift size={14} className="text-blue-200" />
             )}
-            <span>CLAIM REWARDS</span>
+            <span>💎 CLAIM REWARDS</span>
           </button>
         </div>
 
         {claimNotice && (
-          <div className="mt-2.5 p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-mono text-center flex items-center justify-center gap-1.5 animate-in fade-in">
-            <CheckCircle2 size={13} className="text-[#10B981] shrink-0" />
+          <div className="mt-2.5 p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[11px] font-mono text-center flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.25)]">
+            <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
             <span>{claimNotice}</span>
           </div>
         )}
@@ -242,52 +267,52 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
       />
 
       {/* Mining Rig Stats Panel */}
-      <div className="w-full bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-sm mb-4">
+      <div className="w-full obsidian-card p-4 rounded-2xl border border-white/10 shadow-xl mb-4">
         <div className="text-xs font-mono uppercase text-slate-400 mb-3 flex items-center justify-between">
-          <span className="font-bold text-slate-700">RIG TELEMETRY</span>
-          <span className="text-[#059669] font-bold flex items-center space-x-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] inline-block animate-pulse" />
+          <span className="font-bold text-white">RIG TELEMETRY</span>
+          <span className="text-emerald-400 font-bold flex items-center space-x-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse shadow-[0_0_8px_#10B981]" />
             <span>ONLINE</span>
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="bg-[#ECFDF5]/60 p-2.5 rounded-xl border border-emerald-100">
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-white/10">
             <div className="text-slate-400 text-[10px] uppercase font-mono font-semibold">Current Hashrate</div>
-            <div className="text-slate-900 font-mono font-bold mt-0.5">{hashrate} TON/s</div>
+            <div className="text-emerald-300 font-mono font-bold mt-0.5">{hashrate} TON/s</div>
           </div>
-          <div className="bg-[#EFF6FF]/70 p-2.5 rounded-xl border border-blue-100">
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-white/10">
             <div className="text-slate-400 text-[10px] uppercase font-mono font-semibold">24h Max Output</div>
-            <div className="text-[#2563EB] font-mono font-bold mt-0.5">~{dailyProjectedTon} TON</div>
+            <div className="text-blue-300 font-mono font-bold mt-0.5">~{dailyProjectedTon} TON</div>
           </div>
         </div>
       </div>
 
       {/* Miner Rig Level & Upgrade Panel */}
-      <div className="w-full bg-white p-4 rounded-2xl border border-[#E2E8F0] shadow-sm mb-4 relative overflow-hidden">
+      <div className="w-full obsidian-card p-4 rounded-2xl border border-white/10 shadow-xl mb-4 relative overflow-hidden">
         <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-500 shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shadow-xs">
               <Zap size={18} />
             </div>
             <div>
-              <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <div className="text-xs font-black text-white flex items-center gap-1.5">
                 <span>RIG LEVEL {levelStatus?.currentLevel || user?.minerLevel || 1}</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-bold">
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full btn-amber-glass font-bold">
                   {levelStatus?.currentLevel && levelStatus.currentLevel >= 2 ? 'HIGH-ROLLER' : 'STANDARD'}
                 </span>
               </div>
-              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                Rate: <span className="text-[#2563EB] font-bold">{hashrate} TON/s</span>
+              <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                Rate: <span className="text-blue-300 font-bold">{hashrate} TON/s</span>
                 {levelStatus && (
-                  <span> → Next: <span className="text-amber-600 font-bold">{levelStatus.nextHashrate} TON/s</span></span>
+                  <span> → Next: <span className="text-amber-300 font-bold">{levelStatus.nextHashrate} TON/s</span></span>
                 )}
               </div>
             </div>
           </div>
           <div className="text-right">
             <span className="text-[10px] font-mono text-slate-400 block">Payout Tier</span>
-            <span className={`text-[11px] font-mono font-bold flex items-center justify-end gap-1 ${levelStatus?.canWithdrawOverHalfTon ? 'text-[#059669]' : 'text-amber-600'}`}>
+            <span className={`text-[11px] font-mono font-bold flex items-center justify-end gap-1 ${levelStatus?.canWithdrawOverHalfTon ? 'text-emerald-400' : 'text-amber-300'}`}>
               {levelStatus?.canWithdrawOverHalfTon ? (
                 <>
                   <ShieldCheck size={12} />
@@ -304,28 +329,28 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
         </div>
 
         {/* Daily 50 Ads Level-Up Progress */}
-        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 space-y-2">
+        <div className="bg-slate-950/70 p-3 rounded-xl border border-white/10 space-y-2">
           <div className="flex justify-between items-center text-[11px] font-mono">
-            <span className="text-slate-700 flex items-center gap-1.5 font-semibold">
-              <Tv size={13} className="text-[#2563EB]" />
+            <span className="text-slate-300 flex items-center gap-1.5 font-semibold">
+              <Tv size={13} className="text-blue-400" />
               <span>Watch 50 Ads in 1 Day to Level Up</span>
             </span>
-            <span className="text-[#2563EB] font-bold">
+            <span className="text-blue-300 font-bold">
               {levelStatus ? levelStatus.adsWatchedToday : 0} / 50 Ads
             </span>
           </div>
 
           {/* Progress Bar */}
-          <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden border border-slate-300/60">
+          <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-white/10">
             <div
-              className="h-full bg-gradient-to-r from-emerald-400 to-[#10B981] transition-all duration-500 rounded-full"
+              className="h-full bg-gradient-to-r from-emerald-400 to-[#10B981] transition-all duration-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"
               style={{ width: `${levelStatus ? levelStatus.progressPercent : 0}%` }}
             />
           </div>
 
-          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
             <span>Boosts hashrate + unlocks &gt;0.5 TON payouts</span>
-            <span className="font-mono text-emerald-600 font-bold">{levelStatus ? levelStatus.progressPercent : 0}%</span>
+            <span className="font-mono text-emerald-400 font-bold">{levelStatus ? levelStatus.progressPercent : 0}%</span>
           </div>
 
           {/* Upgrade Action / Progress Button */}
@@ -333,7 +358,7 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
             <button
               onClick={handleLevelUpgrade}
               disabled={upgradingLevel}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-extrabold text-xs uppercase tracking-wider shadow-md shadow-blue-600/20 transition active:scale-98 flex items-center justify-center gap-1.5 animate-pulse cursor-pointer"
+              className="w-full py-2.5 px-4 rounded-xl btn-cobalt-glass text-white font-extrabold text-xs uppercase tracking-wider transition active:scale-98 flex items-center justify-center gap-1.5 animate-pulse cursor-pointer"
             >
               {upgradingLevel ? (
                 <>
@@ -348,22 +373,22 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
               )}
             </button>
           ) : levelStatus?.hasLeveledUpToday ? (
-            <div className="w-full py-2 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-center text-xs font-mono flex items-center justify-center gap-1.5">
+            <div className="w-full py-2 px-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-center text-xs font-mono flex items-center justify-center gap-1.5">
               <span>✅ Rig upgraded today! Watch 50 ads tomorrow for Level {levelStatus.nextLevel}.</span>
             </div>
           ) : (
             <button
               onClick={() => onNavigate('missions')}
-              className="w-full py-2 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-900 text-xs font-mono transition flex items-center justify-center gap-1.5 active:scale-98 shadow-xs cursor-pointer"
+              className="w-full py-2 px-3 rounded-xl btn-smoked-glass text-slate-300 text-xs font-mono transition flex items-center justify-center gap-1.5 active:scale-98 cursor-pointer"
             >
-              <Tv size={13} className="text-[#2563EB]" />
+              <Tv size={13} className="text-blue-400" />
               <span>Watch Ads in Missions ({levelStatus ? levelStatus.adsRemaining : 50} more needed)</span>
               <ArrowRight size={13} className="text-slate-400" />
             </button>
           )}
 
           {upgradeMessage && (
-            <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] text-center font-mono">
+            <div className="p-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-[11px] text-center font-mono">
               {upgradeMessage}
             </div>
           )}
@@ -372,46 +397,44 @@ export const MiningDashboard: React.FC<MiningDashboardProps> = ({
 
       {/* Quick Action Cards */}
       <div className="w-full space-y-2.5">
-        {/* Arcade Hub Banner */}
         <button
           onClick={() => onNavigate('game')}
-          className="w-full p-3.5 rounded-2xl bg-white border border-[#E2E8F0] shadow-sm hover:border-blue-300 transition-all flex items-center justify-between group active:scale-98 cursor-pointer"
+          className="w-full p-3.5 rounded-2xl obsidian-card hover:border-blue-400/50 transition-all flex items-center justify-between group active:scale-98 cursor-pointer shadow-xl"
         >
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center justify-center shadow-xs">
               <Gamepad2 size={22} />
             </div>
             <div className="text-left">
-              <div className="text-xs font-bold text-slate-900 group-hover:text-[#2563EB] transition-colors">
+              <div className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors">
                 Arcade Hub (4 Mini-Games)
               </div>
-              <div className="text-[11px] text-slate-500">
-                Color Tube Sort, Memory Matrix & Cyber Car Race
+              <div className="text-[11px] text-slate-400">
+                Color Tube Sort, Memory Matrix &amp; Cyber Car Race
               </div>
             </div>
           </div>
-          <ArrowRight size={18} className="text-slate-400 group-hover:text-[#2563EB] group-hover:translate-x-1 transition-all" />
+          <ArrowRight size={18} className="text-slate-500 group-hover:text-blue-300 group-hover:translate-x-1 transition-all" />
         </button>
 
-        {/* Missions Banner */}
         <button
           onClick={() => onNavigate('missions')}
-          className="w-full p-3.5 rounded-2xl bg-white border border-[#E2E8F0] shadow-sm hover:border-emerald-300 transition-all flex items-center justify-between group active:scale-98 cursor-pointer"
+          className="w-full p-3.5 rounded-2xl obsidian-card hover:border-emerald-400/50 transition-all flex items-center justify-between group active:scale-98 cursor-pointer shadow-xl"
         >
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-[#ECFDF5] text-[#10B981] flex items-center justify-center shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 flex items-center justify-center shadow-xs">
               <Target size={22} />
             </div>
             <div className="text-left">
-              <div className="text-xs font-bold text-slate-900 group-hover:text-[#10B981] transition-colors">
-                Sponsored Missions & Ad Hub
+              <div className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                Sponsored Missions &amp; Ad Hub
               </div>
-              <div className="text-[11px] text-slate-500">
+              <div className="text-[11px] text-slate-400">
                 Complete community tasks or watch 200 daily ads
               </div>
             </div>
           </div>
-          <ArrowRight size={18} className="text-slate-400 group-hover:text-[#10B981] group-hover:translate-x-1 transition-all" />
+          <ArrowRight size={18} className="text-slate-500 group-hover:text-emerald-300 group-hover:translate-x-1 transition-all" />
         </button>
       </div>
 

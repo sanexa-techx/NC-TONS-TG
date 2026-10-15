@@ -144,92 +144,92 @@ export const WalletVerificationCard: React.FC<WalletVerificationCardProps> = ({
     <div
       className={`w-full rounded-2xl transition-all ${
         isVerified
-          ? 'bg-[#ECFDF5] border border-emerald-200 p-3.5 shadow-2xs'
-          : 'bg-gradient-to-br from-[#EFF6FF] via-white to-[#F0FDF4] border-2 border-blue-200 p-4 shadow-sm'
+          ? 'bg-emerald-950/45 border border-emerald-500/40 p-4 shadow-[0_0_18px_rgba(16,185,129,0.25)] backdrop-blur-xl'
+          : 'obsidian-card p-4 rounded-2xl'
       } ${className}`}
     >
       {/* Top Bar: Title & Account Status Badge */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2.5">
           <div
-            className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
               isVerified
-                ? 'bg-emerald-100 text-[#059669]'
-                : 'bg-blue-100 text-[#2563EB]'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                : 'bg-blue-600/20 text-blue-400 border-blue-500/40 shadow-[0_0_10px_rgba(37,99,235,0.3)]'
             }`}
           >
-            {isVerified ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
+            {isVerified ? <ShieldCheck size={18} /> : <ShieldAlert size={18} />}
           </div>
           <div>
-            <h4 className="text-xs font-bold text-slate-900 leading-tight">
+            <h4 className="text-xs font-black text-white uppercase tracking-wider leading-tight">
               {isVerified ? 'Account Verified' : 'Account Verification Gate'}
             </h4>
-            <p className="text-[10px] text-slate-500 font-mono">
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
               {isVerified ? 'Withdrawals unlocked' : 'Anti-bot security clearance'}
             </p>
           </div>
         </div>
 
-        {/* Account Status Badge: "Verified" vs "0.05 TON Fee" */}
+        {/* Account Status Badge: "Verified" vs "Required: 0.05 TON" */}
         {isVerified ? (
-          <span className="px-2.5 py-1 rounded-full bg-[#D1FAE5] text-[#059669] border border-emerald-300 text-[10px] font-extrabold font-mono flex items-center space-x-1 shadow-2xs">
-            <CheckCircle2 size={11} className="text-[#059669]" />
-            <span>Verified</span>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/80 text-[10px] font-extrabold font-mono flex items-center space-x-1 shadow-[0_0_14px_rgba(16,185,129,0.35)]">
+            <CheckCircle2 size={11} className="text-emerald-400" />
+            <span>✓ Verified</span>
           </span>
         ) : (
-          <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-300 text-[10px] font-extrabold font-mono flex items-center space-x-1 shadow-2xs">
-            <Lock size={10} className="text-amber-600" />
-            <span>0.05 TON Fee</span>
+          <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/15 text-amber-300 text-[10px] font-extrabold font-mono flex items-center space-x-1 backdrop-blur-md shadow-2xs">
+            <Lock size={10} className="text-amber-400" />
+            <span>Required: 0.05 TON</span>
           </span>
         )}
       </div>
 
       {/* Anti-Bot Fee Notice */}
       {isVerified ? (
-        <div className="mt-2.5 pt-2 border-t border-emerald-200/60 flex items-center space-x-2 text-[11px] text-[#059669]">
-          <CheckCircle2 size={14} className="shrink-0 text-[#10B981]" />
+        <div className="mt-3 pt-2.5 border-t border-emerald-500/30 flex items-center space-x-2 text-[11px] text-emerald-300">
+          <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
           <span className="font-medium">
             Your wallet is verified! All withdrawal locks are permanently removed.
           </span>
         </div>
       ) : (
-        <div className="mt-2.5 pt-2.5 border-t border-blue-100/80">
-          <p className="text-[11px] text-slate-600 leading-relaxed mb-3">
-            <span className="font-semibold text-slate-800">Anti-Bot Notice:</span> To prevent bot syndicates and authenticate non-custodial wallet ownership, a one-time network fee of{' '}
-            <strong className="text-[#2563EB] font-bold">0.05 TON (50,000,000 nanotons)</strong> is required to unlock your payout wallet.
+        <div className="mt-3 pt-3 border-t border-white/10">
+          <p className="text-[11px] text-slate-300 leading-relaxed mb-3">
+            <span className="font-bold text-white">Anti-Bot Notice:</span> To prevent bot syndicates and authenticate non-custodial wallet ownership, a one-time network fee of{' '}
+            <strong className="text-blue-300 font-mono font-bold">0.05 TON (50,000,000 nanotons)</strong> is required to unlock your payout wallet.
           </p>
 
           {/* Feedback Alerts */}
           {errorMsg && (
-            <div className="mb-3 p-2.5 rounded-xl bg-[#FEF2F2] border border-red-200 text-[#DC2626] text-[11px] flex items-center space-x-2">
-              <AlertCircle size={14} className="shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="mb-3 p-2.5 rounded-xl card-crimson-glass text-[11px] flex items-center space-x-2">
+              <AlertCircle size={14} className="shrink-0 text-red-400" />
+              <span className="text-red-200">{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="mb-3 p-2.5 rounded-xl bg-[#ECFDF5] border border-emerald-200 text-[#059669] text-[11px] flex items-center space-x-2">
-              <CheckCircle2 size={14} className="shrink-0" />
+            <div className="mb-3 p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center space-x-2 shadow-[0_0_12px_rgba(16,185,129,0.25)]">
+              <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
               <span>{successMsg}</span>
             </div>
           )}
 
-          {/* Solid Cobalt Blue Payment Button */}
+          {/* Glowing Cobalt Blue Payment Button */}
           <button
             type="button"
             onClick={handlePayVerificationFee}
             disabled={isPayingFee}
-            className="w-full py-2.5 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-extrabold text-xs uppercase tracking-wider shadow-md hover:shadow-lg active:scale-98 transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
+            className="w-full py-2.5 px-4 rounded-xl btn-cobalt-glass font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
           >
             {isPayingFee ? (
               <>
-                <Loader2 size={15} className="animate-spin" />
+                <Loader2 size={15} className="animate-spin text-blue-300" />
                 <span>Broadcasting & Verifying...</span>
               </>
             ) : (
               <>
-                <TonIcon className="w-4 h-4 text-white" />
-                <span>Pay 0.05 TON &amp; Unlock Wallet</span>
+                <TonIcon className="w-4 h-4 text-blue-200" />
+                <span>💎 Pay 0.05 TON &amp; Unlock Wallet</span>
               </>
             )}
           </button>

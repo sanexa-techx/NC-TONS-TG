@@ -16,6 +16,7 @@ import {
   Award,
   Zap,
   Power,
+  Trash2,
 } from 'lucide-react';
 import { TonIcon, NcIcon } from '../components/icons/index.js';
 import { AdminPromoManager } from '../components/admin/AdminPromoManager.js';
@@ -56,13 +57,19 @@ export const AdminPage: React.FC = () => {
     try {
       const [cfgRes, msnRes, statsRes, dailyRes, milesRes] = await Promise.all([
         api.getRewardConfigs(),
-        api.getAvailableMissions(),
+        api.getAdminMissions().catch(() => api.getAvailableMissions()),
         api.getAdminStats(),
         api.getDailyStreakConfigs().catch(() => ({ days: [] })),
         api.getReferralMilestones().catch(() => ({ milestones: [] })),
       ]);
       setConfigs(cfgRes.configs);
-      setMissions(msnRes.missions);
+      const rawList = (msnRes as any).missions || [];
+      setMissions(
+        rawList.map((m: any) => ({
+          ...m,
+          isActive: m.isActive !== undefined ? Boolean(m.isActive) : !m.isCompleted,
+        }))
+      );
       setStats(statsRes);
       setDailyDays(dailyRes.days || []);
       setMilestones(milesRes.milestones || []);
@@ -142,15 +149,35 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const [deletingMissionId, setDeletingMissionId] = useState<number | null>(null);
+
   const handleToggleMission = async (missionId: number, currentActive: boolean) => {
     try {
       await api.updateAdminMission(missionId, { isActive: !currentActive });
       setMissions((prev) =>
-        prev.map((m) => (m.id === missionId ? { ...m, isCompleted: !currentActive } : m))
+        prev.map((m) => (m.id === missionId ? { ...m, isActive: !currentActive } : m))
       );
-      fetchData();
+      setFeedback({ type: 'success', text: `Mission #${missionId} marked as ${!currentActive ? 'Active' : 'Disabled'}` });
     } catch (err) {
       setFeedback({ type: 'error', text: (err as Error).message });
+    }
+  };
+
+  const handleDeleteMission = async (missionId: number, title: string) => {
+    const confirmed = window.confirm(`Permanently remove mission "${title}" (ID: #${missionId})?\n\nThis will delete the mission and all related progress.`);
+    if (!confirmed) return;
+
+    setDeletingMissionId(missionId);
+    setFeedback(null);
+    try {
+      await api.deleteAdminMission(missionId);
+      setMissions((prev) => prev.filter((m) => m.id !== missionId));
+      setFeedback({ type: 'success', text: `Mission "${title}" was permanently removed!` });
+      fetchData();
+    } catch (err) {
+      setFeedback({ type: 'error', text: (err as Error).message || 'Failed to delete mission' });
+    } finally {
+      setDeletingMissionId(null);
     }
   };
 
@@ -769,34 +796,83 @@ export const AdminPage: React.FC = () => {
 
           {/* Manage Missions List */}
           <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border mb-4">
-            <h3 className="text-xs font-bold font-mono uppercase text-slate-300 mb-3 flex items-center space-x-1.5">
-              <Power size={16} className="text-cyber-green" />
-              <span>Active Mission Controls</span>
+            <h3 className="text-xs font-bold font-mono uppercase text-slate-300 mb-3 flex items-center justify-between">
+              <span className="flex items-center space-x-1.5">
+                <Power size={16} className="text-cyber-green" />
+                <span>Mission Controls ({missions.length})</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Delete or Toggle Missions</span>
             </h3>
 
-            <div className="space-y-2">
-              {missions.map((m) => (
-                <div
-                  key={m.id}
-                  className="p-3 rounded-xl bg-cyber-bg border border-cyber-border flex items-center justify-between text-xs"
-                >
-                  <div>
-                    <div className="font-bold text-white">{m.title}</div>
-                    <div className="text-[10px] font-mono text-slate-400 mt-0.5">
-                      ID: #{m.id} • {m.completedCount} claims
-                    </div>
-                  </div>
+            {missions.length === 0 ? (
+              <div className="text-center py-6 text-xs text-slate-400 font-mono">
+                No missions found. Create a priority mission above.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {missions.map((m) => {
+                  const isActive = (m as any).isActive !== undefined ? (m as any).isActive : !m.isCompleted;
+                  const isDeleting = deletingMissionId === m.id;
+                  return (
+                    <div
+                      key={m.id}
+                      className="p-3 rounded-xl bg-cyber-bg border border-cyber-border flex items-center justify-between text-xs transition-all hover:border-slate-600"
+                    >
+                      <div className="flex-1 pr-3">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-white text-xs">{m.title}</span>
+                          <span
+                            className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
+                              isActive
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}
+                          >
+                            {isActive ? 'Active' : 'Disabled'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center space-x-2 flex-wrap">
+                          <span>ID: #{m.id}</span>
+                          <span>•</span>
+                          <span>{m.completedCount ?? 0} claims</span>
+                          <span>•</span>
+                          <span className="text-cyber-gold font-bold">{m.ncReward} NC</span>
+                          {m.tonReward && Number(m.tonReward) > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-cyber-cyan font-bold">{m.tonReward} TON</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
 
-                  <button
-                    onClick={() => handleToggleMission(m.id, !m.isCompleted)}
-                    className="p-2 rounded-xl bg-cyber-surface hover:bg-cyber-card border border-cyber-border text-cyber-cyan flex items-center space-x-1"
-                    title="Toggle Active State"
-                  >
-                    <Power size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <button
+                          onClick={() => handleToggleMission(m.id, isActive)}
+                          className={`p-2 rounded-xl border transition-all ${
+                            isActive
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                          }`}
+                          title={isActive ? 'Disable Mission' : 'Activate Mission'}
+                        >
+                          <Power size={14} />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteMission(m.id, m.title)}
+                          disabled={isDeleting}
+                          className="p-2 rounded-xl bg-red-950/40 text-red-400 border border-red-500/30 hover:bg-red-900/50 hover:text-red-300 hover:border-red-500/60 active:scale-95 transition-all"
+                          title="Permanently Delete Mission"
+                        >
+                          {isDeleting ? <Loader2 size={14} className="animate-spin text-red-400" /> : <Trash2 size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </>
       )}

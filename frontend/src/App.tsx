@@ -14,7 +14,7 @@ import { OnlinePlayersBadge } from './components/OnlinePlayersBadge.js';
 import { UserProfileHeader } from './components/UserProfileHeader.js';
 import DailyStreakModal from './components/DailyStreakModal.js';
 import { DailyStreakStatusResponse } from './types/index.js';
-import { useAdManager } from './hooks/useAdManager.js';
+import { useAdManager, isGameActive } from './hooks/useAdManager.js';
 import { Loader2 } from 'lucide-react';
 import ForceJoinGate, { ChannelItem } from './components/ForceJoinGate.js';
 
@@ -63,7 +63,6 @@ export const App: React.FC = () => {
         setMembershipVerified(false);
       }
     } catch (e) {
-      // In case of network timeout, allow cached or default to false
       setMembershipVerified(false);
     }
   }, [currentUserId]);
@@ -87,6 +86,25 @@ export const App: React.FC = () => {
     }
   };
 
+  // 60-Second Automatic Interstitial Loop (Monetag -> 60s -> Gigapub -> 60s -> Monetag...)
+  // Strictly suppressed while user is in Game Mode!
+  // When a game finishes, post-game ad is shown and 60s cooldown resets.
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      // Do not show ads during active gameplay
+      if (isGameActive()) {
+        return;
+      }
+      try {
+        await triggerInterstitial('auto_60s');
+      } catch (err) {
+        console.warn('[App] 60s auto-interstitial error:', err);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [triggerInterstitial]);
+
   const initAuth = useCallback(async () => {
     setAuthLoading(true);
     try {
@@ -102,7 +120,6 @@ export const App: React.FC = () => {
         setBotUsername(res.botUsername);
       }
 
-      // Fetch daily streak status and auto-popup if ready
       try {
         const streakData = await api.getDailyStatus(res.user.id);
         setDailyStatus(streakData);
@@ -125,7 +142,6 @@ export const App: React.FC = () => {
   }, [initAuth, checkMembership]);
 
   const handleGameFinished = (_ncAwarded: number, _tonAwarded: string) => {
-    // Refresh state after game round
     sync();
   };
 
@@ -147,17 +163,22 @@ export const App: React.FC = () => {
   // Loading Splash
   if (authLoading || membershipVerified === null) {
     return (
-      <div className="min-h-screen bg-[#F4F7FB] flex flex-col items-center justify-center p-4 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-[#EFF6FF] border border-blue-200 flex items-center justify-center text-[#2563EB] mb-4 shadow-sm animate-pulse">
-          <Loader2 size={32} className="animate-spin" />
+      <div className="min-h-screen bg-[#060911] text-white flex flex-col items-center justify-center p-4 text-center relative overflow-hidden">
+        <div className="absolute top-1/4 -left-20 w-72 h-72 rounded-full bg-emerald-500/15 blur-[90px] pointer-events-none" />
+        <div className="absolute bottom-1/4 -right-20 w-72 h-72 rounded-full bg-blue-600/15 blur-[90px] pointer-events-none" />
+        
+        <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-400/40 flex items-center justify-center text-blue-300 mb-4 shadow-[0_0_24px_rgba(37,99,235,0.4)] backdrop-blur-xl animate-pulse">
+          <Loader2 size={32} className="animate-spin text-blue-400" />
         </div>
-        <h2 className="text-xl font-black text-slate-900 tracking-tight">INITIALIZING MINING RIG</h2>
-        <p className="text-xs text-slate-500 mt-1 font-mono">Verifying security clearance...</p>
+        <h2 className="text-xl font-black text-white tracking-tight drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">
+          INITIALIZING MINING RIG
+        </h2>
+        <p className="text-xs text-slate-400 mt-1 font-mono">Verifying security clearance...</p>
       </div>
     );
   }
 
-  // Mandatory Subscription Gate (Blocks everything if any channel missing)
+  // Mandatory Subscription Gate
   if (!membershipVerified) {
     return (
       <ForceJoinGate
@@ -170,24 +191,28 @@ export const App: React.FC = () => {
 
   return (
     <TonConnectUIProvider manifestUrl={manifestUrl}>
-      <div className="min-h-screen bg-[#F4F7FB] text-slate-800 flex flex-col selection:bg-[#10B981] selection:text-white">
-        {/* Sticky Profile Header — Daylight Neo-Mint & Cobalt Theme */}
-        <header className="sticky top-0 z-20 w-full bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] px-4 py-2.5 shadow-xs">
+      <div className="min-h-screen bg-[#060911] text-slate-100 flex flex-col selection:bg-[#10B981] selection:text-white relative overflow-hidden">
+        {/* Ambient Radial Neon-Emerald and Cobalt-Blue Background Light Blurs */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+          <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-emerald-500/12 blur-[100px]" />
+          <div className="absolute top-1/3 -right-32 w-96 h-96 rounded-full bg-blue-600/14 blur-[110px]" />
+          <div className="absolute -bottom-32 left-1/3 w-96 h-96 rounded-full bg-emerald-500/10 blur-[120px]" />
+        </div>
+
+        {/* Sticky Profile Header — Obsidian Glassmorphism */}
+        <header className="sticky top-0 z-20 w-full bg-slate-950/80 backdrop-blur-2xl border-b border-white/10 px-4 py-2.5 shadow-2xl shadow-black/80">
           <div className="w-full max-w-md mx-auto flex items-center justify-between gap-3">
-            {/* Real Telegram Profile Bar */}
             <UserProfileHeader
               user={user}
               livePowerPercentage={livePowerPercentage}
               liveTonBalance={liveTonBalance}
             />
-
-            {/* Real-time Online Players Beacon */}
             <OnlinePlayersBadge userId={user?.id} />
           </div>
         </header>
 
         {/* Main Content Pages */}
-        <main className="flex-1 w-full max-w-md mx-auto">
+        <main className="flex-1 w-full max-w-md mx-auto relative z-10">
           {activeTab === 'mining' && (
             <MiningDashboard
               user={user}
@@ -213,6 +238,7 @@ export const App: React.FC = () => {
             <MissionsPage
               onRewardClaimed={handleRewardClaimed}
               userId={user?.id || ''}
+              isAdmin={Boolean(user?.isAdmin)}
             />
           )}
 

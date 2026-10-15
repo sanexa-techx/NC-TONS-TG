@@ -34,11 +34,14 @@ if (typeof window !== "undefined" && MONETAG_ZONE_ID > 0) {
 
 // Global state tracking to prevent any ad from interrupting active gameplay
 let isGameActiveGlobal = false;
-let globalLastInterstitialTime = 0;
+let globalLastInterstitialTime = Date.now(); // Starts from app mount; first auto ad in 60s
 
 export const setGameActiveState = (active: boolean) => {
   isGameActiveGlobal = active;
-  console.log(`[AdManager] Active game state: ${active}`);
+  console.log(`[AdManager] Active game state: ${active ? "ACTIVE (60s ads paused)" : "INACTIVE (60s ads active)"}`);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("nc_game_mode_changed", { detail: { active } }));
+  }
 };
 
 export const isGameActive = () => isGameActiveGlobal;
@@ -352,47 +355,52 @@ export function useAdManager(
   }, [userId]);
 
   // 3. Interstitial Trigger (Guarded against playing while game is active)
-  // 1:1 Alternating between Monetag and Gigapub on tab changes and interstitial events
+  // 1:1 Alternating between Monetag and Gigapub: Monetag -> 60s -> Gigapub -> 60s -> Monetag...
   const triggerInterstitial = useCallback(
     async (
-      reason: "nav" | "start" | "withdraw" | "game_start" | "game_end"
+      reason: "nav" | "start" | "withdraw" | "game_start" | "game_end" | "auto_30s" | "auto_60s"
     ): Promise<boolean> => {
       // CRITICAL: Block any interstitial ad if a game is actively playing!
-      if (isGameActiveGlobal && reason !== "game_start" && reason !== "game_end") {
+      // Only "game_end" is permitted to show after game finishes.
+      if (isGameActiveGlobal && reason !== "game_end") {
         console.log(`[AdManager] Interstitial blocked: Gameplay active (${reason})`);
         return false;
       }
 
       const now = Date.now();
-      const minCooldown =
-        reason === "game_start" || reason === "game_end" ? 8000 : 30000;
+      // For game_end, skip cooldown so the post-game ad shows immediately!
+      // For all others (nav, auto_60s, etc.), enforce strictly 60s cooldown.
+      const minCooldown = reason === "game_end" ? 0 : 60000;
       if (now - globalLastInterstitialTime < minCooldown) {
         const remaining = Math.ceil((minCooldown - (now - globalLastInterstitialTime)) / 1000);
         console.log(`[AdManager] Interstitial throttled (${reason}) - ${remaining}s cooldown remaining`);
         return false;
       }
 
-      globalLastInterstitialTime = now;
-
       console.log(`[Ad Trigger] Showing 1:1 alternating interstitial for ${reason}...`);
 
-      return await executeAlternatingInterstitial(userId, reason);
+      const shown = await executeAlternatingInterstitial(userId, reason);
+      // Reset the 60-second timer to start counting from now!
+      globalLastInterstitialTime = Date.now();
+      return shown;
     },
     [userId]
   );
 
-  // 4. Pre-Game Interstitial (Before gameplay begins)
+  // 4. Pre-Game Helper
   const showPreGameAd = useCallback(async (): Promise<boolean> => {
-    console.log("[AdManager] Triggering pre-game ad...");
-    setGameActiveState(false);
     return await triggerInterstitial("game_start");
   }, [triggerInterstitial]);
 
-  // 5. Post-Game Interstitial (After gameplay ends)
+  // 5. Post-Game Interstitial (After gameplay ends: Monetag <-> Gigapub)
   const showPostGameAd = useCallback(async (): Promise<boolean> => {
-    console.log("[AdManager] Triggering post-game ad...");
-    setGameActiveState(false);
-    return await triggerInterstitial("game_end");
+    console.log("[AdManager] Triggering post-game ad (gameplay ended)...");
+    try {
+      return await triggerInterstitial("game_end");
+    } finally {
+      // Reset game mode to inactive; 30s auto loop will resume 30s from now
+      setGameActiveState(false);
+    }
   }, [triggerInterstitial]);
 
   // 6. Withdrawal Limit Ad (Rewarded video/interstitial for 30 daily / 100 weekly limit pass)

@@ -25,7 +25,8 @@ import {
   Share2,
   TrendingUp,
   Tag,
-  FileText,
+  Lock,
+  Camera,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -33,6 +34,8 @@ import {
   triggerAlternatingInterstitial,
   calculateTierReward,
   getAdManagerStats,
+  setGameActiveState,
+  isGameActive,
 } from '../services/smartAdManager.js';
 
 export type ScreenTab = 'mining' | 'arcade' | 'missions' | 'friends' | 'wallet';
@@ -52,16 +55,17 @@ export function UIShowcase() {
   const [viewMode, setViewMode] = useState<'single' | 'studio'>('single');
 
   // Balances
-  const [ncBalance, setNcBalance] = useState(181900);
+  const [ncBalance, setNcBalance] = useState(179500);
   const [tonBalance, setTonBalance] = useState(0.40);
   const [walletTonBalance, setWalletTonBalance] = useState(23.374);
   const [walletNcBalance, setWalletNcBalance] = useState(50000);
 
-  // Mining Battery Timer ("07:38:35")
-  const [batterySeconds, setBatterySeconds] = useState(7 * 3600 + 38 * 60 + 35);
+  // Mining Battery Timer ("05:14:12 LEFT")
+  const [batterySeconds, setBatterySeconds] = useState(5 * 3600 + 14 * 60 + 12);
   const [isMiningActive, setIsMiningActive] = useState(true);
-  const [batteryProgress, setBatteryProgress] = useState(15);
+  const [batteryProgress, setBatteryProgress] = useState(66);
   const [minerLevel, setMinerLevel] = useState(1);
+  const [minedNcCount, setMinedNcCount] = useState(63601);
 
   // 15s Dwell Timer
   const [dwellSeconds, setDwellSeconds] = useState(11);
@@ -85,6 +89,11 @@ export function UIShowcase() {
   const [friendCommissionTon, setFriendCommissionTon] = useState(1.25);
   const [claimedCommission, setClaimedCommission] = useState(false);
 
+  // Wallet Verification Gate (0.05 TON)
+  const [isAccountVerified, setIsAccountVerified] = useState<boolean>(false);
+  const [isPayingFee, setIsPayingFee] = useState<boolean>(false);
+  const [adminReceiverWallet] = useState<string>('UQC7H_l-uAuupnB1tplVxMCKeImLbv1vzJhKnVDDJyg9V97v');
+
   // Color Tube Sort visual state & In-Game Mode
   const [selectedTube, setSelectedTube] = useState<number | null>(null);
   const [tubePoured, setTubePoured] = useState(false);
@@ -99,10 +108,10 @@ export function UIShowcase() {
   const [activeGameModal, setActiveGameModal] = useState<'tube_sort' | 'memory' | 'car_race' | null>(null);
 
   // Wallet State & Modals
-  const [walletAddress, setWalletAddress] = useState('EQBvW8Z5huBkMJYdn30Bl5NsQ5DCMb-EZ13s_EXAMPLE');
+  const [walletAddress, setWalletAddress] = useState('UQD-1VqX4bF-8VfR8zL4wR9Yv9_6xK7uP4bT2hQ9wY7eN8mK');
+  const [withdrawAmount, setWithdrawAmount] = useState('0.0500');
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [promoRedeemed, setPromoRedeemed] = useState(false);
-  const [legalModalOpen, setLegalModalOpen] = useState<'terms' | 'privacy' | null>(null);
 
   // Mining Modals
   const [rechargeModalOpen, setRechargeModalOpen] = useState(false);
@@ -153,10 +162,13 @@ export function UIShowcase() {
         if (prev <= 0) return 8 * 3600;
         return prev - 1;
       });
+      if (isMiningActive) {
+        setMinedNcCount((prev) => prev + 1);
+      }
       setAdStats(getAdManagerStats());
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isMiningActive]);
 
   // 15s Dwell timer effect
   useEffect(() => {
@@ -185,10 +197,10 @@ export function UIShowcase() {
   const triggerCelebration = () => {
     try {
       confetti({
-        particleCount: 75,
-        spread: 60,
+        particleCount: 90,
+        spread: 75,
         origin: { y: 0.6 },
-        colors: ['#10B981', '#2563EB', '#F59E0B', '#3B82F6'],
+        colors: ['#10B981', '#2563EB', '#F59E0B', '#38BDF8'],
       });
     } catch {}
   };
@@ -234,19 +246,50 @@ export function UIShowcase() {
     }
   };
 
-  // 1:1 Alternating Interstitial Ad Trigger
-  const handleTriggerInterstitial = async (actionSource: string) => {
-    try {
+  // 60-Second Automatic Interstitial Loop (Monetag -> 60s -> Gigapub -> 60s -> Monetag...)
+  // Pauses strictly during active game mode!
+  // When user finishes a game, an ad shows immediately and resets the 60s timer.
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      // Do not trigger while in Game Mode
+      if (isGameActive() || activeGameModal !== null) {
+        return;
+      }
       const res = await triggerAlternatingInterstitial(false);
       if (res.shown) {
         setAdStats(getAdManagerStats());
         showToast(
           'interstitial',
-          `1:1 Interstitial Ad Triggered [${res.provider}]`,
-          `Triggered via ${actionSource}. Next rotation will show ${res.provider === 'MONETAG' ? 'GIGAPUB' : 'MONETAG'}.`
+          `60s Interstitial Ad [${res.provider}]`,
+          `Sequence: ${res.provider}. Next auto ad in 60s (${res.provider === 'MONETAG' ? 'GIGAPUB' : 'MONETAG'}).`
         );
-      } else {
-        showToast('info', 'Interstitial Cooldown', `${actionSource} complete. (${res.reason})`);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeGameModal]);
+
+  // Tab Switch with 1:1 Alternating Interstitial
+  const handleTabChange = async (tab: ScreenTab) => {
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+      await handleTriggerInterstitial(`Tab switch to ${tab.toUpperCase()}`);
+    }
+  };
+
+  // 1:1 Alternating Interstitial Ad Trigger (Monetag <-> Gigapub)
+  const handleTriggerInterstitial = async (actionSource: string, force = false) => {
+    try {
+      const res = await triggerAlternatingInterstitial(force);
+      if (res.shown) {
+        setAdStats(getAdManagerStats());
+        showToast(
+          'interstitial',
+          `Interstitial Ad [${res.provider}]`,
+          `Shown via ${actionSource}. Next rotation will show ${res.provider === 'MONETAG' ? 'GIGAPUB' : 'MONETAG'} in 60s.`
+        );
+      } else if (!force) {
+        showToast('info', 'Interstitial Status', `${actionSource}. (${res.reason})`);
       }
     } catch (e: any) {
       console.error(e);
@@ -260,8 +303,8 @@ export function UIShowcase() {
     setNcBalance((b) => b + claimNc);
     setWalletNcBalance((b) => b + claimNc);
     setTonBalance((b) => Number((b + claimTon).toFixed(4)));
-    setBatteryProgress(15);
-    setBatterySeconds(7 * 3600 + 38 * 60 + 35);
+    setBatteryProgress(66);
+    setBatterySeconds(5 * 3600 + 14 * 60 + 12);
     triggerCelebration();
     showToast('reward', 'Mining Rewards Claimed!', `+${claimNc} NC and +${claimTon} TON added.`);
     await handleTriggerInterstitial('Claim Mining Rewards');
@@ -379,44 +422,62 @@ export function UIShowcase() {
     showToast('reward', 'Mission Completed! 🎯', `+${target.ncReward.toLocaleString()} NC and +${target.tonReward} TON claimed.`);
   };
 
+  // Simulate or execute 0.05 TON Verification
+  const handlePay005TonFee = () => {
+    setIsPayingFee(true);
+    setTimeout(() => {
+      setIsPayingFee(false);
+      setIsAccountVerified(true);
+      triggerCelebration();
+      showToast(
+        'reward',
+        '0.05 TON Verified! 💎',
+        `Transferred 50,000,000 nanotons to admin ${adminReceiverWallet.slice(0, 6)}... Withdrawal locks permanently removed!`
+      );
+    }, 1200);
+  };
+
   // ==========================================
   // SCREEN 1: MINING (HOME)
   // ==========================================
   const renderMiningScreen = () => (
     <div className="space-y-3.5">
-      {/* Top Header with Dual-Currency Cards */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
+      {/* Top Header with Dual-Currency Glowing Pills */}
+      <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-2xl shadow-black/70">
         <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-extrabold text-slate-900 tracking-tight text-base truncate">NC TONs</span>
+            <span className="font-black text-white tracking-tight text-base truncate">NC TONs</span>
             <button
               onClick={() => setIsMiningActive((prev) => !prev)}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#ECFDF5] text-[#059669] border border-emerald-200 shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold btn-mint-glass shrink-0 cursor-pointer"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${isMiningActive ? 'bg-[#10B981] animate-pulse' : 'bg-slate-400'}`}></span>
-              {isMiningActive ? 'LIVE SYNC' : 'PAUSED'}
+              <span className={`w-1.5 h-1.5 rounded-full ${isMiningActive ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_#10B981]' : 'bg-slate-500'}`}></span>
+              {isMiningActive ? 'LIVE RIG' : 'PAUSED'}
             </button>
           </div>
           <button
             onClick={() => setStreakModalOpen(true)}
-            className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 hover:bg-amber-100 cursor-pointer"
+            className="text-[10px] font-bold btn-amber-glass px-2.5 py-0.5 rounded-full shrink-0 flex items-center gap-1 cursor-pointer"
           >
-            <Trophy className="w-3 h-3 text-amber-500" />
+            <Trophy className="w-3 h-3 text-amber-300" />
             Day 4 Streak
           </button>
         </div>
 
-        {/* Dual-Currency Balance Cards */}
+        {/* Dual-Currency Balance Pills */}
         <div className="grid grid-cols-2 gap-2">
-          <div className="bg-[#ECFDF5]/70 border border-emerald-100 rounded-xl px-2.5 py-1.5 min-w-0">
-            <p className="text-[9px] uppercase font-bold text-emerald-600/80 tracking-wide">NC Coins</p>
-            <p className="text-sm font-extrabold text-[#10B981] font-mono truncate">
-              {ncBalance.toLocaleString()} NC
+          {/* Amber Gold Glass NC Pill */}
+          <div className="btn-amber-glass rounded-xl px-3 py-2 min-w-0 flex flex-col justify-center">
+            <p className="text-[9px] uppercase font-bold text-amber-300/90 tracking-wider">NC Coins</p>
+            <p className="text-sm font-black text-amber-100 font-mono truncate drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]">
+              +{ncBalance.toLocaleString()} NC
             </p>
           </div>
-          <div className="bg-[#EFF6FF]/80 border border-blue-100 rounded-xl px-2.5 py-1.5 min-w-0">
-            <p className="text-[9px] uppercase font-bold text-blue-500/80 tracking-wide">TON Vault</p>
-            <p className="text-sm font-extrabold text-[#2563EB] font-mono truncate">
+
+          {/* Cobalt Blue Glass TON Pill */}
+          <div className="btn-cobalt-glass rounded-xl px-3 py-2 min-w-0 flex flex-col justify-center">
+            <p className="text-[9px] uppercase font-bold text-blue-300/90 tracking-wider">TON Vault</p>
+            <p className="text-sm font-black text-blue-100 font-mono truncate drop-shadow-[0_0_10px_rgba(37,99,235,0.6)]">
               {tonBalance.toFixed(2)} TON
             </p>
           </div>
@@ -424,94 +485,123 @@ export function UIShowcase() {
       </div>
 
       {/* Central 8H MINING BATTERY Card */}
-      <div className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-28 h-28 bg-[#10B981]/10 rounded-full blur-2xl pointer-events-none"></div>
+      <div className="obsidian-card rounded-2xl p-4 border border-white/10 shadow-2xl shadow-black/70 relative overflow-hidden">
+        {/* Ambient Glows */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-[#ECFDF5] flex items-center justify-center text-[#10B981] shrink-0">
-              <Zap className="w-4 h-4 fill-[#10B981]" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-[0_0_12px_rgba(16,185,129,0.35)]">
+              <Zap className="w-4 h-4 fill-emerald-400" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider truncate">
+              <h2 className="text-xs font-black text-white uppercase tracking-wider truncate">
                 8H Mining Battery
               </h2>
-              <p className="text-[10px] text-slate-500 truncate">Autonomous Rig • Level {minerLevel}</p>
+              <p className="text-[10px] text-slate-400 truncate">Autonomous Rig • Level {minerLevel}</p>
             </div>
           </div>
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold font-mono bg-[#ECFDF5] text-[#059669] border border-emerald-200 shrink-0">
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold font-mono btn-mint-glass shrink-0">
             {batteryProgress}% CHARGED
           </span>
         </div>
 
-        {/* Neo-Mint Progress Bar (15% Default State) */}
-        <div className="relative w-full h-3.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/80 mb-3">
-          <div
-            className="h-full bg-gradient-to-r from-emerald-400 to-[#10B981] rounded-full transition-all duration-500 shadow-sm relative"
-            style={{ width: `${batteryProgress}%` }}
-          >
-            <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full"></div>
+        {/* 3D Translucent Glass Battery Cylinder filled to 66% with Glowing Neon-Mint Liquid */}
+        <div className="relative w-full mb-3 flex items-center">
+          {/* Outer Glass Cylinder */}
+          <div className="relative flex-1 h-8 bg-slate-950/70 rounded-full border border-white/20 p-1 shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] backdrop-blur-md overflow-hidden">
+            {/* Top Specular Sheen Reflection */}
+            <div className="absolute inset-x-2 top-0.5 h-2.5 bg-gradient-to-b from-white/25 to-transparent rounded-t-full pointer-events-none z-10" />
+
+            {/* Glowing Neon-Mint Liquid Fill (66%) */}
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-teal-400 to-[#10B981] shadow-[0_0_18px_rgba(16,185,129,0.6)] transition-all duration-700 relative overflow-hidden flex items-center justify-end pr-2"
+              style={{ width: `${batteryProgress}%` }}
+            >
+              {/* Internal pulsing liquid bubbles */}
+              <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
+              <span className="text-[9px] font-mono font-black text-slate-950 relative z-10 tracking-tight">
+                {batteryProgress}%
+              </span>
+            </div>
+          </div>
+
+          {/* Battery Positive Terminal Node */}
+          <div className="w-2 h-4 rounded-r-md bg-slate-700 border border-white/20 -ml-0.5 shadow-sm shrink-0" />
+        </div>
+
+        {/* Neon-Mint Digital Countdown Banner */}
+        <div className="mb-3.5 p-2 rounded-xl bg-slate-950/60 border border-emerald-500/30 flex items-center justify-between text-xs backdrop-blur-md">
+          <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-mono uppercase">
+            <Clock className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Time Remaining</span>
+          </div>
+          <span className="font-mono font-black text-emerald-300 text-xs tracking-wider drop-shadow-[0_0_8px_rgba(16,185,129,0.7)]">
+            {formatTimer(batterySeconds)} LEFT
+          </span>
+        </div>
+
+        {/* 3 Smoked-Glass Metric Sub-Cards */}
+        <div className="grid grid-cols-3 gap-2 mb-3.5">
+          <div className="btn-smoked-glass rounded-xl p-2 text-center min-w-0">
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight truncate">OUTPUT</p>
+            <p className="text-[11px] font-black text-emerald-300 font-mono mt-0.5 truncate drop-shadow-[0_0_6px_rgba(16,185,129,0.4)]">
+              +0.50M
+            </p>
+          </div>
+          <div className="btn-smoked-glass rounded-xl p-2 text-center min-w-0">
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight truncate">MINED</p>
+            <p className="text-[11px] font-black text-amber-300 font-mono mt-0.5 truncate drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]">
+              {minedNcCount.toLocaleString()}
+            </p>
+          </div>
+          <div className="btn-smoked-glass rounded-xl p-2 text-center min-w-0">
+            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tight truncate">BOOST</p>
+            <p className="text-[11px] font-black text-blue-300 font-mono mt-0.5 truncate drop-shadow-[0_0_6px_rgba(37,99,235,0.4)]">
+              x1.5
+            </p>
           </div>
         </div>
 
-        {/* Two-Column Split: Battery Depletion ("07:38:35") & Mining Rate */}
-        <div className="grid grid-cols-2 gap-2 bg-slate-50/90 rounded-xl p-2.5 border border-slate-100 mb-3.5">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase flex items-center gap-1 truncate">
-              <Clock className="w-3 h-3 text-slate-400 shrink-0" /> Battery Depletion
-            </p>
-            <p className="text-sm font-bold font-mono text-slate-800 mt-0.5 truncate">
-              {formatTimer(batterySeconds)}
-            </p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase flex items-center gap-1 truncate">
-              <Flame className="w-3 h-3 text-[#10B981] shrink-0" /> Mining Rate
-            </p>
-            <p className="text-[11px] font-bold text-slate-800 mt-0.5 truncate">
-              <span className="text-[#10B981]">+{(0.5 + minerLevel * 0.1).toFixed(3)}M NC</span> /{' '}
-              <span className="text-[#2563EB] font-mono">+0.40 TON</span> / hr
-            </p>
-          </div>
-        </div>
-
-        {/* Action Buttons: Outlined Cobalt Boost & Solid Deep-Cobalt Claim */}
-        <div className="grid grid-cols-2 gap-2.5">
+        {/* Full-width glowing Amber Gold ACTIVATE BOOST button stacked above full-width glowing Cobalt Blue CLAIM REWARDS */}
+        <div className="space-y-2">
           <button
             onClick={() => setRechargeModalOpen(true)}
-            className="w-full py-2.5 px-2 rounded-xl border-2 border-[#2563EB] text-[#2563EB] font-bold text-[11px] uppercase tracking-wider hover:bg-[#EFF6FF] active:scale-95 transition-all flex items-center justify-center gap-1 shadow-xs truncate cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl btn-amber-glass font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_18px_rgba(245,158,11,0.3)] active:scale-[0.98]"
           >
-            <Zap className="w-3.5 h-3.5 fill-[#2563EB] shrink-0" />
-            ACTIVATE BOOST
+            <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300 shrink-0" />
+            <span>⚡ ACTIVATE BOOST</span>
           </button>
+
           <button
             onClick={handleClaimMining}
-            className="w-full py-2.5 px-2 rounded-xl bg-[#1E3A8A] hover:bg-[#1D4ED8] active:scale-95 text-white font-bold text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-md shadow-blue-900/20 truncate cursor-pointer"
+            className="w-full py-2.5 px-4 rounded-xl btn-cobalt-glass font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-[0.98]"
           >
-            <Gift className="w-3.5 h-3.5 shrink-0" />
-            CLAIM REWARDS
+            <Gift className="w-3.5 h-3.5 text-blue-200 shrink-0" />
+            <span>💎 CLAIM REWARDS</span>
           </button>
         </div>
       </div>
 
-      {/* Miner Level Upgrade Card (Feature from Previous Setup) */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm flex items-center justify-between">
+      {/* Miner Level Upgrade Card */}
+      <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl flex items-center justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-400/30 text-blue-400 flex items-center justify-center shrink-0">
             <TrendingUp className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-bold text-slate-900 truncate">
+            <p className="text-xs font-bold text-white truncate">
               Miner Rig Level {minerLevel}
             </p>
-            <p className="text-[10px] text-slate-500 truncate">
+            <p className="text-[10px] text-slate-400 truncate">
               Next: Level {minerLevel + 1} (+0.100M NC/hr)
             </p>
           </div>
         </div>
         <button
           onClick={handleUpgradeMinerLevel}
-          className="py-1.5 px-3 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] active:scale-95 text-white font-bold text-[10px] uppercase tracking-wider shrink-0 transition-all cursor-pointer"
+          className="py-1.5 px-3 rounded-xl btn-cobalt-glass font-black text-[10px] uppercase tracking-wider shrink-0 cursor-pointer"
         >
           Upgrade (10K NC)
         </button>
@@ -520,14 +610,14 @@ export function UIShowcase() {
       {/* 7-Day Mining Streak Card */}
       <div
         onClick={() => setStreakModalOpen(true)}
-        className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm cursor-pointer hover:border-blue-200 transition-colors"
+        className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl cursor-pointer hover:border-blue-400/40 transition-colors"
       >
         <div className="flex items-center justify-between mb-2 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Trophy className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="text-xs font-bold text-slate-800 truncate">Daily Login Streak</span>
+            <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-xs font-bold text-slate-200 truncate">Daily Login Streak</span>
           </div>
-          <span className="text-[10px] font-bold text-[#059669] bg-[#ECFDF5] px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+          <span className="text-[10px] font-bold btn-mint-glass px-2 py-0.5 rounded-full shrink-0">
             {dailyStreakClaimed ? '✓ Claimed Today' : 'Day 4 Active (+5,000 NC)'}
           </span>
         </div>
@@ -535,12 +625,12 @@ export function UIShowcase() {
           {['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'].map((day, idx) => (
             <div
               key={day}
-              className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-center border ${
+              className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-center border backdrop-blur-md ${
                 idx < 3 || (idx === 3 && dailyStreakClaimed)
-                  ? 'bg-[#ECFDF5] border-emerald-200 text-[#059669]'
+                  ? 'bg-emerald-500/15 border-emerald-400/60 text-emerald-300'
                   : idx === 3
-                  ? 'bg-[#2563EB] border-[#2563EB] text-white shadow-xs animate-pulse'
-                  : 'bg-slate-50 border-slate-200 text-slate-400'
+                  ? 'btn-cobalt-glass text-white shadow-xs animate-pulse font-bold'
+                  : 'bg-white/5 border-white/10 text-slate-500'
               }`}
             >
               <span className="text-[9px] font-bold">{day}</span>
@@ -551,15 +641,6 @@ export function UIShowcase() {
           ))}
         </div>
       </div>
-
-      {/* Global Miners Status */}
-      <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/60 flex items-center justify-between text-xs text-slate-600">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="w-2 h-2 rounded-full bg-[#10B981] shrink-0"></span>
-          <span className="truncate">Active Cloud Miners:</span>
-        </div>
-        <span className="font-mono font-bold text-slate-800 shrink-0">48,219 Online</span>
-      </div>
     </div>
   );
 
@@ -569,38 +650,43 @@ export function UIShowcase() {
   const renderArcadeScreen = () => (
     <div className="space-y-3.5">
       {/* Arcade Header */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm flex items-center justify-between">
+      <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl flex items-center justify-between">
         <div className="min-w-0">
-          <h2 className="text-sm font-extrabold text-slate-900 tracking-tight truncate">NC Arcade Hub</h2>
-          <p className="text-[11px] text-slate-500 truncate">Play Web3 games & earn dual tokens</p>
+          <h2 className="text-sm font-black text-white tracking-tight truncate">NC Arcade Hub</h2>
+          <p className="text-[11px] text-slate-400 truncate">Play Web3 games & earn dual tokens</p>
         </div>
-        <div className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold flex items-center gap-1 shrink-0">
-          <Gamepad2 className="w-3.5 h-3.5" />
+        <div className="px-2.5 py-1 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-400/40 text-[11px] font-bold flex items-center gap-1 shrink-0 backdrop-blur-md shadow-[0_0_12px_rgba(168,85,247,0.3)]">
+          <Gamepad2 className="w-3.5 h-3.5 text-purple-300" />
           <span>4 Games Ready</span>
         </div>
       </div>
 
-      {/* Featured Dark Navy Card: COLOR TUBE SORT */}
-      <div className="bg-[#0F172A] rounded-2xl p-4 text-white shadow-lg border border-slate-800 relative overflow-hidden">
+      {/* Featured Smoked-Glass Card: COLOR TUBE SORT */}
+      <div className="obsidian-card rounded-2xl p-4 border border-white/10 shadow-2xl shadow-black/80 relative overflow-hidden">
+        {/* Ambient Top Light Reflection */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+
         <div className="flex items-center justify-between mb-3 min-w-0">
           <div className="min-w-0">
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-[#10B981] border border-emerald-500/30 inline-block">
+            <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider btn-mint-glass inline-block">
               Featured Arcade
             </span>
-            <h3 className="text-base font-black text-white mt-1 truncate">COLOR TUBE SORT</h3>
+            <h3 className="text-base font-black text-white mt-1.5 truncate tracking-tight">
+              COLOR TUBE SORT
+            </h3>
             <p className="text-[11px] text-slate-400 truncate">
               {tubePoured
                 ? 'Liquid poured! Tap tubes to sort colors'
                 : 'Sort glowing neon liquids into matching test tubes'}
             </p>
           </div>
-          <span className="text-[11px] font-mono font-bold text-[#10B981] bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-800 shrink-0">
+          <span className="text-[10px] font-mono font-black btn-mint-glass px-2.5 py-1 rounded-xl shrink-0">
             +1,200 NC / LVL
           </span>
         </div>
 
-        {/* 4 Vertical Glass Test Tubes with Dynamic Interaction */}
-        <div className="bg-slate-900/90 rounded-xl p-3 border border-slate-800 flex items-center justify-around my-3">
+        {/* 4 Glossy Translucent Glass Test Tubes with Dynamic Glowing Liquid Layers */}
+        <div className="bg-slate-950/70 rounded-2xl p-3.5 border border-white/10 flex items-center justify-around my-3.5 shadow-inner backdrop-blur-xl">
           {tubeColors.map((tubeLayers, tIdx) => {
             const isSelected = selectedTube === tIdx;
             return (
@@ -613,12 +699,9 @@ export function UIShowcase() {
                   } else if (selectedTube === tIdx) {
                     setSelectedTube(null);
                   } else {
-                    // Pour top layer from selectedTube to tIdx
                     const source = [...tubeColors[selectedTube]];
                     const dest = [...tubeColors[tIdx]];
-                    // Find top non-transparent layer in source
                     const topSrcIdx = source.findIndex((c) => c !== 'bg-transparent');
-                    // Find bottom-most transparent layer in dest
                     const destEmptyIdx = dest.lastIndexOf('bg-transparent');
 
                     if (topSrcIdx !== -1 && destEmptyIdx !== -1) {
@@ -642,80 +725,96 @@ export function UIShowcase() {
                   isSelected ? '-translate-y-2 scale-105' : 'hover:-translate-y-1'
                 }`}
               >
-                {/* Tube Rim */}
-                <div className="w-8 h-1 border border-slate-400/60 rounded-t-sm bg-slate-700/50"></div>
-                {/* Glass Tube */}
+                {/* Tube Rim with Specular Glass Light */}
+                <div className="w-8 h-1.5 border border-white/30 rounded-t-sm bg-white/20 shadow-xs" />
+                {/* 3D Glass Tube Cylinder */}
                 <div
-                  className={`w-7 h-24 border-2 border-t-0 rounded-b-2xl p-0.5 flex flex-col justify-end gap-0.5 backdrop-blur-sm transition-colors ${
+                  className={`w-7 h-24 border-2 border-t-0 rounded-b-2xl p-0.5 flex flex-col justify-end gap-0.5 backdrop-blur-md relative overflow-hidden transition-all ${
                     isSelected
-                      ? 'border-[#10B981] bg-emerald-500/10 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-                      : 'border-slate-500/50 bg-slate-800/40'
+                      ? 'border-emerald-400 bg-emerald-500/15 shadow-[0_0_16px_rgba(16,185,129,0.5)]'
+                      : 'border-white/25 bg-slate-900/60 shadow-[inset_0_1px_2px_rgba(255,255,255,0.15)]'
                   }`}
                 >
+                  {/* Vertical Light Refraction Specular Sheen */}
+                  <div className="absolute top-0 bottom-0 left-1 w-0.5 bg-white/25 pointer-events-none rounded-full" />
+
                   {tubeLayers.map((color, cIdx) => (
                     <div
                       key={cIdx}
-                      className={`h-4 rounded-sm transition-all duration-300 ${color} ${
-                        color !== 'bg-transparent' ? 'opacity-90 shadow-xs' : ''
+                      className={`h-4 rounded-sm transition-all duration-300 relative ${color} ${
+                        color !== 'bg-transparent'
+                          ? 'opacity-95 shadow-[0_0_8px_currentColor]'
+                          : ''
                       }`}
-                    ></div>
+                    />
                   ))}
                 </div>
-                <span className="text-[9px] font-mono text-slate-400 mt-1">Tube {tIdx + 1}</span>
+                <span className="text-[9px] font-mono text-slate-400 mt-1.5 font-bold">Tube {tIdx + 1}</span>
               </div>
             );
           })}
         </div>
 
-        {/* Full-Width Neo-Mint Play Button */}
+        {/* Full-Width Glowing Neo-Mint Play Button */}
         <button
-          onClick={async () => {
+          onClick={() => {
+            setGameActiveState(true);
             setActiveGameModal('tube_sort');
           }}
-          className="w-full py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+          className="w-full py-2.5 rounded-xl btn-mint-glass font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-[0_0_18px_rgba(16,185,129,0.35)] active:scale-[0.98]"
         >
-          <Play className="w-3.5 h-3.5 fill-slate-950" />
-          PLAY COLOR TUBE SORT
+          <Play className="w-3.5 h-3.5 fill-emerald-300 text-emerald-300" />
+          <span>▶ PLAY COLOR TUBE SORT</span>
         </button>
       </div>
 
-      {/* 2-Column Grid: Memory Matrix & Cyber Car Race */}
+      {/* 2-Column Frosted Glass Grid: Memory Matrix & Cyber Car Race */}
       <div className="grid grid-cols-2 gap-2.5">
-        <div className="bg-white rounded-2xl p-3 border border-[#E2E8F0] shadow-sm flex flex-col justify-between min-w-0">
+        {/* Memory Matrix */}
+        <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl flex flex-col justify-between min-w-0">
           <div className="min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] mb-2 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300 mb-2 shrink-0 shadow-[0_0_12px_rgba(37,99,235,0.3)]">
               <Sparkles className="w-4 h-4" />
             </div>
-            <h4 className="text-xs font-bold text-slate-900 truncate">Memory Matrix</h4>
-            <p className="text-[10px] text-slate-500 mt-0.5 truncate">Sequence recall challenge</p>
-            <div className="mt-1.5 text-[9px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.5 rounded-md inline-block truncate">
+            <h4 className="text-xs font-black text-white truncate">Memory Matrix</h4>
+            <p className="text-[10px] text-slate-400 mt-0.5 truncate">Sequence recall challenge</p>
+            <div className="mt-1.5 text-[9px] font-bold text-blue-300 bg-blue-500/15 border border-blue-400/30 px-2 py-0.5 rounded-md inline-block truncate">
               +500 NC / +0.001 TON
             </div>
           </div>
           <button
-            onClick={() => setActiveGameModal('memory')}
-            className="mt-2.5 w-full py-1.5 rounded-xl border border-[#2563EB] text-[#2563EB] hover:bg-[#EFF6FF] font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+            onClick={() => {
+              setGameActiveState(true);
+              setActiveGameModal('memory');
+            }}
+            className="mt-3 w-full py-2 rounded-xl btn-mint-glass font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1"
           >
-            Play Matrix
+            <Play className="w-3 h-3 fill-emerald-300 text-emerald-300" />
+            <span>▶ Play</span>
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl p-3 border border-[#E2E8F0] shadow-sm flex flex-col justify-between min-w-0">
+        {/* Cyber Car Race */}
+        <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl flex flex-col justify-between min-w-0">
           <div className="min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center text-purple-600 mb-2 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-300 mb-2 shrink-0 shadow-[0_0_12px_rgba(168,85,247,0.3)]">
               <Flame className="w-4 h-4" />
             </div>
-            <h4 className="text-xs font-bold text-slate-900 truncate">Cyber Car Race</h4>
-            <p className="text-[10px] text-slate-500 mt-0.5 truncate">Traffic evasion speed run</p>
-            <div className="mt-1.5 text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-md inline-block truncate">
-              +750 NC + Fuel Boost
+            <h4 className="text-xs font-black text-white truncate">Cyber Car Race</h4>
+            <p className="text-[10px] text-slate-400 mt-0.5 truncate">Traffic evasion speed run</p>
+            <div className="mt-1.5 text-[9px] font-bold text-purple-300 bg-purple-500/15 border border-purple-400/30 px-2 py-0.5 rounded-md inline-block truncate">
+              +750 NC + Boost
             </div>
           </div>
           <button
-            onClick={() => setActiveGameModal('car_race')}
-            className="mt-2.5 w-full py-1.5 rounded-xl border border-purple-600 text-purple-600 hover:bg-purple-50 font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+            onClick={() => {
+              setGameActiveState(true);
+              setActiveGameModal('car_race');
+            }}
+            className="mt-3 w-full py-2 rounded-xl btn-mint-glass font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1"
           >
-            Play Race
+            <Play className="w-3 h-3 fill-emerald-300 text-emerald-300" />
+            <span>▶ Play</span>
           </button>
         </div>
       </div>
@@ -737,222 +836,246 @@ export function UIShowcase() {
     return (
       <div className="space-y-3.5">
         {/* Missions Header */}
-        <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm flex items-center justify-between">
+        <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl flex items-center justify-between">
           <div className="min-w-0">
-            <h2 className="text-sm font-extrabold text-slate-900 tracking-tight truncate">
-              Missions & Ad Hub
+            <h2 className="text-sm font-black text-white tracking-tight truncate">
+              Missions &amp; Ad Hub
             </h2>
-            <p className="text-[11px] text-slate-500 truncate">High CPM multi-network monetization</p>
+            <p className="text-[11px] text-slate-400 truncate">High CPM multi-network monetization</p>
           </div>
-          <div className="px-2 py-0.5 rounded-xl bg-[#EFF6FF] border border-blue-200 text-[#2563EB] text-[11px] font-mono font-bold shrink-0">
+          <div className="px-2.5 py-1 rounded-xl btn-cobalt-glass text-[11px] font-mono font-bold shrink-0">
             {totalWatched}/200 TODAY
           </div>
         </div>
 
-        {/* 15-SECOND DWELL PARTNER LINK Card */}
-        <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
+        {/* 15-SECOND ACTIVE PARTNER LINK Card with Glowing Neo-Mint Progress Pill */}
+        <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl">
           <div className="flex items-center justify-between mb-2 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-300 flex items-center justify-center shrink-0">
                 <ExternalLink className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-xs font-bold text-slate-900 uppercase truncate">
-                  15-Second Dwell Partner Link
+                <h3 className="text-xs font-black text-white uppercase truncate">
+                  Active Partner Link
                 </h3>
-                <p className="text-[10px] text-slate-500 truncate">Visit partner dApp for 15s</p>
+                <p className="text-[10px] text-slate-400 truncate">Visit partner dApp for 15s dwell</p>
               </div>
             </div>
-            {/* Cobalt Countdown Pill */}
-            <span
-              className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border shrink-0 transition-colors ${
-                dwellActive
-                  ? 'bg-[#2563EB] text-white border-[#2563EB] animate-pulse'
-                  : dwellCompleted
-                  ? 'bg-[#ECFDF5] text-[#059669] border-emerald-200'
-                  : 'bg-[#EFF6FF] text-[#2563EB] border-blue-200'
-              }`}
-            >
-              {dwellCompleted ? '✓ CLAIMED (+250)' : dwellActive ? `15s • ${dwellSeconds}s left` : '15s • 11s left'}
+
+            {/* Glowing Neo-Mint Progress Pill: "15s • 11s LEFT" */}
+            <span className="px-3 py-1 rounded-full text-[10px] font-mono font-black btn-mint-glass shrink-0 shadow-[0_0_18px_rgba(16,185,129,0.35)]">
+              {dwellCompleted ? '✓ CLAIMED (+250)' : dwellActive ? `15s • ${dwellSeconds}s LEFT` : '15s • 11s LEFT'}
             </span>
           </div>
 
-          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-[#10B981]">+250 NC Reward</span>
+          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-white/10">
+            <span className="text-[11px] font-bold text-emerald-400">+250 NC Reward</span>
             <button
               disabled={dwellCompleted || dwellActive}
               onClick={() => {
                 setDwellActive(true);
                 showToast('info', 'Dwell Timer Started', 'Stay on page 15s to claim rewards.');
               }}
-              className="py-1 px-3 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white text-[11px] font-bold transition-all cursor-pointer"
+              className="py-1.5 px-3 rounded-xl btn-cobalt-glass disabled:opacity-50 text-[11px] font-bold cursor-pointer"
             >
               {dwellCompleted ? 'Completed' : dwellActive ? 'Visiting...' : 'Open Partner'}
             </button>
           </div>
         </div>
 
-        {/* WATCH ADS (200 DAILY SYSTEM) Card */}
-        <div className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-sm relative overflow-hidden">
+        {/* WATCH ADS Card with 3D Icons & Provider Rows */}
+        <div className="obsidian-card rounded-2xl p-4 border border-white/10 shadow-2xl shadow-black/80 relative overflow-hidden">
           <div className="flex items-center justify-between mb-2.5 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-[#ECFDF5] text-[#10B981] flex items-center justify-center shrink-0">
-                <Tv className="w-4 h-4" />
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Dark Glass 3D Camera/Clapperboard Icon */}
+              <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/15 text-slate-200 flex items-center justify-center shrink-0 backdrop-blur-md shadow-inner">
+                <Camera className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-xs font-bold text-slate-900 uppercase truncate">
-                  Watch Ads (200 Daily System)
+                <h3 className="text-xs font-black text-white uppercase truncate">
+                  Watch Ads (200 Daily Waterfall)
                 </h3>
-                <p className="text-[10px] text-slate-500 truncate">Priority Waterfall Queue</p>
+                <p className="text-[10px] text-slate-400 truncate">Priority Ad Network Routing</p>
               </div>
             </div>
-            <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg shrink-0">
+            <span className="text-[10px] font-mono font-bold text-slate-300 btn-smoked-glass px-2 py-0.5 rounded-lg shrink-0">
               {totalWatched} / 200
             </span>
           </div>
 
-          {/* 3-Tier CPM Protection Pills */}
-          <div className="grid grid-cols-3 gap-1.5 my-2.5">
+          {/* 3-Column Bottom Row of Glowing Neon-Bordered Pills: TIER 1 (Neo-Mint), TIER 2 (Cobalt Blue), TIER 3 (Smoked Slate) */}
+          <div className="grid grid-cols-3 gap-1.5 my-3">
             <div
-              className={`p-1.5 rounded-xl border text-center transition-all min-w-0 ${
+              className={`p-2 rounded-xl text-center transition-all min-w-0 ${
                 totalWatched <= 20
-                  ? 'bg-[#ECFDF5] border-emerald-300 text-emerald-800 ring-1 ring-emerald-400'
-                  : 'bg-slate-50 border-slate-200 text-slate-400 opacity-60'
+                  ? 'btn-mint-glass'
+                  : 'btn-smoked-glass opacity-60'
               }`}
             >
-              <p className="text-[8px] font-black uppercase tracking-tight truncate">ADS 1-20: HIGH</p>
+              <p className="text-[8px] font-black uppercase tracking-tight truncate">TIER 1 (ADS 1-20)</p>
               <p className="text-[9px] font-bold mt-0.5 truncate">NC + Full TON</p>
             </div>
             <div
-              className={`p-1.5 rounded-xl border text-center transition-all min-w-0 ${
+              className={`p-2 rounded-xl text-center transition-all min-w-0 ${
                 totalWatched > 20 && totalWatched <= 50
-                  ? 'bg-[#EFF6FF] border-blue-300 text-blue-800 ring-1 ring-blue-400'
-                  : 'bg-slate-50 border-slate-200 text-slate-400 opacity-60'
+                  ? 'btn-cobalt-glass'
+                  : 'btn-smoked-glass opacity-60'
               }`}
             >
-              <p className="text-[8px] font-black uppercase tracking-tight truncate">ADS 21-50: MID</p>
+              <p className="text-[8px] font-black uppercase tracking-tight truncate">TIER 2 (ADS 21-50)</p>
               <p className="text-[9px] font-bold mt-0.5 truncate">NC + 50% TON</p>
             </div>
             <div
-              className={`p-1.5 rounded-xl border text-center transition-all min-w-0 ${
+              className={`p-2 rounded-xl text-center transition-all min-w-0 ${
                 totalWatched > 50
-                  ? 'bg-amber-50 border-amber-300 text-amber-800 ring-1 ring-amber-400'
-                  : 'bg-slate-50 border-slate-200 text-slate-400 opacity-60'
+                  ? 'btn-smoked-glass border-white/40 text-white'
+                  : 'btn-smoked-glass opacity-60'
               }`}
             >
-              <p className="text-[8px] font-black uppercase tracking-tight truncate">ADS 51+: FUEL</p>
-              <p className="text-[9px] font-bold mt-0.5 truncate">NC Only (0 TON)</p>
+              <p className="text-[8px] font-black uppercase tracking-tight truncate">TIER 3 (ADS 51+)</p>
+              <p className="text-[9px] font-bold mt-0.5 truncate">NC Only (Fuel)</p>
             </div>
           </div>
 
-          {/* Live Provider Status Rows */}
-          <div className="space-y-2 bg-slate-50/90 rounded-xl p-2.5 border border-slate-100 my-2.5">
-            {/* Priority 1: Monetag */}
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] shrink-0"></span>
-                <span className="font-bold text-slate-800 text-[11px] truncate">Priority 1: Monetag</span>
+          {/* Smoked-Glass Provider Rows with Frosted [ Watch ] Buttons */}
+          <div className="space-y-2 bg-slate-950/70 rounded-xl p-2.5 border border-white/10 my-2.5 backdrop-blur-md">
+            {/* MONETAG Row */}
+            <div className="flex items-center justify-between text-xs py-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_#10B981]" />
+                <span className="font-bold text-white text-[11px] truncate">MONETAG</span>
                 <span className="text-[9px] text-slate-400 font-mono shrink-0">(98.4%)</span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#10B981] rounded-full"
-                    style={{ width: `${(adStats.counts.monetag / adStats.dailyCaps.monetag) * 100}%` }}
-                  ></div>
-                </div>
-                <span className="font-mono text-[10px] font-bold text-slate-600">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="font-mono text-[10px] text-slate-400">
                   {adStats.counts.monetag}/{adStats.dailyCaps.monetag}
                 </span>
+                <button
+                  onClick={handleWatchRewardedAd}
+                  className="btn-smoked-glass px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer"
+                >
+                  [ Watch ]
+                </button>
               </div>
             </div>
 
-            {/* Priority 2: Gigapub */}
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB] shrink-0"></span>
-                <span className="font-bold text-slate-800 text-[11px] truncate">Priority 2: Gigapub</span>
+            {/* GIGAPUB Row */}
+            <div className="flex items-center justify-between text-xs py-1 border-t border-white/5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0 shadow-[0_0_6px_#3B82F6]" />
+                <span className="font-bold text-white text-[11px] truncate">GIGAPUB</span>
                 <span className="text-[9px] text-slate-400 font-mono shrink-0">(94.1%)</span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#2563EB] rounded-full"
-                    style={{ width: `${(adStats.counts.gigapub / adStats.dailyCaps.gigapub) * 100}%` }}
-                  ></div>
-                </div>
-                <span className="font-mono text-[10px] font-bold text-slate-600">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="font-mono text-[10px] text-slate-400">
                   {adStats.counts.gigapub}/{adStats.dailyCaps.gigapub}
                 </span>
+                <button
+                  onClick={handleWatchRewardedAd}
+                  className="btn-smoked-glass px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer"
+                >
+                  [ Watch ]
+                </button>
               </div>
             </div>
 
-            {/* Priority 3: Adsgram */}
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0"></span>
-                <span className="font-bold text-slate-800 text-[11px] truncate">Priority 3: Adsgram</span>
+            {/* ADSGRAM Row */}
+            <div className="flex items-center justify-between text-xs py-1 border-t border-white/5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0 shadow-[0_0_6px_#A855F7]" />
+                <span className="font-bold text-white text-[11px] truncate">ADSGRAM</span>
                 <span className="text-[9px] text-slate-400 font-mono shrink-0">(89.2%)</span>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-purple-500 rounded-full"
-                    style={{ width: `${(adStats.counts.adsgram / adStats.dailyCaps.adsgram) * 100}%` }}
-                  ></div>
-                </div>
-                <span className="font-mono text-[10px] font-bold text-slate-600">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="font-mono text-[10px] text-slate-400">
                   {adStats.counts.adsgram}/{adStats.dailyCaps.adsgram}
                 </span>
+                <button
+                  onClick={handleWatchRewardedAd}
+                  className="btn-smoked-glass px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer"
+                >
+                  [ Watch ]
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Watch Ad CTA */}
+          {/* Full Waterfall Trigger Button */}
           <div className="pt-1">
             <button
               disabled={adLoading}
               onClick={handleWatchRewardedAd}
-              className="w-full py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] active:scale-95 disabled:opacity-60 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+              className="w-full py-2.5 rounded-xl btn-mint-glass font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_18px_rgba(16,185,129,0.35)] cursor-pointer"
             >
               {adLoading ? (
                 <>
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Loading Ad Waterfall...
-                </>
-              ) : adStats.rewardedCooldownLeft > 0 ? (
-                <>
-                  <Clock className="w-3.5 h-3.5" />
-                  Cooldown Active ({adStats.rewardedCooldownLeft}s)
+                  <div className="w-3.5 h-3.5 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin" />
+                  <span>Loading Ad Waterfall...</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  Watch Rewarded Ad (+{currentTier.nc} NC)
+                  <Play className="w-3.5 h-3.5 fill-emerald-300 text-emerald-300" />
+                  <span>Watch Rewarded Ad (+{currentTier.nc} NC)</span>
                 </>
               )}
             </button>
-            <p className="text-[9px] text-slate-400 text-center mt-1.5 truncate">
-              Next Tier: <strong className="text-slate-700">{currentTier.tier}</strong> (
-              +{currentTier.nc} NC, +{currentTier.ton} TON)
-            </p>
           </div>
         </div>
 
-        {/* Task / Missions List with Category Pills */}
-        <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
+        {/* 60-SECOND INTERSTITIAL WATERFALL CARD */}
+        <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-400/40 text-blue-300 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                  60s Interstitial Waterfall
+                </h4>
+                <p className="text-[10px] text-slate-400">
+                  Monetag ⇄ Gigapub (Alternates every 60s)
+                </p>
+              </div>
+            </div>
+            {isGameActive() || activeGameModal !== null ? (
+              <span className="px-2 py-0.5 rounded-full btn-amber-glass text-[9px] font-mono font-bold text-amber-200">
+                🎮 GAME MODE (PAUSED)
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full btn-mint-glass text-[9px] font-mono font-bold text-emerald-200">
+                ACTIVE • {adStats.interstitialCooldownLeft > 0 ? `${adStats.interstitialCooldownLeft}s LEFT` : 'READY'}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-white/10 text-[10px]">
+            <span className="text-slate-300">
+              Next In Rotation: <strong className="text-blue-300 font-mono">{(typeof localStorage !== 'undefined' && localStorage.getItem('nc_last_tab_ad_provider') === 'monetag') ? 'GIGAPUB' : 'MONETAG'}</strong>
+            </span>
+            <button
+              onClick={() => handleTriggerInterstitial('Manual Test', true)}
+              className="px-2.5 py-1 rounded-lg btn-cobalt-glass text-[10px] font-black uppercase tracking-wider cursor-pointer"
+            >
+              ⚡ Test Interstitial
+            </button>
+          </div>
+        </div>
+
+        {/* Task / Missions List */}
+        <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl">
           <div className="flex items-center justify-between mb-2.5">
-            <h4 className="text-xs font-bold text-slate-900 uppercase">Community Tasks</h4>
-            {/* Category Filter */}
+            <h4 className="text-xs font-black text-white uppercase">Community Tasks</h4>
             <div className="flex gap-1">
               {(['all', 'telegram', 'social', 'partner'] as const).map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setMissionCategory(cat)}
-                  className={`text-[9px] px-2 py-0.5 rounded-full capitalize font-semibold transition-colors cursor-pointer ${
+                  className={`text-[9px] px-2 py-0.5 rounded-full capitalize font-bold transition-all cursor-pointer ${
                     missionCategory === cat
-                      ? 'bg-[#2563EB] text-white'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      ? 'btn-cobalt-glass'
+                      : 'btn-smoked-glass text-slate-400'
                   }`}
                 >
                   {cat}
@@ -965,21 +1088,21 @@ export function UIShowcase() {
             {filteredMissions.map((mission) => (
               <div
                 key={mission.id}
-                className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2"
+                className="p-2.5 rounded-xl border border-white/10 bg-slate-950/60 flex items-center justify-between gap-2 backdrop-blur-md"
               >
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-slate-900 truncate">{mission.title}</p>
-                  <p className="text-[9px] font-mono text-emerald-600 mt-0.5">
+                  <p className="text-[11px] font-bold text-white truncate">{mission.title}</p>
+                  <p className="text-[9px] font-mono text-emerald-400 mt-0.5">
                     +{mission.ncReward.toLocaleString()} NC • +{mission.tonReward} TON
                   </p>
                 </div>
                 <button
                   disabled={mission.completed}
                   onClick={() => handleCompleteMission(mission.id)}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer ${
                     mission.completed
-                      ? 'bg-emerald-100 text-emerald-700 cursor-default'
-                      : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xs'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 cursor-default'
+                      : 'btn-cobalt-glass'
                   }`}
                 >
                   {mission.completed ? 'Claimed ✓' : 'Start'}
@@ -997,110 +1120,33 @@ export function UIShowcase() {
   // ==========================================
   const renderFriendsScreen = () => (
     <div className="space-y-3.5">
-      {/* Verification Header Pills */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm flex items-center justify-between">
-        <div className="min-w-0">
+      {/* Frosted Referral Gate Card with Glowing Pills */}
+      <div className="obsidian-card rounded-2xl p-4 border border-white/10 shadow-2xl shadow-black/80">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#ECFDF5] text-[#059669] border border-emerald-200 shrink-0">
-              HUMAN VERIFIED ONLY
+            {/* Glowing Neo-Mint "✓ HUMAN VERIFIED ONLY" Badge */}
+            <span className="px-2.5 py-1 rounded-full text-[9px] font-extrabold btn-mint-glass shadow-[0_0_18px_rgba(16,185,129,0.35)] shrink-0">
+              ✓ HUMAN VERIFIED ONLY
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-blue-200 shrink-0">
+            {/* Glowing Cobalt "INVITE ONLY" Badge */}
+            <span className="px-2.5 py-1 rounded-full text-[9px] font-extrabold btn-cobalt-glass shadow-[0_0_20px_rgba(37,99,235,0.4)] shrink-0">
               INVITE ONLY
             </span>
           </div>
-          <h2 className="text-sm font-extrabold text-slate-900 tracking-tight mt-1 truncate">
-            Squad Referrals
-          </h2>
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-[9px] text-slate-400 uppercase font-bold">Unclaimed Commission</p>
-          <p className="text-xs font-black text-[#2563EB] font-mono">
-            {friendCommissionTon > 0 ? `+${friendCommissionTon.toFixed(2)} TON` : '0.00 TON'}
-          </p>
-        </div>
-      </div>
 
-      {/* Referral Stats Summary */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white rounded-2xl p-2.5 border border-[#E2E8F0] shadow-sm text-center min-w-0">
-          <p className="text-[9px] uppercase font-bold text-slate-400 truncate">Invited</p>
-          <p className="text-base font-black text-slate-800 font-mono mt-0.5">14</p>
-          <p className="text-[9px] text-slate-400 truncate">Friends</p>
-        </div>
-        <div className="bg-white rounded-2xl p-2.5 border border-[#E2E8F0] shadow-sm text-center min-w-0">
-          <p className="text-[9px] uppercase font-bold text-slate-400 truncate">Active</p>
-          <p className="text-base font-black text-[#10B981] font-mono mt-0.5">11</p>
-          <p className="text-[9px] text-emerald-500 font-semibold truncate">Miners</p>
-        </div>
-        <div className="bg-white rounded-2xl p-2.5 border border-[#E2E8F0] shadow-sm text-center min-w-0">
-          <p className="text-[9px] uppercase font-bold text-slate-400 truncate">Commission</p>
-          <p className="text-base font-black text-[#2563EB] font-mono mt-0.5">15%</p>
-          <p className="text-[9px] text-slate-400 truncate">Lifetime</p>
-        </div>
-      </div>
-
-      {/* Claim Commission Action (from Previous Setup) */}
-      {friendCommissionTon > 0 && !claimedCommission && (
-        <div className="bg-[#EFF6FF] rounded-2xl p-3 border border-blue-200 shadow-sm flex items-center justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-bold text-[#2563EB]">Pending Referral Earnings</p>
-            <p className="text-[10px] text-slate-600">You have +1.25 TON ready to collect</p>
+          <div className="text-right shrink-0">
+            <p className="text-[8px] text-slate-400 uppercase font-bold">Unclaimed</p>
+            <p className="text-xs font-black text-blue-300 font-mono">
+              +{friendCommissionTon.toFixed(2)} TON
+            </p>
           </div>
-          <button
-            onClick={handleClaimCommission}
-            className="py-1.5 px-3 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer"
-          >
-            Claim Commission
-          </button>
         </div>
-      )}
 
-      {/* 5-Emoji Anti-Bot Verification Captcha */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
-        <div className="flex items-center justify-between mb-1.5 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <ShieldCheck className="w-4 h-4 text-[#10B981] shrink-0" />
-            <h3 className="text-xs font-bold text-slate-900 truncate">Anti-Bot Verification Captcha</h3>
-          </div>
-          <span
-            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-              captchaVerified
-                ? 'bg-[#ECFDF5] text-[#059669] border border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border border-amber-200'
-            }`}
-          >
-            {captchaVerified ? '✓ VERIFIED' : 'PENDING'}
-          </span>
-        </div>
-        <p className="text-[10px] text-slate-500 mb-2.5">
-          Select the <strong className="text-slate-800">🚀 Rocket</strong> icon to verify human session:
-        </p>
+        <h2 className="text-sm font-black text-white tracking-tight mb-3">
+          Squad Referral Engine
+        </h2>
 
-        {/* 5-Emoji Bar */}
-        <div className="grid grid-cols-5 gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-          {['💎', '🚀', '⚡', '🍀', '🪙'].map((emoji) => {
-            const isChosen = captchaSelected === emoji;
-            return (
-              <button
-                key={emoji}
-                onClick={() => handleCaptchaClick(emoji)}
-                className={`h-10 rounded-xl text-lg flex items-center justify-center transition-all cursor-pointer ${
-                  isChosen
-                    ? emoji === '🚀'
-                      ? 'bg-emerald-100 border-2 border-[#10B981] scale-105'
-                      : 'bg-red-100 border-2 border-red-500'
-                    : 'bg-white border border-slate-200 hover:bg-slate-100 active:scale-95 shadow-xs'
-                }`}
-              >
-                {emoji}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Primary Invite CTA */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm space-y-2.5">
+        {/* Full-width glowing Cobalt Blue "+ INVITE FRIENDS ON TELEGRAM" Button */}
         <button
           onClick={() => {
             const text = '⚡ Mine real TON & NC Coins on NC TONs! Join with my link:';
@@ -1108,14 +1154,14 @@ export function UIShowcase() {
             window.open(shareUrl, '_blank');
             showToast('info', 'Opening Telegram', 'Sharing referral invitation...');
           }}
-          className="w-full py-2.5 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] active:scale-95 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
+          className="w-full py-2.5 rounded-xl btn-cobalt-glass font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-[0.98]"
         >
           <Share2 className="w-3.5 h-3.5 shrink-0" />
-          + INVITE FRIENDS ON TELEGRAM
+          <span>+ INVITE FRIENDS ON TELEGRAM</span>
         </button>
 
-        <div className="flex items-center justify-between text-xs bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
-          <span className="text-slate-500 truncate font-mono text-[10px]">
+        <div className="mt-2.5 flex items-center justify-between text-xs bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-white/10">
+          <span className="text-slate-400 truncate font-mono text-[10px]">
             https://t.me/NC_TONs_Bot?start=ref_81920
           </span>
           <button
@@ -1125,41 +1171,82 @@ export function UIShowcase() {
               showToast('info', 'Copied', 'Referral link copied to clipboard!');
               setTimeout(() => setCopiedLink(false), 2500);
             }}
-            className="text-[#2563EB] hover:text-blue-700 font-bold flex items-center gap-1 shrink-0 ml-1.5 text-[11px] cursor-pointer"
+            className="text-blue-300 hover:text-blue-200 font-bold flex items-center gap-1 shrink-0 ml-1.5 text-[11px] cursor-pointer"
           >
-            {copiedLink ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copiedLink ? 'Copied' : 'Copy'}
+            {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            <span>{copiedLink ? 'Copied' : 'Copy'}</span>
           </button>
         </div>
       </div>
 
-      {/* Milestone Ladder (from Previous Setup) */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
-        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-          Referral Milestones
-        </h4>
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] p-2 bg-emerald-50 rounded-xl border border-emerald-100">
-            <span className="font-semibold text-emerald-800">5 Friends Invited</span>
-            <span className="font-mono font-bold text-emerald-700">+0.10 TON (Claimed ✓)</span>
+      {/* Frosted ANTI-BOT VERIFICATION CAPTCHA Card */}
+      <div className="obsidian-card rounded-2xl p-4 border border-white/10 shadow-xl">
+        <div className="flex items-center justify-between mb-1.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <h3 className="text-xs font-black text-white uppercase tracking-wider truncate">
+              Anti-Bot Verification Captcha
+            </h3>
           </div>
-          <div className="flex items-center justify-between text-[11px] p-2 bg-emerald-50 rounded-xl border border-emerald-100">
-            <span className="font-semibold text-emerald-800">10 Friends Invited</span>
-            <span className="font-mono font-bold text-emerald-700">+0.25 TON (Claimed ✓)</span>
-          </div>
-          <div className="flex items-center justify-between text-[11px] p-2 bg-blue-50 rounded-xl border border-blue-100">
-            <span className="font-semibold text-[#2563EB]">25 Friends (14/25)</span>
-            <span className="font-mono font-bold text-[#2563EB]">+1.00 TON Locked</span>
-          </div>
+          <span
+            className={`text-[9px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+              captchaVerified
+                ? 'btn-mint-glass text-emerald-300'
+                : 'btn-amber-glass text-amber-300'
+            }`}
+          >
+            {captchaVerified ? '✓ VERIFIED' : 'PENDING'}
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-400 mb-3">
+          Select the <strong className="text-white">🚀 Rocket</strong> icon to verify human session:
+        </p>
+
+        {/* 5 Backlit Smoked-Glass Emoji Buttons */}
+        <div className="grid grid-cols-5 gap-1.5 bg-slate-950/70 p-1.5 rounded-xl border border-white/10 backdrop-blur-md">
+          {['💎', '🚀', '⚡', '🍀', '🪙'].map((emoji) => {
+            const isChosen = captchaSelected === emoji;
+            return (
+              <button
+                key={emoji}
+                onClick={() => handleCaptchaClick(emoji)}
+                className={`h-11 rounded-xl text-lg flex items-center justify-center transition-all cursor-pointer ${
+                  isChosen
+                    ? emoji === '🚀'
+                      ? 'btn-mint-glass scale-105 border-emerald-400 shadow-[0_0_18px_rgba(16,185,129,0.5)]'
+                      : 'card-crimson-glass scale-95'
+                    : 'btn-smoked-glass hover:bg-white/10 active:scale-95'
+                }`}
+              >
+                {emoji}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Scrollable List of Verified Invites */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
-        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+      {/* Claim Commission Action */}
+      {friendCommissionTon > 0 && !claimedCommission && (
+        <div className="btn-cobalt-glass rounded-2xl p-3.5 border border-blue-400/80 shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-white">Pending Referral Commission</p>
+            <p className="text-[10px] text-blue-200 font-mono">You have +1.25 TON ready to collect</p>
+          </div>
+          <button
+            onClick={handleClaimCommission}
+            className="py-1.5 px-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-md"
+          >
+            Claim Commission
+          </button>
+        </div>
+      )}
+
+      {/* Smoked-Glass Referral List Rows with Neon-Mint Checkmarks */}
+      <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl">
+        <h4 className="text-xs font-black text-white uppercase tracking-wider mb-2">
           Verified Friends
         </h4>
-        <div className="divide-y divide-slate-100 max-h-36 overflow-y-auto pr-1">
+        <div className="divide-y divide-white/5 max-h-36 overflow-y-auto pr-1">
           {[
             { name: 'Alex M.', handle: '@alex_ton', rate: '+0.45 TON', status: 'Active', verified: true },
             { name: 'Sophia K.', handle: '@sophia_web3', rate: '+0.38 TON', status: 'Active', verified: true },
@@ -1167,20 +1254,20 @@ export function UIShowcase() {
           ].map((f, i) => (
             <div key={i} className="py-2 flex items-center justify-between min-w-0">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-[11px] text-slate-600 shrink-0">
+                <div className="w-7 h-7 rounded-full bg-white/10 border border-white/15 flex items-center justify-center font-bold text-[11px] text-slate-200 shrink-0">
                   {f.name.charAt(0)}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
-                    <p className="text-[11px] font-bold text-slate-900 truncate">{f.name}</p>
-                    {f.verified && <CheckCircle2 className="w-3 h-3 text-[#10B981] fill-emerald-100 shrink-0" />}
+                    <p className="text-[11px] font-bold text-white truncate">{f.name}</p>
+                    {f.verified && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
                   </div>
                   <p className="text-[9px] text-slate-400 truncate">{f.handle}</p>
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[11px] font-mono font-bold text-[#2563EB]">{f.rate}</p>
-                <p className="text-[9px] text-[#059669] font-semibold">{f.status}</p>
+                <p className="text-[11px] font-mono font-bold text-blue-300">{f.rate}</p>
+                <p className="text-[9px] text-emerald-400 font-semibold">{f.status}</p>
               </div>
             </div>
           ))}
@@ -1194,34 +1281,191 @@ export function UIShowcase() {
   // ==========================================
   const renderWalletScreen = () => (
     <div className="space-y-3.5">
-      {/* Dual Vault Balance Summary */}
-      <div className="bg-white rounded-2xl p-4 border border-[#E2E8F0] shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-          Total Vault Balance
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-[#ECFDF5]/80 rounded-xl p-2.5 border border-emerald-100 min-w-0">
-            <p className="text-[9px] uppercase font-bold text-[#059669]">NC Tokens</p>
-            <p className="text-base font-black text-[#10B981] font-mono mt-0.5 truncate">
-              +{walletNcBalance >= 1000000 ? `${(walletNcBalance / 1000000).toFixed(3)}M` : `0.0${(walletNcBalance / 1000).toFixed(0)}M`} NC
-            </p>
-            <p className="text-[9px] text-emerald-600/80 mt-0.5 truncate">Ready for exchange</p>
+      {/* Top Full-Width Glowing Amber Gold Bar ("+0.050M NC") */}
+      <div className="w-full btn-amber-glass rounded-2xl p-3.5 border border-amber-400/70 shadow-[0_0_18px_rgba(245,158,11,0.3)] backdrop-blur-md flex items-center justify-between">
+        <div>
+          <p className="text-[9px] uppercase font-bold text-amber-300 tracking-wider">Mining Fuel Supply</p>
+          <div className="text-xl font-black font-mono text-amber-100 tracking-tight mt-0.5 drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]">
+            +{(walletNcBalance / 1000000).toFixed(3)}M <span className="text-xs text-amber-300">NC</span>
           </div>
-          <div className="bg-[#EFF6FF]/80 rounded-xl p-2.5 border border-blue-100 min-w-0">
-            <p className="text-[9px] uppercase font-bold text-[#2563EB]">TON Vault</p>
-            <p className="text-base font-black text-[#2563EB] font-mono mt-0.5 truncate">
-              {walletTonBalance.toFixed(3)} TON
-            </p>
-            <p className="text-[9px] text-blue-600/80 mt-0.5 truncate">≈ ${(walletTonBalance * 5.2).toFixed(2)} USD</p>
-          </div>
+        </div>
+        <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
+          <Zap className="w-4 h-4 fill-amber-300" />
         </div>
       </div>
 
-      {/* Promo Code Redeem Card (Feature from Previous Setup) */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
+      {/* Stacked Above Glowing Cobalt Blue Bar ("23.374 TON") with 3D Blue Diamond Accent */}
+      <div className="w-full btn-cobalt-glass rounded-2xl p-3.5 border border-blue-400/80 shadow-[0_0_20px_rgba(37,99,235,0.4)] backdrop-blur-md flex items-center justify-between">
+        <div>
+          <p className="text-[9px] uppercase font-bold text-blue-200 tracking-wider">Withdrawable Real TON</p>
+          <div className="text-xl font-black font-mono text-blue-100 tracking-tight mt-0.5 drop-shadow-[0_0_12px_rgba(37,99,235,0.7)] flex items-center gap-1.5">
+            <span>{walletTonBalance.toFixed(3)}</span>
+            <span className="text-xs text-blue-300">TON</span>
+          </div>
+        </div>
+        {/* 3D Blue Diamond Accent */}
+        <div className="w-9 h-9 rounded-2xl bg-blue-600/30 border border-blue-400 flex items-center justify-center shadow-[0_0_16px_rgba(37,99,235,0.6)] animate-pulse">
+          <span className="text-lg">💎</span>
+        </div>
+      </div>
+
+      {/* Frosted ACCOUNT VERIFICATION Card */}
+      <div className="obsidian-card rounded-2xl p-4 border border-white/10 shadow-2xl shadow-black/80">
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center space-x-2.5">
+            {/* Dark Translucent Glass Padlock & Safe Visuals */}
+            <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-400/40 text-blue-300 flex items-center justify-center shadow-[0_0_12px_rgba(37,99,235,0.35)] shrink-0">
+              {isAccountVerified ? <ShieldCheck size={18} className="text-emerald-400" /> : <Lock size={18} />}
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                Account Verification
+              </h4>
+              <p className="text-[10px] text-slate-400 font-mono">
+                {isAccountVerified ? 'Withdrawals Unlocked' : 'Anti-bot Security Gate'}
+              </p>
+            </div>
+          </div>
+
+          {/* Smoked-Glass "Required: 0.05 TON" Pill Badge */}
+          {isAccountVerified ? (
+            <span className="px-2.5 py-1 rounded-full btn-mint-glass text-[10px] font-extrabold font-mono shadow-[0_0_14px_rgba(16,185,129,0.35)]">
+              ✓ Verified
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded-full btn-smoked-glass text-amber-300 text-[10px] font-extrabold font-mono border border-white/15">
+              Required: 0.05 TON
+            </span>
+          )}
+        </div>
+
+        <p className="text-[11px] text-slate-300 leading-relaxed mb-3">
+          To prevent bot syndicates and authenticate non-custodial wallet ownership, a one-time network fee of{' '}
+          <strong className="text-blue-300 font-mono font-bold">0.05 TON (50,000,000 nanotons)</strong> is required to unlock payouts to{' '}
+          <span className="font-mono text-slate-400 text-[10px]">{adminReceiverWallet.slice(0, 6)}...{adminReceiverWallet.slice(-4)}</span>.
+        </p>
+
+        {/* Prominent Glowing Cobalt Blue "💎 PAY 0.05 TON & UNLOCK WALLET" Button */}
+        <button
+          onClick={handlePay005TonFee}
+          disabled={isPayingFee || isAccountVerified}
+          className={`w-full py-2.5 px-4 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all active:scale-[0.98] ${
+            isAccountVerified
+              ? 'btn-mint-glass cursor-default opacity-90'
+              : 'btn-cobalt-glass cursor-pointer shadow-[0_0_20px_rgba(37,99,235,0.4)]'
+          }`}
+        >
+          {isPayingFee ? (
+            <span>Broadcasting &amp; Verifying BOC...</span>
+          ) : isAccountVerified ? (
+            <span>✓ Verified • Withdrawals Unlocked</span>
+          ) : (
+            <span>💎 PAY 0.05 TON &amp; UNLOCK WALLET</span>
+          )}
+        </button>
+      </div>
+
+      {/* Crimson Frosted Glass "⚠️ Daily Limit Hit! (12/30)" Container */}
+      <div className="card-crimson-glass rounded-2xl p-4 border border-red-500/50 shadow-[0_0_18px_rgba(239,68,68,0.2)]">
+        <div className="flex items-start gap-2.5 mb-2.5">
+          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <h4 className="text-[11px] font-black text-red-200 uppercase tracking-wide truncate">
+              ⚠️ Daily Limit Hit! ({dailyBreakCount}/30)
+            </h4>
+            <p className="text-[10px] text-red-300/90 mt-0.5">
+              Daily quota reached (1/1). Watch 30 ads to break daily limit or wait for midnight reset.
+            </p>
+          </div>
+        </div>
+
+        {/* Glowing Red Progress Bar */}
+        <div className="w-full h-2 bg-slate-950/80 rounded-full overflow-hidden border border-red-500/30 p-0.5 mb-2">
+          <div
+            className="h-full bg-gradient-to-r from-red-600 via-rose-500 to-red-400 rounded-full transition-all duration-300 shadow-[0_0_12px_rgba(239,68,68,0.6)]"
+            style={{ width: `${(dailyBreakCount / 30) * 100}%` }}
+          />
+        </div>
+
+        {/* Quota Break Action Button */}
+        <div className="flex items-center justify-between mb-3 bg-red-950/40 p-2 rounded-xl border border-red-500/20">
+          <span className="text-[10px] text-red-200 font-mono font-medium">Break Limit via Smart Ad:</span>
+          <button
+            onClick={handleBreakDailyLimit}
+            disabled={adLoading || dailyBreakCount >= 30}
+            className="px-2.5 py-1 rounded-lg btn-amber-glass text-[10px] font-black uppercase tracking-wider disabled:opacity-50 cursor-pointer shadow-sm"
+          >
+            {adLoading ? 'Loading Ad...' : '⚡ Break Limit (+1)'}
+          </button>
+        </div>
+
+        {/* Dark Translucent Glass Input Fields: Address & Amount */}
+        <div className="space-y-2 mb-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono text-slate-400 font-bold uppercase">
+              Destination TON Wallet Address
+            </label>
+            <input
+              type="text"
+              value={walletAddress}
+              onChange={(e) => setWalletAddress(e.target.value)}
+              placeholder="Enter TON Wallet Address..."
+              className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-blue-400 transition-colors"
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-mono text-slate-400 font-bold uppercase">
+                Withdraw Amount (TON)
+              </label>
+              <span className="text-[9px] text-blue-300 font-mono">Bal: {walletTonBalance.toFixed(3)} TON</span>
+            </div>
+            <input
+              type="text"
+              value={withdrawAmount}
+              onChange={(e) => setWithdrawAmount(e.target.value)}
+              placeholder="0.0500"
+              className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-blue-400 transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Smoked-Glass "🔒 Withdraw TON Now" Button that Transforms into Glowing Cobalt Blue once isVerified */}
+        <button
+          onClick={() => {
+            if (!isAccountVerified) {
+              showToast('error', 'Verification Required', 'Complete the 0.05 TON verification above to unlock payouts.');
+            } else {
+              triggerCelebration();
+              showToast('reward', 'Withdrawal Sent!', `Withdrew ${withdrawAmount} TON to ${walletAddress.slice(0, 8)}...`);
+            }
+          }}
+          disabled={!isAccountVerified}
+          className={`w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+            !isAccountVerified
+              ? 'btn-smoked-glass text-slate-400 cursor-not-allowed opacity-80'
+              : 'btn-cobalt-glass cursor-pointer shadow-[0_0_20px_rgba(37,99,235,0.4)]'
+          }`}
+        >
+          {!isAccountVerified ? (
+            <>
+              <Lock size={14} />
+              <span>🔒 Withdraw TON Now (Locked)</span>
+            </>
+          ) : (
+            <>
+              <Wallet size={14} />
+              <span>Withdraw TON Now</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Redeem Promo Card */}
+      <div className="obsidian-card rounded-2xl p-3.5 border border-white/10 shadow-xl">
         <div className="flex items-center gap-2 mb-2">
-          <Tag className="w-4 h-4 text-[#2563EB]" />
-          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+          <Tag className="w-4 h-4 text-blue-400" />
+          <h4 className="text-xs font-bold text-white uppercase tracking-wider">
             Redeem Promo Code
           </h4>
         </div>
@@ -1231,162 +1475,22 @@ export function UIShowcase() {
             value={promoCodeInput}
             onChange={(e) => setPromoCodeInput(e.target.value)}
             placeholder="Try code NCTON2026"
-            className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono uppercase bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="flex-1 px-3 py-1.5 rounded-xl border border-white/10 text-xs font-mono uppercase bg-slate-950/70 text-white placeholder-slate-500 focus:outline-none focus:border-blue-400"
           />
           <button
             onClick={handleRedeemPromo}
-            className="px-3 py-1.5 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-xl btn-cobalt-glass text-xs font-black uppercase tracking-wider cursor-pointer"
           >
             Apply
           </button>
         </div>
       </div>
-
-      {/* Withdrawal Quota Status Cards */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm space-y-2.5">
-        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-          Withdrawal Quota Status
-        </h3>
-
-        {/* Daily Quota: 1/1 HIT */}
-        <div>
-          <div className="flex items-center justify-between text-[11px] mb-1 min-w-0">
-            <span className="font-semibold text-slate-600 truncate">Daily Quota</span>
-            <span className="font-mono font-bold text-[#DC2626] bg-[#FEF2F2] px-1.5 py-0.2 rounded-full border border-[#FECACA] shrink-0 text-[10px]">
-              1/1 HIT (LIMIT REACHED)
-            </span>
-          </div>
-          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-            <div className="h-full bg-[#DC2626] rounded-full w-full"></div>
-          </div>
-        </div>
-
-        {/* Weekly Quota: 2/5 LEFT */}
-        <div>
-          <div className="flex items-center justify-between text-[11px] mb-1 min-w-0">
-            <span className="font-semibold text-slate-600 truncate">Weekly Quota</span>
-            <span className="font-mono font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded-full border border-blue-200 shrink-0 text-[10px]">
-              2/5 LEFT (3 REMAINING)
-            </span>
-          </div>
-          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-            <div className="h-full bg-[#2563EB] rounded-full w-[40%]"></div>
-          </div>
-        </div>
-      </div>
-
-      {/* SOFT CORAL RED ALERT BOX */}
-      <div className="bg-[#FEF2F2] rounded-2xl p-3.5 border border-[#FECACA] shadow-sm">
-        <div className="flex items-start gap-2 min-w-0">
-          <AlertTriangle className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <h4 className="text-[11px] font-black text-[#DC2626] uppercase tracking-wide truncate">
-              Daily Limit Hit! Watch 30 Ads to break ({dailyBreakCount}/30)
-            </h4>
-            <p className="text-[10px] text-red-700/90 mt-0.5 leading-snug">
-              Bypass cooldown via the Monetag → Gigapub → Adsgram rewarded waterfall.
-            </p>
-
-            {/* Red Alert Progress Bar */}
-            <div className="w-full h-1.5 bg-red-200/80 rounded-full overflow-hidden my-2">
-              <div
-                className="h-full bg-[#DC2626] rounded-full transition-all duration-300"
-                style={{ width: `${(dailyBreakCount / 30) * 100}%` }}
-              ></div>
-            </div>
-
-            <button
-              disabled={adLoading || dailyBreakCount >= 30}
-              onClick={handleBreakDailyLimit}
-              className="w-full py-2 rounded-xl bg-[#DC2626] hover:bg-red-700 active:scale-95 disabled:opacity-50 text-white font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-            >
-              {dailyBreakCount >= 30 ? (
-                'Daily Limit Unlocked!'
-              ) : (
-                <>
-                  <Tv className="w-3 h-3 shrink-0" />
-                  Watch Ad to Break Limit (+1 Progress)
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* TON Wallet Address Input & Withdraw CTA */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm space-y-2.5">
-        <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold text-slate-700 uppercase">
-            Destination TON Wallet Address
-          </label>
-          <span className="text-[9px] text-[#2563EB] font-bold">TonConnect Supported</span>
-        </div>
-        <div className="mt-1">
-          <input
-            type="text"
-            value={walletAddress}
-            onChange={(e) => setWalletAddress(e.target.value)}
-            className="w-full px-2.5 py-2 rounded-xl border border-slate-200 text-[11px] font-mono text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 truncate"
-            placeholder="Enter TON wallet address"
-          />
-        </div>
-
-        <button
-          onClick={() => {
-            if (dailyBreakCount < 30) {
-              showToast('error', 'Daily Quota Hit', 'Break your daily limit by watching remaining ads or wait for 24h reset.');
-            } else {
-              triggerCelebration();
-              showToast('reward', 'Withdrawal Initiated', `Transferred 5.0 TON to ${walletAddress.substring(0, 8)}...`);
-            }
-          }}
-          className="w-full py-2.5 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] active:scale-95 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
-        >
-          <Wallet className="w-3.5 h-3.5" />
-          Withdraw TON Now
-        </button>
-      </div>
-
-      {/* Past Withdrawal History (Feature from Previous Setup) */}
-      <div className="bg-white rounded-2xl p-3.5 border border-[#E2E8F0] shadow-sm">
-        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
-          Recent Withdrawals
-        </h4>
-        <div className="space-y-2">
-          {[
-            { amount: '5.0 TON', date: 'Today, 14:20', status: 'Completed', tx: 'EQA...3b91' },
-            { amount: '2.5 TON', date: 'Yesterday', status: 'Completed', tx: 'EQC...1f4e' },
-            { amount: '1.0 TON', date: 'Oct 12', status: 'Pending', tx: 'In queue' },
-          ].map((tx, idx) => (
-            <div key={idx} className="flex items-center justify-between text-[11px] py-1.5 border-b border-slate-100 last:border-b-0">
-              <div>
-                <p className="font-bold text-slate-900">{tx.amount}</p>
-                <p className="text-[9px] text-slate-400">{tx.date} • {tx.tx}</p>
-              </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tx.status === 'Completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                {tx.status}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Legal Footer Links */}
-      <div className="flex justify-center gap-4 text-[10px] text-slate-400 pt-1">
-        <button onClick={() => setLegalModalOpen('terms')} className="hover:text-slate-600 underline cursor-pointer">
-          Terms of Service
-        </button>
-        <span>•</span>
-        <button onClick={() => setLegalModalOpen('privacy')} className="hover:text-slate-600 underline cursor-pointer">
-          Privacy Policy
-        </button>
-      </div>
     </div>
   );
 
-  // Bottom Navigation Bar
+  // Bottom Navigation Bar: Floating frosted obsidian bar with glowing neon-mint active tab icons
   const renderBottomNav = () => (
-    <div className="fixed bottom-0 left-0 right-0 max-w-[380px] mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 py-1.5 px-3 z-40 flex items-center justify-around shadow-lg">
+    <div className="fixed bottom-0 left-0 right-0 max-w-[380px] mx-auto bg-slate-950/85 backdrop-blur-2xl border-t border-white/10 py-1.5 px-3 z-40 flex items-center justify-around shadow-2xl shadow-black/90">
       {[
         { id: 'mining', label: 'Mining', icon: Pickaxe },
         { id: 'arcade', label: 'Arcade', icon: Gamepad2 },
@@ -1399,17 +1503,35 @@ export function UIShowcase() {
         return (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as ScreenTab)}
+            onClick={() => handleTabChange(tab.id as ScreenTab)}
             className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all cursor-pointer ${
               isActive
-                ? 'text-[#2563EB] font-bold scale-105'
-                : 'text-slate-400 hover:text-slate-600 font-medium'
+                ? 'text-emerald-300 font-bold scale-105'
+                : 'text-slate-400 hover:text-slate-200 font-medium'
             }`}
           >
-            <div className={`p-1 rounded-lg ${isActive ? 'bg-[#EFF6FF]' : ''}`}>
-              <Icon className="w-4 h-4" />
+            <div
+              className={`p-1.5 rounded-xl transition-all ${
+                isActive
+                  ? 'bg-emerald-500/15 border border-emerald-400/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                  : 'bg-transparent border border-transparent'
+              }`}
+            >
+              <Icon
+                className={`w-4 h-4 ${
+                  isActive
+                    ? 'text-emerald-300 drop-shadow-[0_0_8px_rgba(16,185,129,0.7)]'
+                    : 'text-slate-400'
+                }`}
+              />
             </div>
-            <span className="text-[9px] mt-0.5">{tab.label}</span>
+            <span
+              className={`text-[9px] mt-0.5 ${
+                isActive ? 'text-emerald-300 font-bold' : 'text-slate-400'
+              }`}
+            >
+              {tab.label}
+            </span>
           </button>
         );
       })}
@@ -1417,50 +1539,57 @@ export function UIShowcase() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F4F7FB] text-slate-800 antialiased selection:bg-[#10B981] selection:text-white pb-20">
+    <div className="min-h-screen bg-[#060911] text-slate-100 antialiased selection:bg-[#10B981] selection:text-white pb-20 relative overflow-hidden">
+      {/* Ambient Radial Neon-Emerald and Cobalt-Blue Background Light Blurs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-emerald-500/12 blur-[100px]" />
+        <div className="absolute top-1/3 -right-32 w-96 h-96 rounded-full bg-blue-600/14 blur-[110px]" />
+        <div className="absolute -bottom-32 left-1/3 w-96 h-96 rounded-full bg-emerald-500/10 blur-[120px]" />
+      </div>
+
       {/* Toast Notification */}
       {activeNotification && (
-        <div className="fixed top-3 left-3 right-3 max-w-[380px] mx-auto z-50">
+        <div className="fixed top-3 left-3 right-3 max-w-[380px] mx-auto z-50 animate-in fade-in slide-in-from-top-2">
           <div
-            className={`rounded-2xl p-3 shadow-xl border flex items-start gap-2.5 ${
+            className={`rounded-2xl p-3 shadow-2xl border backdrop-blur-xl flex items-start gap-2.5 ${
               activeNotification.type === 'reward'
-                ? 'bg-[#ECFDF5] border-emerald-300 text-emerald-900'
+                ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.3)]'
                 : activeNotification.type === 'interstitial'
-                ? 'bg-[#EFF6FF] border-blue-300 text-blue-900'
+                ? 'bg-blue-950/80 border-blue-500/50 text-blue-200 shadow-[0_0_20px_rgba(37,99,235,0.3)]'
                 : activeNotification.type === 'error'
-                ? 'bg-[#FEF2F2] border-red-300 text-red-900'
-                : 'bg-slate-900 text-white border-slate-800'
+                ? 'bg-red-950/80 border-red-500/50 text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
+                : 'obsidian-card text-white'
             }`}
           >
-            {activeNotification.type === 'reward' && <Sparkles className="w-4 h-4 text-[#10B981] shrink-0 mt-0.5" />}
-            {activeNotification.type === 'interstitial' && <Tv className="w-4 h-4 text-[#2563EB] shrink-0 mt-0.5" />}
-            {activeNotification.type === 'error' && <AlertTriangle className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />}
-            {activeNotification.type === 'info' && <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />}
+            {activeNotification.type === 'reward' && <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />}
+            {activeNotification.type === 'interstitial' && <Tv className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />}
+            {activeNotification.type === 'error' && <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />}
+            {activeNotification.type === 'info' && <Info className="w-4 h-4 text-blue-300 shrink-0 mt-0.5" />}
             <div className="flex-1 text-xs min-w-0">
-              <p className="font-extrabold truncate">{activeNotification.title}</p>
+              <p className="font-black truncate">{activeNotification.title}</p>
               <p className="mt-0.5 text-[11px] opacity-90 leading-tight">{activeNotification.message}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Recharge / Boost Modal (from Previous Setup) */}
+      {/* Recharge Modal */}
       {rechargeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full border border-slate-200 shadow-2xl relative animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="obsidian-card rounded-3xl p-5 max-w-sm w-full border border-white/10 shadow-2xl relative animate-in fade-in zoom-in-95">
             <button
               onClick={() => setRechargeModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center">
-                <Zap className="w-4 h-4 fill-[#2563EB]" />
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center">
+                <Zap className="w-4 h-4 fill-blue-300" />
               </div>
-              <h3 className="text-sm font-extrabold text-slate-900">Recharge Mining Battery</h3>
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">Recharge Mining Battery</h3>
             </div>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-slate-300 mb-4">
               Select your preferred recharge method to restore your rig back to 100% capacity:
             </p>
 
@@ -1473,13 +1602,13 @@ export function UIShowcase() {
                   triggerCelebration();
                   showToast('reward', 'Battery Recharged! ⚡', 'Power grid restored to 100% with speed boost.');
                 }}
-                className="w-full p-3 rounded-2xl border border-emerald-200 bg-[#ECFDF5] hover:bg-emerald-100/70 text-left flex items-center justify-between transition-colors cursor-pointer"
+                className="w-full p-3 rounded-2xl btn-mint-glass text-left flex items-center justify-between transition-colors cursor-pointer"
               >
                 <div>
-                  <p className="text-xs font-bold text-emerald-900">Instant Fuel Boost</p>
-                  <p className="text-[10px] text-emerald-700">Recharges battery to 100%</p>
+                  <p className="text-xs font-bold text-white">Instant Fuel Boost</p>
+                  <p className="text-[10px] text-emerald-300">Recharges battery to 100%</p>
                 </div>
-                <span className="text-xs font-bold text-[#10B981]">500 NC</span>
+                <span className="text-xs font-bold text-emerald-300">500 NC</span>
               </button>
 
               <button
@@ -1489,34 +1618,34 @@ export function UIShowcase() {
                   setBatteryProgress(100);
                   setBatterySeconds(8 * 3600);
                 }}
-                className="w-full p-3 rounded-2xl border border-blue-200 bg-[#EFF6FF] hover:bg-blue-100/70 text-left flex items-center justify-between transition-colors cursor-pointer"
+                className="w-full p-3 rounded-2xl btn-cobalt-glass text-left flex items-center justify-between transition-colors cursor-pointer"
               >
                 <div>
-                  <p className="text-xs font-bold text-blue-900">Watch Ad to Recharge</p>
-                  <p className="text-[10px] text-blue-700">Multi-network ad waterfall</p>
+                  <p className="text-xs font-bold text-white">Watch Ad to Recharge</p>
+                  <p className="text-[10px] text-blue-200">Multi-network ad waterfall</p>
                 </div>
-                <span className="text-xs font-bold text-[#2563EB]">Free</span>
+                <span className="text-xs font-bold text-blue-200">Free</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 7-Day Streak Ladder Modal (from Previous Setup) */}
+      {/* 7-Day Streak Ladder Modal */}
       {streakModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full border border-slate-200 shadow-2xl relative animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="obsidian-card rounded-3xl p-5 max-w-sm w-full border border-white/10 shadow-2xl relative animate-in fade-in zoom-in-95">
             <button
               onClick={() => setStreakModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2 mb-2">
-              <Trophy className="w-5 h-5 text-amber-500" />
-              <h3 className="text-sm font-extrabold text-slate-900">7-Day Mining Login Streak</h3>
+              <Trophy className="w-5 h-5 text-amber-400" />
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">7-Day Mining Login Streak</h3>
             </div>
-            <p className="text-xs text-slate-500 mb-4">
+            <p className="text-xs text-slate-300 mb-4">
               Log in daily to claim escalating NC coins and TON bonuses!
             </p>
 
@@ -1534,10 +1663,10 @@ export function UIShowcase() {
                   key={idx}
                   className={`flex items-center justify-between p-2 rounded-xl text-xs border ${
                     item.status === 'Claimed'
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-100'
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/40'
                       : item.status === 'Ready'
-                      ? 'bg-blue-50 text-blue-900 border-blue-200 font-bold ring-1 ring-blue-400'
-                      : 'bg-slate-50 text-slate-400 border-slate-100'
+                      ? 'btn-cobalt-glass text-white font-bold ring-1 ring-blue-400'
+                      : 'bg-white/5 text-slate-400 border-white/10'
                   }`}
                 >
                   <span>{item.day}</span>
@@ -1554,7 +1683,7 @@ export function UIShowcase() {
             <button
               disabled={dailyStreakClaimed}
               onClick={handleClaimDailyStreak}
-              className="w-full py-2.5 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+              className="w-full py-2.5 rounded-xl btn-cobalt-glass disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer"
             >
               {dailyStreakClaimed ? 'Streak Claimed Today' : 'Claim Day 4 Reward (+5,000 NC)'}
             </button>
@@ -1562,14 +1691,14 @@ export function UIShowcase() {
         </div>
       )}
 
-      {/* Mini-Game Arena Modal (Playable Arcade from Previous Setup) */}
+      {/* Mini-Game Arena Modal */}
       {activeGameModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-[#0F172A] rounded-3xl p-5 max-w-sm w-full border border-slate-700 shadow-2xl relative text-white animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-md">
+          <div className="obsidian-card rounded-3xl p-5 max-w-sm w-full border border-white/10 shadow-2xl relative text-white animate-in fade-in">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Gamepad2 className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-sm font-bold uppercase tracking-wider">
+                <h3 className="text-sm font-black uppercase tracking-wider">
                   {activeGameModal === 'tube_sort'
                     ? 'Color Tube Sort'
                     : activeGameModal === 'memory'
@@ -1578,15 +1707,18 @@ export function UIShowcase() {
                 </h3>
               </div>
               <button
-                onClick={() => setActiveGameModal(null)}
+                onClick={async () => {
+                  setActiveGameModal(null);
+                  setGameActiveState(false);
+                  await handleTriggerInterstitial('Game Exit', true);
+                }}
                 className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Game Screen Content */}
-            <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800 text-center space-y-4">
+            <div className="bg-slate-950/70 rounded-2xl p-4 border border-white/10 text-center space-y-4">
               <p className="text-xs text-slate-300">
                 {activeGameModal === 'tube_sort'
                   ? 'All tubes aligned! Test tubes ready for high-speed automated chemistry sort.'
@@ -1601,7 +1733,7 @@ export function UIShowcase() {
                 </div>
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex justify-around text-xs font-mono">
+              <div className="bg-slate-900/80 p-2.5 rounded-xl border border-white/10 flex justify-around text-xs font-mono">
                 <div>
                   <p className="text-[10px] text-slate-400">Score</p>
                   <p className="text-emerald-400 font-bold">1,450 PTS</p>
@@ -1617,189 +1749,156 @@ export function UIShowcase() {
                   setNcBalance((b) => b + 1200);
                   setWalletNcBalance((b) => b + 1200);
                   setActiveGameModal(null);
+                  setGameActiveState(false);
                   triggerCelebration();
                   showToast('reward', 'Round Victory!', '+1,200 NC awarded for completing game round.');
-                  await handleTriggerInterstitial('Game Round Completion');
+                  await handleTriggerInterstitial('Game Round Completion', true);
                 }}
-                className="w-full py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-slate-950 font-black text-xs uppercase tracking-wider transition-all cursor-pointer"
+                className="w-full py-2.5 rounded-xl btn-mint-glass text-slate-950 font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_18px_rgba(16,185,129,0.35)]"
               >
-                Complete & Claim Reward
+                Complete &amp; Claim Reward
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Legal Modal (from Previous Setup) */}
-      {legalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full border border-slate-200 shadow-2xl relative">
-            <button
-              onClick={() => setLegalModalOpen(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-2 mb-2">
-              <FileText className="w-4 h-4 text-blue-600" />
-              <h3 className="text-sm font-bold text-slate-900 uppercase">
-                {legalModalOpen === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
-              </h3>
-            </div>
-            <div className="text-xs text-slate-600 space-y-2 max-h-60 overflow-y-auto pr-1">
-              <p>
-                NC TONs is a dual-currency Telegram Mini App cloud simulation protocol. NC Coins are in-app rewards
-                utilizable within the arcade gaming and cloud hashrate ecosystem.
-              </p>
-              <p>
-                All withdrawals are governed by dynamic network quotas, anti-bot captcha verification, and CPM
-                protection tiers to ensure sustainable distribution.
-              </p>
-            </div>
-            <button
-              onClick={() => setLegalModalOpen(null)}
-              className="mt-4 w-full py-2 rounded-xl bg-slate-900 text-white font-bold text-xs"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Top Header / View Mode Controls */}
-      <div className="bg-white border-b border-[#E2E8F0] px-4 py-2.5 sticky top-0 z-30 shadow-xs flex items-center justify-between">
+      <div className="bg-slate-950/80 border-b border-white/10 px-4 py-2.5 sticky top-0 z-30 shadow-2xl backdrop-blur-2xl flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="font-black text-sm tracking-tight text-slate-900">
-            NC TONs <span className="text-[#10B981]">NEO-MINT</span> &{' '}
-            <span className="text-[#2563EB]">COBALT</span>
+          <span className="font-black text-sm tracking-tight text-white">
+            NC TONs <span className="text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]">OBSIDIAN</span> &amp;{' '}
+            <span className="text-blue-400 drop-shadow-[0_0_8px_rgba(37,99,235,0.6)]">GLASS</span>
           </span>
         </div>
 
         {/* View Mode Toggle: Phone View vs 5-Screen Studio */}
-        <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
+        <div className="flex items-center bg-slate-900/80 p-0.5 rounded-xl border border-white/10 text-xs font-bold backdrop-blur-md">
           <button
             onClick={() => setViewMode('single')}
             className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
               viewMode === 'single'
-                ? 'bg-white text-[#2563EB] shadow-xs'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'btn-cobalt-glass text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             <Smartphone className="w-3.5 h-3.5" />
-            Phone View
+            <span>Phone View</span>
           </button>
           <button
             onClick={() => setViewMode('studio')}
             className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
               viewMode === 'studio'
-                ? 'bg-white text-[#2563EB] shadow-xs'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'btn-cobalt-glass text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            5-Screen Studio
+            <span>5-Screen Studio</span>
           </button>
         </div>
       </div>
 
       {/* Main App Content */}
-      {viewMode === 'single' ? (
-        /* Single Centered Mobile Container (max-w-[380px]) */
-        <div className="max-w-[380px] w-full mx-auto p-3.5 pt-3">
-          {activeTab === 'mining' && renderMiningScreen()}
-          {activeTab === 'arcade' && renderArcadeScreen()}
-          {activeTab === 'missions' && renderMissionsScreen()}
-          {activeTab === 'friends' && renderFriendsScreen()}
-          {activeTab === 'wallet' && renderWalletScreen()}
-          {renderBottomNav()}
-        </div>
-      ) : (
-        /* 5-Screen Studio: Horizontal Scroll Container with fixed min-w-[340px] per phone */
-        <div className="w-full py-4">
-          <div className="text-center max-w-xl mx-auto mb-4 px-4">
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">
-              NC TONs: Neo-Mint & Cobalt Daylight Studio
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              5-screen complete presentation sheet — horizontal scroll layout with full feature parity
-            </p>
+      <div className="relative z-10">
+        {viewMode === 'single' ? (
+          /* Single Centered Mobile Container (max-w-[380px]) */
+          <div className="max-w-[380px] w-full mx-auto p-3.5 pt-3">
+            {activeTab === 'mining' && renderMiningScreen()}
+            {activeTab === 'arcade' && renderArcadeScreen()}
+            {activeTab === 'missions' && renderMissionsScreen()}
+            {activeTab === 'friends' && renderFriendsScreen()}
+            {activeTab === 'wallet' && renderWalletScreen()}
+            {renderBottomNav()}
           </div>
+        ) : (
+          /* 5-Screen Studio: Horizontal Scroll Container with fixed min-w-[340px] per phone */
+          <div className="w-full py-4">
+            <div className="text-center max-w-xl mx-auto mb-4 px-4">
+              <h1 className="text-xl font-black text-white tracking-tight">
+                NC TONs: Obsidian Glassmorphism Studio
+              </h1>
+              <p className="text-xs text-slate-400 mt-0.5">
+                5-screen complete presentation sheet — horizontal scroll layout with full feature parity
+              </p>
+            </div>
 
-          <div className="w-full overflow-x-auto pb-6 px-4">
-            <div className="flex flex-row gap-5 items-start min-w-max mx-auto justify-start lg:justify-center">
-              {/* Phone 1: MINING (HOME) */}
-              <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-white rounded-[28px] border-2 border-slate-200/90 shadow-lg overflow-hidden flex flex-col">
-                <div className="bg-slate-100/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                  <span className="font-bold text-[11px] text-slate-700">1. MINING (HOME)</span>
-                  <div className="w-10 h-1.5 rounded-full bg-slate-300"></div>
+            <div className="w-full overflow-x-auto pb-6 px-4">
+              <div className="flex flex-row gap-5 items-start min-w-max mx-auto justify-start lg:justify-center">
+                {/* Phone 1: MINING (HOME) */}
+                <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-slate-900/90 rounded-[28px] border-2 border-white/10 shadow-2xl shadow-black/90 overflow-hidden flex flex-col backdrop-blur-2xl">
+                  <div className="bg-slate-950/90 px-4 py-2 border-b border-white/10 flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-emerald-300">1. MINING (HOME)</span>
+                    <div className="w-10 h-1.5 rounded-full bg-slate-700" />
+                  </div>
+                  <div className="p-3 bg-[#060911]/90">
+                    {renderMiningScreen()}
+                  </div>
+                  <div className="py-2 bg-slate-950 flex justify-center border-t border-white/5">
+                    <div className="w-24 h-1 rounded-full bg-slate-700" />
+                  </div>
                 </div>
-                <div className="p-3 bg-[#F4F7FB]">
-                  {renderMiningScreen()}
-                </div>
-                <div className="py-2 bg-white flex justify-center border-t border-slate-100">
-                  <div className="w-24 h-1 rounded-full bg-slate-300"></div>
-                </div>
-              </div>
 
-              {/* Phone 2: ARCADE HUB */}
-              <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-white rounded-[28px] border-2 border-slate-200/90 shadow-lg overflow-hidden flex flex-col">
-                <div className="bg-slate-100/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                  <span className="font-bold text-[11px] text-slate-700">2. ARCADE HUB</span>
-                  <div className="w-10 h-1.5 rounded-full bg-slate-300"></div>
+                {/* Phone 2: ARCADE HUB */}
+                <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-slate-900/90 rounded-[28px] border-2 border-white/10 shadow-2xl shadow-black/90 overflow-hidden flex flex-col backdrop-blur-2xl">
+                  <div className="bg-slate-950/90 px-4 py-2 border-b border-white/10 flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-blue-300">2. ARCADE HUB</span>
+                    <div className="w-10 h-1.5 rounded-full bg-slate-700" />
+                  </div>
+                  <div className="p-3 bg-[#060911]/90">
+                    {renderArcadeScreen()}
+                  </div>
+                  <div className="py-2 bg-slate-950 flex justify-center border-t border-white/5">
+                    <div className="w-24 h-1 rounded-full bg-slate-700" />
+                  </div>
                 </div>
-                <div className="p-3 bg-[#F4F7FB]">
-                  {renderArcadeScreen()}
-                </div>
-                <div className="py-2 bg-white flex justify-center border-t border-slate-100">
-                  <div className="w-24 h-1 rounded-full bg-slate-300"></div>
-                </div>
-              </div>
 
-              {/* Phone 3: MISSIONS & ADS */}
-              <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-white rounded-[28px] border-2 border-slate-200/90 shadow-lg overflow-hidden flex flex-col">
-                <div className="bg-slate-100/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                  <span className="font-bold text-[11px] text-slate-700">3. MISSIONS & ADS</span>
-                  <div className="w-10 h-1.5 rounded-full bg-slate-300"></div>
+                {/* Phone 3: MISSIONS & ADS */}
+                <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-slate-900/90 rounded-[28px] border-2 border-white/10 shadow-2xl shadow-black/90 overflow-hidden flex flex-col backdrop-blur-2xl">
+                  <div className="bg-slate-950/90 px-4 py-2 border-b border-white/10 flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-amber-300">3. MISSIONS &amp; ADS</span>
+                    <div className="w-10 h-1.5 rounded-full bg-slate-700" />
+                  </div>
+                  <div className="p-3 bg-[#060911]/90">
+                    {renderMissionsScreen()}
+                  </div>
+                  <div className="py-2 bg-slate-950 flex justify-center border-t border-white/5">
+                    <div className="w-24 h-1 rounded-full bg-slate-700" />
+                  </div>
                 </div>
-                <div className="p-3 bg-[#F4F7FB]">
-                  {renderMissionsScreen()}
-                </div>
-                <div className="py-2 bg-white flex justify-center border-t border-slate-100">
-                  <div className="w-24 h-1 rounded-full bg-slate-300"></div>
-                </div>
-              </div>
 
-              {/* Phone 4: SQUAD REFERRALS */}
-              <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-white rounded-[28px] border-2 border-slate-200/90 shadow-lg overflow-hidden flex flex-col">
-                <div className="bg-slate-100/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                  <span className="font-bold text-[11px] text-slate-700">4. SQUAD REFERRALS</span>
-                  <div className="w-10 h-1.5 rounded-full bg-slate-300"></div>
+                {/* Phone 4: SQUAD REFERRALS */}
+                <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-slate-900/90 rounded-[28px] border-2 border-white/10 shadow-2xl shadow-black/90 overflow-hidden flex flex-col backdrop-blur-2xl">
+                  <div className="bg-slate-950/90 px-4 py-2 border-b border-white/10 flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-purple-300">4. SQUAD REFERRALS</span>
+                    <div className="w-10 h-1.5 rounded-full bg-slate-700" />
+                  </div>
+                  <div className="p-3 bg-[#060911]/90">
+                    {renderFriendsScreen()}
+                  </div>
+                  <div className="py-2 bg-slate-950 flex justify-center border-t border-white/5">
+                    <div className="w-24 h-1 rounded-full bg-slate-700" />
+                  </div>
                 </div>
-                <div className="p-3 bg-[#F4F7FB]">
-                  {renderFriendsScreen()}
-                </div>
-                <div className="py-2 bg-white flex justify-center border-t border-slate-100">
-                  <div className="w-24 h-1 rounded-full bg-slate-300"></div>
-                </div>
-              </div>
 
-              {/* Phone 5: WALLET & QUOTA */}
-              <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-white rounded-[28px] border-2 border-slate-200/90 shadow-lg overflow-hidden flex flex-col">
-                <div className="bg-slate-100/90 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                  <span className="font-bold text-[11px] text-slate-700">5. WALLET & QUOTA</span>
-                  <div className="w-10 h-1.5 rounded-full bg-slate-300"></div>
-                </div>
-                <div className="p-3 bg-[#F4F7FB]">
-                  {renderWalletScreen()}
-                </div>
-                <div className="py-2 bg-white flex justify-center border-t border-slate-100">
-                  <div className="w-24 h-1 rounded-full bg-slate-300"></div>
+                {/* Phone 5: WALLET & QUOTA */}
+                <div className="w-[340px] min-w-[340px] max-w-[340px] shrink-0 bg-slate-900/90 rounded-[28px] border-2 border-white/10 shadow-2xl shadow-black/90 overflow-hidden flex flex-col backdrop-blur-2xl">
+                  <div className="bg-slate-950/90 px-4 py-2 border-b border-white/10 flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-rose-300">5. WALLET &amp; QUOTA</span>
+                    <div className="w-10 h-1.5 rounded-full bg-slate-700" />
+                  </div>
+                  <div className="p-3 bg-[#060911]/90">
+                    {renderWalletScreen()}
+                  </div>
+                  <div className="py-2 bg-slate-950 flex justify-center border-t border-white/5">
+                    <div className="w-24 h-1 rounded-full bg-slate-700" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

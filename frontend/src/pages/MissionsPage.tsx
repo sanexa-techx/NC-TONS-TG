@@ -9,9 +9,10 @@ import { Target, PlusCircle, RefreshCw, Loader2 } from 'lucide-react';
 interface MissionsPageProps {
   onRewardClaimed: (ncAwarded: number, tonAwarded: string) => void;
   userId?: number | string;
+  isAdmin?: boolean;
 }
 
-export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, userId }) => {
+export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, userId, isAdmin }) => {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [category, setCategory] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
@@ -57,6 +58,18 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
       );
       onRewardClaimed(res.ncAwarded, res.tonAwarded);
       return res;
+    }
+  };
+
+  const handleAdminDelete = async (missionId: number) => {
+    const target = missions.find((m) => m.id === missionId);
+    const confirmed = window.confirm(`Admin: Permanently delete mission "${target?.title || missionId}"?`);
+    if (!confirmed) return;
+    try {
+      await api.deleteAdminMission(missionId);
+      setMissions((prev) => prev.filter((m) => m.id !== missionId));
+    } catch (err) {
+      alert((err as Error).message || 'Failed to delete mission');
     }
   };
 
@@ -150,6 +163,8 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
               mission={mission}
               onClaim={handleClaim}
               userId={userId}
+              isAdmin={isAdmin}
+              onDelete={handleAdminDelete}
               onProofSubmitted={fetchMissions}
             />
           ))

@@ -108,9 +108,7 @@ SET display_name = EXCLUDED.display_name,
 -- Seed Initial Missions
 INSERT INTO dynamic_missions (creator_user_id, title, description, category, task_type, action_url, telegram_chat_id, nc_reward, ton_reward, target_users, is_active, priority)
 VALUES
-    (0, 'Join Official NC TONs Channel', 'Subscribe to our official Telegram channel for daily mining codes and updates.', 'telegram', 'telegram_join', 'https://t.me/nctons_official', '@nctons_official', 500, 0.000500, 10000, true, 10),
-    (0, 'Follow NC TONs on X (Twitter)', 'Follow our official announcement feed on X.', 'social', 'visit_url', 'https://x.com/nctons', NULL, 300, 0.000200, 5000, true, 5),
-    (0, 'Explore TON Ecosystem Bot', 'Launch the partner TON ecosystem bot and start your web3 adventure.', 'partner', 'bot_launch', 'https://t.me/ton_ecosystem_bot', NULL, 400, 0.000300, 2000, true, 2)
+    (0, 'Join Official NC TONs Channel', 'Subscribe to our official Telegram channel for daily mining codes and updates.', 'telegram', 'telegram_join', 'https://t.me/nctons_official', '@nctons_official', 500, 0.000500, 10000, true, 10)
 ON CONFLICT DO NOTHING;
 
 -- Promo Codes Tables

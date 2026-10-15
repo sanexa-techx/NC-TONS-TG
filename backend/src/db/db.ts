@@ -150,40 +150,6 @@ const memoryStore = {
       created_at: new Date(),
     },
     {
-      id: 2,
-      creator_user_id: 0n,
-      title: 'Follow NC TONs on X (Twitter)',
-      description: 'Follow our official announcement feed on X to never miss airdrop announcements.',
-      category: 'social',
-      task_type: 'visit_url',
-      action_url: 'https://x.com/nctons',
-      telegram_chat_id: null,
-      nc_reward: 300,
-      ton_reward: new Decimal('0.000200'),
-      target_users: 5000,
-      completed_count: 812,
-      is_active: true,
-      priority: 5,
-      created_at: new Date(),
-    },
-    {
-      id: 3,
-      creator_user_id: 0n,
-      title: 'Explore TON Ecosystem Bot',
-      description: 'Launch the partner TON ecosystem bot and start your web3 adventure.',
-      category: 'partner',
-      task_type: 'bot_launch',
-      action_url: 'https://t.me/ton_ecosystem_bot',
-      telegram_chat_id: null,
-      nc_reward: 400,
-      ton_reward: new Decimal('0.000300'),
-      target_users: 2000,
-      completed_count: 149,
-      is_active: true,
-      priority: 2,
-      created_at: new Date(),
-    },
-    {
       id: 4,
       creator_user_id: 0n,
       title: 'Subscribe to NC TONs YouTube',
@@ -530,6 +496,27 @@ const mockPrisma = {
       }
       return memoryStore.missions.length;
     },
+    async delete({ where }: any) {
+      const targetId = Number(where.id);
+      const idx = memoryStore.missions.findIndex((m) => m.id === targetId);
+      if (idx === -1) return null;
+      const removed = memoryStore.missions.splice(idx, 1)[0];
+      memoryStore.claims = memoryStore.claims.filter((c) => c.mission_id !== targetId);
+      memoryStore.taskProofSubmissions = memoryStore.taskProofSubmissions.filter((s) => s.mission_id !== targetId);
+      return { ...removed };
+    },
+    async deleteMany({ where }: any = {}) {
+      let count = 0;
+      if (where?.id) {
+        const targetId = Number(where.id);
+        const prev = memoryStore.missions.length;
+        memoryStore.missions = memoryStore.missions.filter((m) => m.id !== targetId);
+        count = prev - memoryStore.missions.length;
+        memoryStore.claims = memoryStore.claims.filter((c) => c.mission_id !== targetId);
+        memoryStore.taskProofSubmissions = memoryStore.taskProofSubmissions.filter((s) => s.mission_id !== targetId);
+      }
+      return { count };
+    },
   },
 
   missionClaim: {
@@ -552,6 +539,15 @@ const mockPrisma = {
       };
       memoryStore.claims.push(newClaim);
       return { ...newClaim };
+    },
+    async deleteMany({ where }: any = {}) {
+      let count = 0;
+      if (where?.mission_id) {
+        const prev = memoryStore.claims.length;
+        memoryStore.claims = memoryStore.claims.filter((c) => c.mission_id !== Number(where.mission_id));
+        count = prev - memoryStore.claims.length;
+      }
+      return { count };
     },
   },
 
@@ -1830,6 +1826,38 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
     return { rows: [], rowCount: 1 };
   }
 
+  // 17d. Dynamic Missions query and cascading deletion
+  if (normalized.includes('FROM dynamic_missions') && normalized.includes('ORDER BY')) {
+    let list = [...memoryStore.missions];
+    if (normalized.includes('is_active = TRUE') || normalized.includes('is_active = true')) {
+      list = list.filter((m) => m.is_active);
+    }
+    return { rows: list, rowCount: list.length };
+  }
+
+  if (normalized.startsWith('DELETE FROM dynamic_missions WHERE id = $1')) {
+    const mId = Number(params[0]);
+    memoryStore.missions = memoryStore.missions.filter((m) => m.id !== mId);
+    memoryStore.claims = memoryStore.claims.filter((c) => c.mission_id !== mId);
+    memoryStore.taskProofSubmissions = memoryStore.taskProofSubmissions.filter((s) => s.mission_id !== mId);
+    return { rows: [], rowCount: 1 };
+  }
+
+  if (normalized.startsWith('DELETE FROM task_proof_submissions WHERE mission_id = $1')) {
+    const mId = Number(params[0]);
+    memoryStore.taskProofSubmissions = memoryStore.taskProofSubmissions.filter((s) => s.mission_id !== mId);
+    return { rows: [], rowCount: 1 };
+  }
+
+  if (normalized.startsWith('DELETE FROM user_mission_claims WHERE mission_id = $1') ||
+      normalized.startsWith('DELETE FROM mission_claims WHERE mission_id = $1') ||
+      normalized.startsWith('DELETE FROM mission_visit_sessions WHERE mission_id = $1') ||
+      normalized.startsWith('DELETE FROM mission_visits WHERE mission_id = $1')) {
+    const mId = Number(params[0]);
+    memoryStore.claims = memoryStore.claims.filter((c) => c.mission_id !== mId);
+    return { rows: [], rowCount: 1 };
+  }
+
   // 18. Transaction control (BEGIN, COMMIT, ROLLBACK)
   if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized.toUpperCase())) {
     return { rows: [], rowCount: 0 };
@@ -1861,6 +1889,8 @@ export const pool = {
 export function getIsPostgresConnected() {
   return isPostgresConnected;
 }
+
+export { memoryStore };
 
 export async function connectDB() {
   try {
@@ -1994,6 +2024,21 @@ export async function connectDB() {
               target_user_id BIGINT NOT NULL,
               created_at TIMESTAMP DEFAULT NOW()
           );
+
+          -- Purge deprecated pre-added X follow and bot mission records
+          DELETE FROM task_proof_submissions WHERE mission_id IN (
+            SELECT id FROM dynamic_missions WHERE title ILIKE '%Follow NC TONs on X%' OR title ILIKE '%Explore TON Ecosystem Bot%' OR action_url ILIKE '%x.com/nctons%' OR action_url ILIKE '%ton_ecosystem_bot%'
+          );
+          DELETE FROM mission_visit_sessions WHERE mission_id IN (
+            SELECT id FROM dynamic_missions WHERE title ILIKE '%Follow NC TONs on X%' OR title ILIKE '%Explore TON Ecosystem Bot%' OR action_url ILIKE '%x.com/nctons%' OR action_url ILIKE '%ton_ecosystem_bot%'
+          );
+          DELETE FROM user_mission_claims WHERE mission_id IN (
+            SELECT id FROM dynamic_missions WHERE title ILIKE '%Follow NC TONs on X%' OR title ILIKE '%Explore TON Ecosystem Bot%' OR action_url ILIKE '%x.com/nctons%' OR action_url ILIKE '%ton_ecosystem_bot%'
+          );
+          DELETE FROM mission_claims WHERE mission_id IN (
+            SELECT id FROM dynamic_missions WHERE title ILIKE '%Follow NC TONs on X%' OR title ILIKE '%Explore TON Ecosystem Bot%' OR action_url ILIKE '%x.com/nctons%' OR action_url ILIKE '%ton_ecosystem_bot%'
+          );
+          DELETE FROM dynamic_missions WHERE title ILIKE '%Follow NC TONs on X%' OR title ILIKE '%Explore TON Ecosystem Bot%' OR action_url ILIKE '%x.com/nctons%' OR action_url ILIKE '%ton_ecosystem_bot%';
         `);
       } catch (colErr: any) {
         console.warn('⚠️ Auto-migration check warning for database:', colErr.message);

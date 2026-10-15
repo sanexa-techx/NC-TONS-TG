@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../db/db.js';
+import { prisma, pool, memoryStore } from '../db/db.js';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export async function getRewardConfigs(req: Request, res: Response) {
@@ -143,6 +143,107 @@ export async function updateAdminMission(req: Request, res: Response) {
   } catch (err) {
     console.error('Error updating mission:', err);
     return res.status(500).json({ error: 'Failed to update mission', message: (err as Error).message });
+  }
+}
+
+export async function getAdminMissions(req: Request, res: Response) {
+  try {
+    let rawMissions: any[] = [];
+    try {
+      rawMissions = await prisma.dynamicMission.findMany({
+        orderBy: [{ priority: 'desc' }, { created_at: 'desc' }],
+      });
+    } catch (dbErr) {
+      if (pool) {
+        const result = await pool.query('SELECT * FROM dynamic_missions ORDER BY priority DESC, created_at DESC');
+        rawMissions = result.rows;
+      }
+    }
+
+    const missions = (rawMissions || []).map((m: any) => ({
+      id: m.id,
+      title: m.title,
+      description: m.description,
+      category: m.category,
+      taskType: m.task_type || m.taskType,
+      actionUrl: m.action_url || m.actionUrl,
+      telegramChatId: m.telegram_chat_id || m.telegramChatId,
+      ncReward: Number(m.nc_reward !== undefined ? m.nc_reward : m.ncReward),
+      tonReward: m.ton_reward instanceof Decimal ? m.ton_reward.toFixed(6) : (Number(m.ton_reward || m.tonReward || 0).toFixed(6)),
+      targetUsers: m.target_users !== undefined ? m.target_users : m.targetUsers,
+      completedCount: m.completed_count !== undefined ? m.completed_count : (m.completedCount || 0),
+      isActive: m.is_active !== undefined ? Boolean(m.is_active) : Boolean(m.isActive),
+      priority: m.priority !== undefined ? m.priority : 0,
+      requiresProof: Boolean(m.requires_proof || m.requiresProof),
+      proofInstructions: m.proof_instructions || m.proofInstructions,
+      createdAt: m.created_at || m.createdAt,
+    }));
+
+    return res.json({ success: true, missions });
+  } catch (err) {
+    console.error('Error fetching admin missions:', err);
+    return res.status(500).json({ error: 'Failed to fetch admin missions', message: (err as Error).message });
+  }
+}
+
+export async function deleteAdminMission(req: Request, res: Response) {
+  try {
+    const missionId = parseInt(req.params.id, 10);
+    if (!missionId || isNaN(missionId)) {
+      return res.status(400).json({ error: 'Invalid mission ID' });
+    }
+
+    // 1. Delete cascading references in pool
+    if (pool) {
+      try {
+        await pool.query('DELETE FROM task_proof_submissions WHERE mission_id = $1', [missionId]);
+      } catch (e) {}
+      try {
+        await pool.query('DELETE FROM mission_visit_sessions WHERE mission_id = $1', [missionId]);
+      } catch (e) {}
+      try {
+        await pool.query('DELETE FROM mission_visits WHERE mission_id = $1', [missionId]);
+      } catch (e) {}
+      try {
+        await pool.query('DELETE FROM user_mission_claims WHERE mission_id = $1', [missionId]);
+      } catch (e) {}
+      try {
+        await pool.query('DELETE FROM mission_claims WHERE mission_id = $1', [missionId]);
+      } catch (e) {}
+      try {
+        await pool.query('DELETE FROM dynamic_missions WHERE id = $1', [missionId]);
+      } catch (e) {}
+    }
+
+    // 2. Also delete using prisma
+    try {
+      if ((prisma as any).taskProofSubmission?.deleteMany) {
+        await (prisma as any).taskProofSubmission.deleteMany({ where: { mission_id: missionId } }).catch(() => {});
+      }
+      if ((prisma as any).missionVisitSession?.deleteMany) {
+        await (prisma as any).missionVisitSession.deleteMany({ where: { mission_id: missionId } }).catch(() => {});
+      }
+      if ((prisma as any).missionClaim?.deleteMany) {
+        await (prisma as any).missionClaim.deleteMany({ where: { mission_id: missionId } }).catch(() => {});
+      }
+      if (prisma.dynamicMission?.delete) {
+        await prisma.dynamicMission.delete({
+          where: { id: missionId },
+        }).catch(() => {});
+      }
+    } catch (e) {}
+
+    // 3. Fallback for mock memory store
+    if (memoryStore && memoryStore.missions) {
+      memoryStore.missions = memoryStore.missions.filter((m: any) => m.id !== missionId);
+      memoryStore.claims = memoryStore.claims.filter((c: any) => c.mission_id !== missionId);
+      memoryStore.taskProofSubmissions = memoryStore.taskProofSubmissions.filter((s: any) => s.mission_id !== missionId);
+    }
+
+    return res.json({ success: true, message: `Mission #${missionId} deleted successfully` });
+  } catch (err) {
+    console.error('Error deleting mission:', err);
+    return res.status(500).json({ error: 'Failed to delete mission', message: (err as Error).message });
   }
 }
 

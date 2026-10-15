@@ -4,37 +4,123 @@
 
 @layer base {
   body {
-    background-color: #F4F7FB;
-    color: #1e293b;
+    background-color: #060911;
+    color: #f1f5f9;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
   }
 }
 
-/* Daylight clean card styling */
-.glass-panel {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+/* Obsidian Glassmorphism Design Tokens */
+.obsidian-card {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12), 0 20px 25px -5px rgba(0, 0, 0, 0.70), 0 8px 10px -6px rgba(0, 0, 0, 0.70);
 }
 
-.glass-panel-glow {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+.obsidian-card-sm {
+  background: rgba(15, 23, 42, 0.60);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.10), 0 10px 15px -3px rgba(0, 0, 0, 0.50);
 }
 
-/* Custom Clean Daylight Scrollbar */
+/* 1. Amber Gold Glass Buttons & Pills */
+.btn-amber-glass {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.70);
+  color: #fef3c7;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.30);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-amber-glass:hover {
+  background: rgba(245, 158, 11, 0.25);
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.45);
+}
+.btn-amber-glass:active {
+  transform: scale(0.98);
+}
+
+/* 2. Cobalt Blue Glass Buttons & Pills */
+.btn-cobalt-glass {
+  background: rgba(37, 99, 235, 0.25);
+  border: 1px solid rgba(96, 165, 250, 0.80);
+  color: #dbeafe;
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.40);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-cobalt-glass:hover {
+  background: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 0 28px rgba(37, 99, 235, 0.55);
+}
+.btn-cobalt-glass:active {
+  transform: scale(0.98);
+}
+
+/* 3. Neo-Mint Glass Buttons & Pills */
+.btn-mint-glass {
+  background: rgba(16, 185, 129, 0.20);
+  border: 1px solid rgba(52, 211, 153, 0.80);
+  color: #a7f3d0;
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-mint-glass:hover {
+  background: rgba(16, 185, 129, 0.30);
+  box-shadow: 0 0 26px rgba(16, 185, 129, 0.50);
+}
+.btn-mint-glass:active {
+  transform: scale(0.98);
+}
+
+/* 4. Smoked Glass Secondary & Locked Buttons */
+.btn-smoked-glass {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-smoked-glass:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.btn-smoked-glass:active {
+  transform: scale(0.98);
+}
+
+/* 5. Crimson Alert Glass */
+.card-crimson-glass {
+  background: rgba(69, 10, 10, 0.45);
+  border: 1px solid rgba(239, 68, 68, 0.50);
+  color: #fecaca;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.20);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Custom Obsidian Glass Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #F4F7FB;
+  background: #060911;
 }
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  background: rgba(255, 255, 255, 0.30);
 }

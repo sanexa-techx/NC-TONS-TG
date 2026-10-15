@@ -56,8 +56,19 @@ export const AD_STATE: AdState = {
   },
 };
 
-export const INTERSTITIAL_COOLDOWN_MS = 90 * 1000; // 90 seconds (protects CPM)
+export const INTERSTITIAL_COOLDOWN_MS = 60 * 1000; // 60 seconds (1:1 alternating ad cooldown)
 export const REWARDED_COOLDOWN_MS = 30 * 1000; // 30 seconds cooldown
+
+// Game Mode State Tracking (suppresses 60s interstitial ads during active gameplay)
+let isGameActiveGlobal = false;
+export const setGameActiveState = (active: boolean) => {
+  isGameActiveGlobal = active;
+  console.log(`[SmartAdManager] Game mode: ${active ? "ACTIVE (30s ads paused)" : "INACTIVE (30s ads resumed)"}`);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("nc_game_mode_changed", { detail: { active } }));
+  }
+};
+export const isGameActive = () => isGameActiveGlobal;
 
 // 1. Individual Provider SDK Call Interface
 declare global {
@@ -188,17 +199,31 @@ export async function showSmartRewardedAd(ignoreCooldown = false): Promise<Rewar
   };
 }
 
-// 3. INTERSTITIAL AD: 1:1 Alternating (1 Monetag, 1 Gigapub) with 90s Cooldown
+// 3. INTERSTITIAL AD: 1:1 Alternating (1 Monetag, 1 Gigapub one after another) with 30s Cooldown
 export async function triggerAlternatingInterstitial(ignoreCooldown = false): Promise<InterstitialResult> {
+  // CRITICAL: Block 30s interstitial ads if user is actively in Game Mode!
+  if (isGameActiveGlobal && !ignoreCooldown) {
+    return { shown: false, reason: 'Game mode active (interstitials paused during gameplay)' };
+  }
+
   const now = Date.now();
   if (!ignoreCooldown && now - AD_STATE.lastInterstitialTime < INTERSTITIAL_COOLDOWN_MS) {
     const remaining = Math.ceil((INTERSTITIAL_COOLDOWN_MS - (now - AD_STATE.lastInterstitialTime)) / 1000);
     return { shown: false, reason: `Interstitial cooldown active (${remaining}s remaining)` };
   }
 
-  // Alternating between Monetag and Gigapub
-  const primary: 'monetag' | 'gigapub' =
-    AD_STATE.lastInterstitialProvider === 'monetag' ? 'gigapub' : 'monetag';
+  // Read persisted last provider so alternation is strictly 1:1 across tabs, reloads, and sessions
+  const savedLast =
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem('nc_last_tab_ad_provider')
+      : null;
+  const last: 'monetag' | 'gigapub' =
+    savedLast === 'monetag' || savedLast === 'gigapub'
+      ? savedLast
+      : AD_STATE.lastInterstitialProvider;
+
+  // Next provider alternates: Monetag -> Gigapub -> Monetag -> Gigapub
+  const primary: 'monetag' | 'gigapub' = last === 'monetag' ? 'gigapub' : 'monetag';
   const fallback: 'monetag' | 'gigapub' = primary === 'monetag' ? 'gigapub' : 'monetag';
 
   const tryShow = async (provider: 'monetag' | 'gigapub') => {
@@ -210,12 +235,18 @@ export async function triggerAlternatingInterstitial(ignoreCooldown = false): Pr
     await tryShow(primary);
     AD_STATE.lastInterstitialProvider = primary;
     AD_STATE.lastInterstitialTime = Date.now();
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('nc_last_tab_ad_provider', primary);
+    }
     return { shown: true, provider: primary.toUpperCase() };
   } catch (err) {
     try {
       await tryShow(fallback);
       AD_STATE.lastInterstitialProvider = fallback;
       AD_STATE.lastInterstitialTime = Date.now();
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('nc_last_tab_ad_provider', fallback);
+      }
       return { shown: true, provider: fallback.toUpperCase() };
     } catch (fallbackErr) {
       return { shown: false, reason: 'Both Monetag and Gigapub interstitials had no fill' };

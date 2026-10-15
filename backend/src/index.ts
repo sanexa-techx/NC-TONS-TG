@@ -17,6 +17,8 @@ import {
   updateRewardConfig,
   createAdminMission,
   updateAdminMission,
+  getAdminMissions,
+  deleteAdminMission,
   getAdminStats,
   getDailyStreakConfigs,
   updateDailyStreakConfig,
@@ -168,8 +170,10 @@ app.get('/api/admin/daily-rewards', authMiddleware, adminMiddleware, getDailyStr
 app.put('/api/admin/daily-rewards/:day', authMiddleware, adminMiddleware, updateDailyStreakConfig);
 app.get('/api/admin/referral-milestones', authMiddleware, adminMiddleware, getReferralMilestones);
 app.put('/api/admin/referral-milestones/:count', authMiddleware, adminMiddleware, updateReferralMilestone);
+app.get('/api/admin/missions', authMiddleware, adminMiddleware, getAdminMissions);
 app.post('/api/admin/missions', authMiddleware, adminMiddleware, createAdminMission);
 app.put('/api/admin/missions/:id', authMiddleware, adminMiddleware, updateAdminMission);
+app.delete('/api/admin/missions/:id', authMiddleware, adminMiddleware, deleteAdminMission);
 app.get('/api/admin/stats', authMiddleware, adminMiddleware, getAdminStats);
 
 // Admin Promo Management

@@ -78,33 +78,33 @@ export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: Withdr
   const weeklyBreakWatched = limits?.weekly?.breakAdsWatched ?? 0;
 
   return (
-    <div className="bg-white border border-[#E2E8F0] rounded-2xl p-4 text-slate-800 space-y-3 mb-4 shadow-xs">
+    <div className="obsidian-card rounded-2xl p-4 text-slate-200 space-y-3 mb-4 border border-white/10 shadow-2xl shadow-black/70">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-          <Zap className="w-4 h-4 text-amber-500" /> Withdrawal Quotas
+        <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-1.5">
+          <Zap className="w-4 h-4 text-amber-400" /> Withdrawal Quotas
         </h4>
-        <span className="text-[10px] font-mono text-slate-400">Resets: Daily & Mon UTC</span>
+        <span className="text-[10px] font-mono text-slate-400">Resets: Daily &amp; Mon UTC</span>
       </div>
 
       {/* Quota Indicators */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         {/* Daily Quota Box */}
         <div
-          className={`p-3 rounded-xl border flex flex-col justify-between ${
+          className={`p-3 rounded-xl border flex flex-col justify-between backdrop-blur-md ${
             isDailyHit
-              ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]"
-              : "bg-[#F8FAFC] border-[#E2E8F0] text-slate-700"
+              ? "card-crimson-glass"
+              : "bg-slate-950/70 border-white/10 text-slate-200"
           }`}
         >
           <div className="flex justify-between items-center text-[11px] font-semibold">
             <span>Daily Quota</span>
             {isDailyHit ? (
-              <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[9px] font-mono font-bold">1/1 HIT</span>
+              <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 text-[9px] font-mono font-bold border border-red-500/40">1/1 HIT</span>
             ) : (
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#10B981]" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
             )}
           </div>
-          <div className="mt-2 font-mono font-black text-base text-slate-900">
+          <div className="mt-2 font-mono font-black text-base text-white">
             {dailyUsed} / {dailyAllowed}
           </div>
           <span className="text-[9px] text-slate-400 mt-0.5 font-mono">Base: 1/day</span>
@@ -112,23 +112,23 @@ export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: Withdr
 
         {/* Weekly Quota Box */}
         <div
-          className={`p-3 rounded-xl border flex flex-col justify-between ${
+          className={`p-3 rounded-xl border flex flex-col justify-between backdrop-blur-md ${
             isWeeklyHit
-              ? "bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]"
-              : "bg-[#F8FAFC] border-[#E2E8F0] text-slate-700"
+              ? "card-crimson-glass"
+              : "bg-slate-950/70 border-white/10 text-slate-200"
           }`}
         >
           <div className="flex justify-between items-center text-[11px] font-semibold">
             <span>Weekly Quota</span>
             {isWeeklyHit ? (
-              <Lock className="w-3.5 h-3.5 text-red-500" />
+              <Lock className="w-3.5 h-3.5 text-red-400" />
             ) : (
-              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#2563EB] text-[9px] font-mono font-bold">
+              <span className="px-1.5 py-0.5 rounded btn-cobalt-glass text-[9px] font-mono font-bold">
                 {weeklyLeft}/{weeklyAllowed} LEFT
               </span>
             )}
           </div>
-          <div className="mt-2 font-mono font-black text-base text-slate-900">
+          <div className="mt-2 font-mono font-black text-base text-white">
             {weeklyUsed} / {weeklyAllowed}
           </div>
           <span className="text-[9px] text-slate-400 mt-0.5 font-mono">Base: 5/week</span>
@@ -137,31 +137,31 @@ export default function WithdrawalLimitsCard({ userId, onLimitUnlocked }: Withdr
 
       {/* Red Alert card: Daily Limit Hit! Watch 30 Ads to break */}
       {isDailyHit && (
-        <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-xl p-3.5 space-y-2">
+        <div className="card-crimson-glass rounded-xl p-3.5 space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-[#DC2626] flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-[#DC2626]" /> Daily Limit Hit! Watch 30 Ads to break ({dailyBreakWatched}/30)
+            <span className="font-black text-red-200 flex items-center gap-1.5 text-[11px]">
+              <ShieldAlert className="w-4 h-4 text-red-400" /> Daily Limit Hit! Watch 30 Ads to break ({dailyBreakWatched}/30)
             </span>
-            <span className="font-mono text-[10px] text-red-600 font-bold">
+            <span className="font-mono text-[10px] text-red-300 font-bold">
               {Math.min(100, Math.round((dailyBreakWatched / 30) * 100))}%
             </span>
           </div>
 
-          <div className="w-full bg-red-100 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-slate-950/80 rounded-full h-1.5 overflow-hidden border border-red-500/30">
             <div
-              className="bg-[#DC2626] h-full transition-all duration-300"
+              className="bg-gradient-to-r from-red-600 to-rose-400 h-full transition-all duration-300 shadow-[0_0_8px_rgba(239,68,68,0.5)]"
               style={{ width: `${Math.min(100, (dailyBreakWatched / 30) * 100)}%` }}
             />
           </div>
 
-          <p className="text-[10.5px] text-red-700/90 font-sans">
+          <p className="text-[10.5px] text-red-200/90 font-sans">
             Streamed through our <strong>Monetag → Gigapub → Adsgram</strong> rewarded waterfall with 30s CPM protection.
           </p>
 
           <button
             onClick={() => handleWatchBreakAd("daily")}
             disabled={adLoading}
-            className="w-full py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-98 shadow-xs cursor-pointer"
+            className="w-full py-2.5 btn-cobalt-glass text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition active:scale-98 shadow-md cursor-pointer"
           >
             <Film className="w-3.5 h-3.5" />
             {adLoading ? "Contacting Waterfall Engine..." : "Watch Ad to Break Daily Limit (30 Ads)"}

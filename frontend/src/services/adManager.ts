@@ -66,8 +66,19 @@ export const AD_STATE: AdState = {
   },
 };
 
-export const INTERSTITIAL_COOLDOWN_MS = 30 * 1000; // 30 seconds (1:1 alternating ad cooldown)
+export const INTERSTITIAL_COOLDOWN_MS = 60 * 1000; // 60 seconds (1:1 alternating ad cooldown)
 export const REWARDED_COOLDOWN_MS = 30 * 1000;     // 30 seconds
+
+// Game Mode State Tracking (suppresses 60s interstitial ads during active gameplay)
+let isGameActiveGlobal = false;
+export const setGameActiveState = (active: boolean) => {
+  isGameActiveGlobal = active;
+  console.log(`[AdManager] Game mode: ${active ? "ACTIVE (30s ads paused)" : "INACTIVE (30s ads resumed)"}`);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("nc_game_mode_changed", { detail: { active } }));
+  }
+};
+export const isGameActive = () => isGameActiveGlobal;
 
 // 1. Provider SDK call functions with safe fallbacks
 declare global {
@@ -287,6 +298,11 @@ export async function showSpecificRewardedAd(
 
 // 3. INTERSTITIAL AD: 1:1 Alternating (1 Monetag, 1 Gigapub one after another) with 30s Cooldown
 export async function triggerAlternatingInterstitial(ignoreCooldown = false): Promise<InterstitialResult> {
+  // CRITICAL: Block 30s interstitial ads if the user is in Game Mode!
+  if (isGameActiveGlobal && !ignoreCooldown) {
+    return { shown: false, reason: "Game mode active (interstitials paused during gameplay)" };
+  }
+
   const now = Date.now();
   if (!ignoreCooldown && now - AD_STATE.lastInterstitialTime < INTERSTITIAL_COOLDOWN_MS) {
     const remaining = Math.ceil((INTERSTITIAL_COOLDOWN_MS - (now - AD_STATE.lastInterstitialTime)) / 1000);
