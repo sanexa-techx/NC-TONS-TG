@@ -238,7 +238,7 @@ router.get("/verification-status", async (req, res) => {
     const adminWallet =
       process.env.ADMIN_RECEIVER_WALLET ||
       process.env.ADMIN_WALLET_ADDRESS ||
-      "UQD-1VqX4bF-8VfR8zL4wR9Yv9_6xK7uP4bT2hQ9wY7eN8mK";
+      "UQC7H_l-uAuupnB1tplVxMCKeImLbv1vzJhKnVDDJyg9V97v";
 
     return res.json({
       isVerified: Boolean(user?.is_verified),
@@ -311,7 +311,7 @@ router.post("/verify-account", async (req, res) => {
     const adminWallet =
       process.env.ADMIN_RECEIVER_WALLET ||
       process.env.ADMIN_WALLET_ADDRESS ||
-      "UQD-1VqX4bF-8VfR8zL4wR9Yv9_6xK7uP4bT2hQ9wY7eN8mK";
+      "UQC7H_l-uAuupnB1tplVxMCKeImLbv1vzJhKnVDDJyg9V97v";
 
     // Record in wallet_verifications audit table
     await client.query(

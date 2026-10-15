@@ -26,7 +26,7 @@ export const WalletVerificationCard: React.FC<WalletVerificationCardProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [adminWallet, setAdminWallet] = useState<string>(
     (import.meta as any).env?.VITE_ADMIN_RECEIVER_WALLET ||
-      'UQD-1VqX4bF-8VfR8zL4wR9Yv9_6xK7uP4bT2hQ9wY7eN8mK'
+      'UQC7H_l-uAuupnB1tplVxMCKeImLbv1vzJhKnVDDJyg9V97v'
   );
 
   useEffect(() => {
