@@ -81,7 +81,8 @@ export const App: React.FC = () => {
 
   const handleTabChange = (newTab: NavTab) => {
     if (newTab !== activeTab) {
-      triggerInterstitial('nav');
+      console.log(`[Navigation] Tab changed: ${activeTab} -> ${newTab}. Triggering 1:1 alternating ad (Monetag <-> Gigapub)...`);
+      triggerInterstitial('nav').catch((err) => console.warn('[App] Tab interstitial error:', err));
       setActiveTab(newTab);
     }
   };

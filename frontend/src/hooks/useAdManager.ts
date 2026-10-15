@@ -10,6 +10,11 @@ declare global {
     };
     showMonetagInterstitial?: () => Promise<boolean>;
     show_11886350?: (options?: any) => Promise<any>;
+    showGiga?: (zone?: string) => Promise<any>;
+    Gigapub?: {
+      showRewarded?: () => Promise<boolean>;
+      showInterstitial?: () => Promise<boolean>;
+    };
   }
 }
 
@@ -38,11 +43,7 @@ export const setGameActiveState = (active: boolean) => {
 
 export const isGameActive = () => isGameActiveGlobal;
 
-// Primary ad network: Monetag (Main Provider for all interstitials and rewarded tasks)
-// Secondary ad network: Adsgram (Reserved strictly for rewarded Missions only)
-
 // Internal executor for Monetag on-demand interstitial display with safety timeout
-// STRICT REQUIREMENT: Only Monetag is shown for interstitials. Adsgram is strictly reserved for missions.
 async function executeMonetagInterstitial(
   userId: number | string
 ): Promise<boolean> {
@@ -106,6 +107,140 @@ async function executeMonetagInterstitial(
   });
 
   return await Promise.race([showPromise, timeoutPromise]);
+}
+
+// Internal executor for Gigapub on-demand interstitial display with safety timeout
+async function executeGigapubInterstitial(): Promise<boolean> {
+  const timeoutMs = 8000;
+
+  return new Promise<boolean>(async (resolve) => {
+    let finished = false;
+    const finish = (result: boolean) => {
+      if (!finished) {
+        finished = true;
+        resolve(result);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      console.warn("[AdManager] Gigapub interstitial timeout (8s) elapsed");
+      finish(false);
+    }, timeoutMs);
+
+    try {
+      const getShowGiga = () => (window as any).showGiga;
+      if (typeof getShowGiga() === "function") {
+        console.log("[AdManager] Executing Gigapub showGiga('main')...");
+        try {
+          await getShowGiga()("main");
+          clearTimeout(timer);
+          finish(true);
+          return;
+        } catch (e) {
+          console.warn("[AdManager] showGiga call error:", e);
+          clearTimeout(timer);
+          finish(false);
+          return;
+        }
+      }
+
+      // If script is asynchronously initializing, retry briefly
+      for (let i = 0; i < 8; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        if (typeof getShowGiga() === "function") {
+          console.log("[AdManager] Executing Gigapub showGiga('main') after wait...");
+          try {
+            await getShowGiga()("main");
+            clearTimeout(timer);
+            finish(true);
+            return;
+          } catch (e) {
+            clearTimeout(timer);
+            finish(false);
+            return;
+          }
+        }
+      }
+
+      if ((window as any).Gigapub && typeof (window as any).Gigapub.showInterstitial === "function") {
+        const res = await (window as any).Gigapub.showInterstitial();
+        clearTimeout(timer);
+        finish(Boolean(res));
+        return;
+      }
+
+      clearTimeout(timer);
+      console.warn("[AdManager] Gigapub SDK not ready or showGiga missing");
+      finish(false);
+    } catch (err) {
+      clearTimeout(timer);
+      console.warn("[AdManager] Gigapub Interstitial error:", err);
+      finish(false);
+    }
+  });
+}
+
+// 1:1 Alternating Interstitial Engine (Monetag <-> Gigapub one after another)
+async function executeAlternatingInterstitial(
+  userId: number | string,
+  reason: string = "nav"
+): Promise<boolean> {
+  // Read persisted last provider so alternation is strictly 1:1 across tab clicks and reloads
+  const savedLast =
+    typeof localStorage !== "undefined"
+      ? localStorage.getItem("nc_last_tab_ad_provider")
+      : null;
+  const lastProvider: "monetag" | "gigapub" =
+    savedLast === "monetag" || savedLast === "gigapub" ? savedLast : "gigapub";
+
+  // Determine next provider in 1:1 sequence (Monetag -> Gigapub -> Monetag -> Gigapub)
+  const nextProvider: "monetag" | "gigapub" =
+    lastProvider === "monetag" ? "gigapub" : "monetag";
+  const fallbackProvider: "monetag" | "gigapub" =
+    nextProvider === "monetag" ? "gigapub" : "monetag";
+
+  console.log(
+    `[AdManager] 1:1 Alternating Tab Ad (${reason}): Showing ${nextProvider.toUpperCase()} (last was ${lastProvider.toUpperCase()})`
+  );
+
+  const runProvider = async (p: "monetag" | "gigapub"): Promise<boolean> => {
+    if (p === "monetag") {
+      return await executeMonetagInterstitial(userId);
+    } else {
+      return await executeGigapubInterstitial();
+    }
+  };
+
+  let displayed = false;
+  try {
+    displayed = await runProvider(nextProvider);
+  } catch (err) {
+    console.warn(`[AdManager] Primary provider ${nextProvider} error:`, err);
+    displayed = false;
+  }
+
+  if (displayed) {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("nc_last_tab_ad_provider", nextProvider);
+    }
+    return true;
+  }
+
+  // Graceful fallback to the opposite network if the primary had zero-fill
+  console.log(`[AdManager] Primary ${nextProvider} had no fill, falling back to ${fallbackProvider}...`);
+  try {
+    const fallbackDisplayed = await runProvider(fallbackProvider);
+    if (fallbackDisplayed) {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("nc_last_tab_ad_provider", fallbackProvider);
+      }
+      return true;
+    }
+  } catch (fallbackErr) {
+    console.warn("[AdManager] Both Monetag and Gigapub interstitials failed:", fallbackErr);
+  }
+
+  return false;
 }
 
 export function useAdManager(
@@ -216,8 +351,8 @@ export function useAdManager(
     return null;
   }, [userId]);
 
-  // 3. Interstitial Trigger (Guarded against playing while game is active, no recurring timers)
-  // STRICT REQUIREMENT: Interstitial ads ONLY show Monetag. Adsgram is reserved exclusively for Missions.
+  // 3. Interstitial Trigger (Guarded against playing while game is active)
+  // 1:1 Alternating between Monetag and Gigapub on tab changes and interstitial events
   const triggerInterstitial = useCallback(
     async (
       reason: "nav" | "start" | "withdraw" | "game_start" | "game_end"
@@ -232,15 +367,16 @@ export function useAdManager(
       const minCooldown =
         reason === "game_start" || reason === "game_end" ? 8000 : 30000;
       if (now - globalLastInterstitialTime < minCooldown) {
-        console.log(`[AdManager] Interstitial throttled (${reason})`);
+        const remaining = Math.ceil((minCooldown - (now - globalLastInterstitialTime)) / 1000);
+        console.log(`[AdManager] Interstitial throttled (${reason}) - ${remaining}s cooldown remaining`);
         return false;
       }
 
       globalLastInterstitialTime = now;
 
-      console.log(`[Ad Trigger] Showing Monetag interstitial (${reason})`);
+      console.log(`[Ad Trigger] Showing 1:1 alternating interstitial for ${reason}...`);
 
-      return await executeMonetagInterstitial(userId);
+      return await executeAlternatingInterstitial(userId, reason);
     },
     [userId]
   );
