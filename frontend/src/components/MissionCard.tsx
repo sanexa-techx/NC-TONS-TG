@@ -95,32 +95,32 @@ export const MissionCard: React.FC<MissionCardProps> = ({
   const isSoldOut = mission.isSoldOut;
 
   return (
-    <div className={`p-4 rounded-2xl border transition-all mb-3 relative overflow-hidden ${
+    <div className={`p-4 rounded-2xl border transition-all mb-3 relative overflow-hidden backdrop-blur-xl shadow-lg ${
       isCompleted
-        ? 'border-emerald-200 bg-[#ECFDF5] shadow-xs'
+        ? 'border-emerald-500/30 bg-emerald-950/20 text-slate-200'
         : isSoldOut
-        ? 'border-[#E2E8F0] bg-slate-50 opacity-60'
-        : 'bg-white border-[#E2E8F0] hover:border-blue-300 shadow-xs'
+        ? 'border-white/5 bg-slate-900/40 opacity-60 text-slate-400'
+        : 'bg-slate-900/80 border-white/10 text-slate-100 hover:border-white/20'
     }`}>
       {/* Category Pill */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-2">
-          <div className="p-1.5 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
+          <div className="p-1.5 rounded-lg bg-slate-950/70 border border-white/10">
             {getTaskIcon()}
           </div>
-          <span className="text-[11px] font-mono uppercase text-slate-500 font-semibold">
+          <span className="text-[11px] font-mono uppercase text-slate-400 font-semibold">
             {mission.category}
           </span>
         </div>
 
         {/* Dual Reward Badges & Optional Admin Action */}
         <div className="flex items-center space-x-1.5">
-          <div className="px-2 py-0.5 rounded-full bg-[#ECFDF5] border border-emerald-200 text-[11px] font-mono font-bold text-[#10B981] flex items-center space-x-1">
+          <div className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-[11px] font-mono font-bold text-emerald-300 flex items-center space-x-1">
             <NcIcon className="w-4 h-4" />
             <span>+{mission.ncReward} NC</span>
           </div>
           {parseFloat(mission.tonReward) > 0 && (
-            <div className="px-2 py-0.5 rounded-full bg-[#EFF6FF] border border-blue-200 text-[11px] font-mono font-bold text-[#2563EB] flex items-center space-x-1">
+            <div className="px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-400/40 text-[11px] font-mono font-bold text-blue-300 flex items-center space-x-1">
               <TonIcon className="w-4 h-4" />
               <span>+{mission.tonReward} TON</span>
             </div>
@@ -132,7 +132,7 @@ export const MissionCard: React.FC<MissionCardProps> = ({
                 e.stopPropagation();
                 onDelete(mission.id);
               }}
-              className="p-1 rounded-lg text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-all ml-1 shadow-2xs"
+              className="p-1 rounded-lg text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-500/40 transition-all ml-1 shadow-2xs"
               title="Admin: Delete Mission"
             >
               <Trash2 size={13} />
@@ -141,9 +141,8 @@ export const MissionCard: React.FC<MissionCardProps> = ({
         </div>
       </div>
 
-      {/* Title & Description */}
-      <h4 className="text-sm font-bold text-slate-900 mb-1">{mission.title}</h4>
-      <p className="text-xs text-slate-500 mb-3 line-clamp-2">{mission.description}</p>
+      {/* Task Title */}
+      <h4 className="text-sm font-bold text-white mb-2">{mission.title}</h4>
 
       {/* Quota Progress */}
       {mission.targetUsers && (
@@ -154,9 +153,9 @@ export const MissionCard: React.FC<MissionCardProps> = ({
               {mission.completedCount} / {mission.targetUsers}
             </span>
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-slate-950/70 rounded-full h-1.5 overflow-hidden border border-white/5">
             <div
-              className="bg-[#2563EB] h-1.5 rounded-full"
+              className="bg-blue-600 h-1.5 rounded-full"
               style={{
                 width: `${Math.min(100, (mission.completedCount / mission.targetUsers) * 100)}%`,
               }}
@@ -167,32 +166,32 @@ export const MissionCard: React.FC<MissionCardProps> = ({
 
       {/* Action Buttons */}
       {isCompleted ? (
-        <div className="w-full py-2 px-3 rounded-xl bg-emerald-100 border border-emerald-300 text-[#059669] text-xs font-bold flex items-center justify-center space-x-1.5">
+        <div className="w-full py-2 px-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold flex items-center justify-center space-x-1.5">
           <CheckCircle2 size={16} />
-          <span>Completed & Claimed</span>
+          <span>Completed</span>
         </div>
       ) : isSoldOut ? (
-        <div className="w-full py-2 px-3 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold text-center">
+        <div className="w-full py-2 px-3 rounded-xl bg-slate-950/60 border border-white/10 text-slate-500 text-xs font-semibold text-center">
           Reward Budget Exhausted
         </div>
       ) : isScreenshotTask ? (
         mission.proofStatus === 'PENDING_REVIEW' ? (
-          <div className="w-full py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold flex items-center justify-center space-x-1.5">
+          <div className="w-full py-2 px-3 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold flex items-center justify-center space-x-1.5">
             <Clock size={16} className="animate-spin" />
-            <span>⏳ Screenshot In Review</span>
+            <span>⏳ Proof In Review</span>
           </div>
         ) : mission.proofStatus === 'REJECTED' ? (
           <div className="flex items-center space-x-2">
             <button
               onClick={handleActionClick}
-              className="flex-1 py-2 px-3 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 flex items-center justify-center space-x-1 transition-all active:scale-95"
+              className="flex-1 py-2 px-3 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-white/10 text-xs font-semibold text-white flex items-center justify-center space-x-1 transition-all active:scale-95"
             >
-              <span>Open Link</span>
-              <ArrowUpRight size={14} className="text-[#2563EB]" />
+              <span>Open</span>
+              <ArrowUpRight size={14} className="text-blue-400" />
             </button>
             <button
               onClick={() => setProofModalOpen(true)}
-              className="flex-1 py-2 px-3 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95"
+              className="flex-1 py-2 px-3 rounded-xl bg-red-950/50 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95"
             >
               <Camera size={14} />
               <span>Retry Proof</span>
@@ -202,17 +201,17 @@ export const MissionCard: React.FC<MissionCardProps> = ({
           <div className="flex items-center space-x-2">
             <button
               onClick={handleActionClick}
-              className="flex-1 py-2 px-3 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 flex items-center justify-center space-x-1 transition-all active:scale-95"
+              className="flex-1 py-2 px-3 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-white/10 text-xs font-semibold text-white flex items-center justify-center space-x-1 transition-all active:scale-95"
             >
-              <span>Open Link</span>
-              <ArrowUpRight size={14} className="text-[#2563EB]" />
+              <span>Open</span>
+              <ArrowUpRight size={14} className="text-blue-400" />
             </button>
             <button
               onClick={() => setProofModalOpen(true)}
-              className="flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all active:scale-95 bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xs"
+              className="flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all active:scale-95 bg-blue-600 hover:bg-blue-700 text-white shadow-xs"
             >
               <Camera size={14} />
-              <span>Submit Proof</span>
+              <span>Proof</span>
             </button>
           </div>
         )
@@ -220,10 +219,10 @@ export const MissionCard: React.FC<MissionCardProps> = ({
         <div className="flex items-center space-x-2">
           <button
             onClick={handleActionClick}
-            className="flex-1 py-2 px-3 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 flex items-center justify-center space-x-1 transition-all active:scale-95"
+            className="flex-1 py-2 px-3 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-white/10 text-xs font-semibold text-white flex items-center justify-center space-x-1 transition-all active:scale-95"
           >
-            <span>{visited ? 'Re-open Link' : 'Open Link'}</span>
-            <ArrowUpRight size={14} className="text-[#2563EB]" />
+            <span>Open</span>
+            <ArrowUpRight size={14} className="text-blue-400" />
           </button>
 
           <button
@@ -231,10 +230,10 @@ export const MissionCard: React.FC<MissionCardProps> = ({
             disabled={claiming || !visited || countdown > 0}
             className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition-all active:scale-95 ${
               !visited
-                ? 'bg-slate-100 border border-[#E2E8F0] text-slate-400 cursor-not-allowed opacity-75'
+                ? 'bg-slate-950/50 border border-white/10 text-slate-500 cursor-not-allowed opacity-75'
                 : countdown > 0
-                ? 'bg-amber-50 border border-amber-300 text-amber-800 cursor-wait shadow-xs'
-                : 'bg-[#10B981] hover:bg-[#059669] text-white shadow-xs font-extrabold'
+                ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 cursor-wait shadow-xs'
+                : 'bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black shadow-[0_0_12px_rgba(16,185,129,0.3)]'
             }`}
           >
             {claiming ? (
@@ -244,11 +243,11 @@ export const MissionCard: React.FC<MissionCardProps> = ({
               </>
             ) : countdown > 0 ? (
               <>
-                <Clock size={14} className="animate-pulse text-amber-600" />
+                <Clock size={14} className="animate-pulse text-amber-300" />
                 <span>Visiting ({countdown}s)</span>
               </>
             ) : (
-              <span>Claim Reward</span>
+              <span>Claim</span>
             )}
           </button>
         </div>

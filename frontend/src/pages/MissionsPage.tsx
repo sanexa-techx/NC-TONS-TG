@@ -88,18 +88,18 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
       {/* Header */}
       <div className="w-full flex items-center justify-between py-2 mb-3">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#10B981]">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
             <Target size={18} />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-900">Missions Marketplace</h2>
-            <p className="text-[11px] text-slate-500">Complete tasks or promote channels</p>
+            <h2 className="text-base font-bold text-white">Missions Marketplace</h2>
+            <p className="text-[11px] text-slate-400">Complete tasks or promote channels</p>
           </div>
         </div>
 
         <button
           onClick={() => setCreateModalOpen(true)}
-          className="py-1.5 px-3 rounded-xl bg-[#EFF6FF] hover:bg-blue-100 border border-blue-200 text-[#2563EB] text-xs font-bold flex items-center space-x-1.5 active:scale-95 transition-all shadow-2xs"
+          className="py-1.5 px-3 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/50 text-blue-300 text-xs font-bold flex items-center space-x-1.5 active:scale-95 transition-all shadow-xs"
         >
           <PlusCircle size={14} />
           <span>Promote</span>
@@ -118,15 +118,15 @@ export const MissionsPage: React.FC<MissionsPageProps> = ({ onRewardClaimed, use
       </div>
 
       {/* Category Tabs */}
-      <div className="w-full flex space-x-1.5 p-1 rounded-xl bg-white border border-[#E2E8F0] shadow-2xs mb-4">
+      <div className="w-full flex space-x-1.5 p-1 rounded-xl bg-slate-950/70 border border-white/10 mb-4">
         {categories.map((c) => (
           <button
             key={c.id}
             onClick={() => setCategory(c.id)}
-            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${
               category === c.id
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-blue-200 shadow-2xs'
-                : 'text-slate-500 hover:text-slate-900'
+                ? 'bg-blue-600 text-white font-bold shadow-[0_0_12px_rgba(37,99,235,0.5)]'
+                : 'bg-slate-900/60 text-slate-400 border border-white/10 hover:text-white'
             }`}
           >
             {c.label}

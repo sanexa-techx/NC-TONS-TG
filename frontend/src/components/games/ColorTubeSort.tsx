@@ -388,35 +388,35 @@ export const ColorTubeSort: React.FC<GameProps> = ({
   const isEligibleForClaim = elapsedSeconds >= 15 && moves >= 8;
 
   return (
-    <div className="min-h-screen bg-[#F4F7FB] text-slate-800 flex flex-col justify-between p-4 select-none w-full max-w-md mx-auto">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 select-none w-full max-w-md mx-auto">
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
         <button
           onClick={onBack}
-          className="p-2 rounded-xl bg-white border border-[#E2E8F0] text-slate-700 hover:text-slate-900 transition active:scale-95 shadow-2xs"
+          className="p-2 rounded-xl bg-slate-900/80 border border-white/10 text-slate-300 hover:text-white transition active:scale-95 shadow-lg"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
 
         <div className="text-center">
-          <h3 className="font-extrabold text-sm tracking-wide text-amber-700 flex items-center justify-center gap-1.5">
+          <h3 className="font-extrabold text-sm tracking-wide text-amber-400 flex items-center justify-center gap-1.5">
             <span>🧪</span> COLOR TUBE SORT
           </h3>
-          <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500 font-mono mt-0.5">
+          <div className="flex items-center justify-center gap-3 text-[11px] text-slate-400 font-mono mt-0.5">
             <span
               className={`flex items-center gap-1 font-bold ${
                 timeLeft <= 10
-                  ? 'text-rose-600 animate-pulse'
+                  ? 'text-rose-400 animate-pulse'
                   : timeLeft <= 20
-                  ? 'text-amber-600'
-                  : 'text-[#2563EB]'
+                  ? 'text-amber-400'
+                  : 'text-blue-400'
               }`}
             >
               <Timer className="w-3.5 h-3.5" />
               {formatTimer(timeLeft)}
             </span>
             <span>•</span>
-            <span className="text-amber-700 font-bold">Moves: {moves}</span>
+            <span className="text-amber-400 font-bold">Moves: {moves}</span>
           </div>
         </div>
 
@@ -425,7 +425,7 @@ export const ColorTubeSort: React.FC<GameProps> = ({
             onClick={handleUndo}
             disabled={history.length === 0 || hasWon || submitting || isTimeUp}
             title="Undo move"
-            className="p-2 rounded-xl bg-white border border-[#E2E8F0] text-slate-700 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition active:scale-95 shadow-2xs"
+            className="p-2 rounded-xl bg-slate-900/80 border border-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition active:scale-95 shadow-lg"
           >
             <Undo2 className="w-4 h-4" />
           </button>
@@ -433,7 +433,7 @@ export const ColorTubeSort: React.FC<GameProps> = ({
             onClick={handleRestartLevel}
             disabled={hasWon || submitting}
             title="Reset level"
-            className="p-2 rounded-xl bg-white border border-[#E2E8F0] text-slate-700 hover:text-slate-900 transition active:scale-95 shadow-2xs"
+            className="p-2 rounded-xl bg-slate-900/80 border border-white/10 text-slate-300 hover:text-white transition active:scale-95 shadow-lg"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -460,19 +460,19 @@ export const ColorTubeSort: React.FC<GameProps> = ({
                 <div
                   key={idx}
                   onClick={() => handleTubeClick(idx)}
-                  className={`relative w-14 sm:w-16 h-44 sm:h-48 rounded-b-3xl border-2 transition-all duration-300 cursor-pointer flex flex-col-reverse p-1 gap-1 bg-white/80 backdrop-blur-md shadow-xs ${
+                  className={`relative w-14 sm:w-16 h-44 sm:h-48 rounded-b-3xl border-2 transition-all duration-300 cursor-pointer flex flex-col-reverse p-1 gap-1 bg-slate-900/80 backdrop-blur-md shadow-lg ${
                     isSelected
                       ? 'border-amber-400 -translate-y-4 ring-2 ring-amber-400/40'
                       : isFullUniform
-                      ? 'border-[#10B981]'
-                      : 'border-slate-300 hover:border-slate-400'
+                      ? 'border-emerald-500'
+                      : 'border-white/20 hover:border-white/40'
                   }`}
                 >
                   {/* Glass Top Lip */}
-                  <div className="absolute -top-3 -left-1.5 -right-1.5 h-3 border-2 border-slate-300 rounded-t-lg bg-slate-100" />
+                  <div className="absolute -top-3 -left-1.5 -right-1.5 h-3 border-2 border-white/20 rounded-t-lg bg-slate-800/80" />
 
                   {/* Glass Gloss Highlight Line */}
-                  <div className="absolute top-1 right-2 bottom-4 w-1 bg-slate-200/50 rounded-full pointer-events-none" />
+                  <div className="absolute top-1 right-2 bottom-4 w-1 bg-white/10 rounded-full pointer-events-none" />
 
                   {/* Liquid Segments */}
                   {tube.map((color, colorIdx) => (
@@ -486,7 +486,7 @@ export const ColorTubeSort: React.FC<GameProps> = ({
 
                   {/* Empty Flask Indicator */}
                   {tube.length === 0 && (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                    <div className="w-full h-full flex items-center justify-center text-[10px] font-mono text-slate-500 uppercase tracking-widest">
                       Buffer
                     </div>
                   )}
@@ -497,7 +497,7 @@ export const ColorTubeSort: React.FC<GameProps> = ({
 
           {/* Error Notice */}
           {errorMessage && (
-            <div className="mt-4 p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs flex items-center gap-2">
+            <div className="mt-4 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
@@ -507,44 +507,44 @@ export const ColorTubeSort: React.FC<GameProps> = ({
 
       {/* Bottom Hint */}
       <div className="text-center space-y-1.5 pt-2">
-        <p className="text-[11px] text-slate-500 font-medium">
+        <p className="text-[11px] text-slate-400 font-medium">
           Tap a tube to lift it, then tap another tube to pour matching fluid.
         </p>
         <div className="flex items-center justify-center gap-2 text-[10px] text-slate-400 font-mono">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#2563EB]" />
+          <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
           <span>1-min timer • Min. 15s elapsed &amp; 8 moves</span>
         </div>
       </div>
 
       {/* Time's Up Defeat Modal */}
       {isTimeUp && !hasWon && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-red-200 rounded-3xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mx-auto text-red-600">
-              <Timer className="w-8 h-8 animate-pulse text-red-600" />
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900/95 border border-red-500/30 rounded-3xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center mx-auto text-red-400">
+              <Timer className="w-8 h-8 animate-pulse text-red-400" />
             </div>
 
             <div className="space-y-1">
-              <h4 className="text-xl font-black text-slate-900 tracking-wide">TIME EXPIRED!</h4>
-              <p className="text-xs text-slate-500">
+              <h4 className="text-xl font-black text-white tracking-wide">TIME EXPIRED!</h4>
+              <p className="text-xs text-slate-400">
                 The 1-minute countdown ran out before all chemical flasks were sorted.
               </p>
             </div>
 
-            <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-3.5 rounded-2xl flex items-center justify-around font-mono text-xs text-slate-700">
+            <div className="bg-slate-950/70 border border-white/10 p-3.5 rounded-2xl flex items-center justify-around font-mono text-xs text-slate-200">
               <div>
                 <span className="text-slate-400 block text-[10px]">TIME LIMIT</span>
-                <span className="text-red-600 font-bold">00:00</span>
+                <span className="text-red-400 font-bold">00:00</span>
               </div>
-              <div className="w-[1px] h-6 bg-[#E2E8F0]" />
+              <div className="w-[1px] h-6 bg-white/10" />
               <div>
                 <span className="text-slate-400 block text-[10px]">MOVES</span>
-                <span className="text-amber-600 font-bold">{moves}</span>
+                <span className="text-amber-400 font-bold">{moves}</span>
               </div>
-              <div className="w-[1px] h-6 bg-[#E2E8F0]" />
+              <div className="w-[1px] h-6 bg-white/10" />
               <div>
                 <span className="text-slate-400 block text-[10px]">SORTED</span>
-                <span className="text-[#10B981] font-bold">
+                <span className="text-emerald-400 font-bold">
                   {tubes.filter((t) => t.length === 4 && t.every((c) => c === t[0])).length} / 4
                 </span>
               </div>
@@ -553,14 +553,14 @@ export const ColorTubeSort: React.FC<GameProps> = ({
             <div className="flex flex-col gap-2 pt-1">
               <button
                 onClick={initGame}
-                className="w-full py-3.5 rounded-2xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-extrabold text-sm flex items-center justify-center gap-2 transition active:scale-98 shadow-xs"
+                className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 transition active:scale-98 shadow-[0_0_15px_rgba(37,99,235,0.4)]"
               >
                 <RotateCcw className="w-4 h-4" />
                 Try Again (1 Min)
               </button>
               <button
                 onClick={onBack}
-                className="w-full py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-[#E2E8F0] text-slate-700 font-medium text-xs transition active:scale-98"
+                className="w-full py-3 rounded-2xl bg-slate-900/60 hover:bg-slate-800 border border-white/10 text-slate-300 font-medium text-xs transition active:scale-98"
               >
                 Return to Arcade Hub
               </button>
@@ -571,32 +571,32 @@ export const ColorTubeSort: React.FC<GameProps> = ({
 
       {/* Win Celebration Modal */}
       {hasWon && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl animate-in zoom-in-95">
-            <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-[#10B981]">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900/95 border border-emerald-500/30 rounded-3xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400">
               <Trophy className="w-8 h-8" />
             </div>
 
             <div className="space-y-1">
-              <h4 className="text-xl font-black text-slate-900">FLASKS SORTED!</h4>
-              <p className="text-xs text-slate-500">
+              <h4 className="text-xl font-black text-white">FLASKS SORTED!</h4>
+              <p className="text-xs text-slate-400">
                 You successfully segregated all chemical isotopes!
               </p>
             </div>
 
-            <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-3.5 rounded-2xl flex items-center justify-around font-mono text-sm">
-              <div className="flex items-center gap-1.5 text-[#10B981] font-bold">
+            <div className="bg-slate-950/70 border border-white/10 p-3.5 rounded-2xl flex items-center justify-around font-mono text-sm">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
                 <NcIcon className="w-4 h-4" /> +55 NC
               </div>
-              <div className="flex items-center gap-1.5 text-[#2563EB] font-bold">
+              <div className="flex items-center gap-1.5 text-blue-400 font-bold">
                 <TonIcon className="w-4 h-4" /> +0.000020 TON
               </div>
             </div>
 
             {/* Anti-cheat countdown if player solved in < 15s */}
             {!isEligibleForClaim && (
-              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-center gap-2 font-mono">
-                <Timer className="w-4 h-4 animate-pulse text-amber-600" />
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-center gap-2 font-mono">
+                <Timer className="w-4 h-4 animate-pulse text-amber-400" />
                 <span>Anti-cheat lock: {15 - elapsedSeconds}s remaining to claim...</span>
               </div>
             )}
@@ -604,7 +604,7 @@ export const ColorTubeSort: React.FC<GameProps> = ({
             <button
               onClick={handleClaim}
               disabled={submitting || !isEligibleForClaim}
-              className="w-full py-3.5 rounded-2xl bg-[#10B981] hover:bg-[#059669] text-white font-extrabold text-sm flex items-center justify-center gap-2 transition active:scale-98 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 transition active:scale-98 shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Sparkles className="w-4 h-4" />
               {submitting ? 'Claiming Bounty...' : 'Collect Bounty to Wallet'}

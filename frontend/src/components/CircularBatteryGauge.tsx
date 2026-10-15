@@ -43,14 +43,14 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
       />
 
       {/* SVG Ring Container */}
-      <div className="relative flex items-center justify-center bg-white rounded-full p-4 border border-[#E2E8F0] shadow-sm" style={{ width: size, height: size }}>
+      <div className="relative flex items-center justify-center bg-slate-900/80 backdrop-blur-xl rounded-full p-4 border border-white/10 shadow-2xl" style={{ width: size, height: size }}>
         <svg width={svgSize} height={svgSize} className="transform -rotate-90">
           {/* Background Track */}
           <circle
             cx={svgSize / 2}
             cy={svgSize / 2}
             r={radius}
-            stroke="#E2E8F0"
+            stroke="rgba(255, 255, 255, 0.08)"
             strokeWidth={strokeWidth}
             fill="transparent"
           />
@@ -60,7 +60,7 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
             cx={svgSize / 2}
             cy={svgSize / 2}
             r={radius}
-            stroke={isDead ? '#DC2626' : '#10B981'}
+            stroke={isDead ? '#EF4444' : '#10B981'}
             strokeWidth={strokeWidth}
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -74,27 +74,27 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
         <div className="absolute flex flex-col items-center justify-center text-center px-4">
           {isDead ? (
             <div className="flex flex-col items-center animate-bounce">
-              <AlertTriangle size={32} className="text-[#DC2626] mb-1" />
-              <span className="text-[11px] font-bold text-[#DC2626] tracking-wider uppercase">
+              <AlertTriangle size={32} className="text-red-500 mb-1" />
+              <span className="text-[11px] font-bold text-red-400 tracking-wider uppercase">
                 Battery Exhausted
               </span>
-              <span className="text-2xl font-black font-mono text-slate-900 mt-0.5">0%</span>
+              <span className="text-2xl font-black font-mono text-white mt-0.5">0%</span>
               <span className="text-[10px] text-slate-400 mt-0.5">Mining Halted</span>
             </div>
           ) : (
             <div className="flex flex-col items-center">
-              <div className="flex items-center space-x-1 text-[#10B981] mb-0.5">
-                <Zap size={16} className="fill-[#10B981]" />
+              <div className="flex items-center space-x-1 text-emerald-400 mb-0.5">
+                <Zap size={16} className="fill-emerald-400" />
                 <span className="text-[10px] font-extrabold uppercase tracking-wider">Rig Active</span>
               </div>
-              <div className="text-3xl font-black font-mono tracking-tight text-slate-900">
+              <div className="text-3xl font-black font-mono tracking-tight text-white">
                 {powerPercentage}%
               </div>
-              <div className="text-[11px] font-mono text-slate-500 mt-0.5 flex items-center space-x-1">
-                <Battery size={13} className="text-[#10B981]" />
+              <div className="text-[11px] font-mono text-slate-400 mt-0.5 flex items-center space-x-1">
+                <Battery size={13} className="text-emerald-400" />
                 <span>{formattedTime} Left</span>
               </div>
-              <div className="text-[10px] text-[#2563EB] font-mono mt-0.5 font-bold">
+              <div className="text-[10px] text-blue-400 font-mono mt-0.5 font-bold">
                 {hashratePerSec} TON/s
               </div>
             </div>
@@ -108,8 +108,8 @@ export const CircularBatteryGauge: React.FC<CircularBatteryGaugeProps> = ({
           onClick={onRechargeClick}
           className={`w-full py-3 px-5 rounded-2xl font-extrabold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition-all transform active:scale-95 shadow-md cursor-pointer ${
             isDead
-              ? 'bg-[#DC2626] hover:bg-red-700 text-white shadow-red-500/20 animate-pulse'
-              : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-blue-600/25'
+              ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20 animate-pulse'
+              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
           }`}
         >
           <BatteryCharging size={18} />

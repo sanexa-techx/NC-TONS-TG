@@ -237,26 +237,26 @@ export const WalletPage: React.FC<WalletPageProps> = ({
         {/* Daily Ad Withdrawal Gatekeeper HUD */}
         {adStatus && (
           <div
-            className={`p-3 rounded-xl border flex items-center justify-between text-xs mb-3 transition-all ${
+            className={`p-3 rounded-xl border flex items-center justify-between text-xs mb-3 transition-all backdrop-blur-xl ${
               adStatus.canWithdraw
-                ? 'bg-[#ECFDF5] border-emerald-200 text-[#059669]'
-                : 'bg-[#FFFBEB] border-amber-200 text-amber-800'
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                : 'bg-amber-500/10 border border-amber-500/30 text-amber-200'
             }`}
           >
             <div className="flex items-center space-x-2.5">
               {adStatus.canWithdraw ? (
-                <ShieldCheck size={18} className="text-[#10B981] shrink-0" />
+                <ShieldCheck size={18} className="text-emerald-400 shrink-0" />
               ) : (
-                <Lock size={18} className="text-amber-500 shrink-0" />
+                <Lock size={18} className="text-amber-400 shrink-0" />
               )}
               <div>
                 <div className="font-bold text-[11px] flex items-center gap-1.5">
-                  <span>Daily Withdrawal Gate</span>
-                  <span className="font-mono text-[9px] px-1 py-0.2 rounded bg-white border border-current font-semibold">
+                  <span className="text-white">Daily Withdrawal Gate</span>
+                  <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-950/70 border border-white/10 text-white font-semibold">
                     {adStatus.canWithdraw ? 'UNLOCKED' : 'LOCKED'}
                   </span>
                 </div>
-                <div className="text-[10px] opacity-80 mt-0.5 font-mono">
+                <div className="text-[10px] opacity-80 mt-0.5 font-mono text-slate-300">
                   Monetag (Main): {adStatus.monetag.watched}/4 • Adsgram (Missions): {adStatus.adsgram.watched}/8
                 </div>
               </div>
@@ -282,26 +282,26 @@ export const WalletPage: React.FC<WalletPageProps> = ({
         {/* Miner Level Payout Tier HUD */}
         {levelStatus && (
           <div
-            className={`p-3 rounded-xl border flex items-center justify-between text-xs mb-3.5 transition-all ${
+            className={`p-3 rounded-xl border flex items-center justify-between text-xs mb-3.5 transition-all backdrop-blur-xl ${
               levelStatus.canWithdrawOverHalfTon
-                ? 'bg-[#EFF6FF] border-blue-200 text-[#2563EB]'
-                : 'bg-[#FFFBEB] border-amber-200 text-amber-800'
+                ? 'bg-blue-500/15 border border-blue-500/30 text-blue-300'
+                : 'bg-amber-500/10 border border-amber-500/30 text-amber-200'
             }`}
           >
             <div className="flex items-center space-x-2.5">
               {levelStatus.canWithdrawOverHalfTon ? (
-                <ShieldCheck size={18} className="text-[#2563EB] shrink-0" />
+                <ShieldCheck size={18} className="text-blue-400 shrink-0" />
               ) : (
-                <Lock size={18} className="text-amber-500 shrink-0" />
+                <Lock size={18} className="text-amber-400 shrink-0" />
               )}
               <div>
                 <div className="font-bold text-[11px] flex items-center gap-1.5">
-                  <span>Rig Level {levelStatus.currentLevel} Payout Tier</span>
-                  <span className="font-mono text-[9px] px-1 py-0.2 rounded bg-white border border-current font-semibold">
+                  <span className="text-white">Rig Level {levelStatus.currentLevel} Payout Tier</span>
+                  <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-950/70 border border-white/10 text-white font-semibold">
                     {levelStatus.canWithdrawOverHalfTon ? 'UNLIMITED' : 'MAX 0.5 TON'}
                   </span>
                 </div>
-                <div className="text-[10px] opacity-80 mt-0.5">
+                <div className="text-[10px] opacity-80 mt-0.5 text-slate-300">
                   {levelStatus.canWithdrawOverHalfTon
                     ? 'High-Roller VIP unlocked: Withdraw any amount over 0.5 TON'
                     : `Level 1 payout limit: 0.5 TON max (${levelStatus.adsWatchedToday}/50 ads today to unlock Level 2)`}
@@ -418,14 +418,14 @@ export const WalletPage: React.FC<WalletPageProps> = ({
 
       {/* Payout History */}
       <div className="w-full">
-        <h3 className="text-xs font-bold font-mono uppercase text-slate-600 mb-2 px-1">
+        <h3 className="text-xs font-bold font-mono uppercase text-slate-400 mb-2 px-1">
           Recent Payout Requests
         </h3>
 
         {loadingHistory ? (
           <div className="py-6 text-center text-xs text-slate-400">Loading history...</div>
         ) : history.length === 0 ? (
-          <div className="bg-white p-4 rounded-2xl border border-[#E2E8F0] text-center text-xs text-slate-500 shadow-xs">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl p-4 text-center text-xs text-slate-400 shadow-lg">
             No withdrawal requests yet.
           </div>
         ) : (

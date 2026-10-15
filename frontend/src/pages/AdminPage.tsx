@@ -258,19 +258,19 @@ export const AdminPage: React.FC = () => {
       {/* Stats Summary */}
       {stats && (
         <div className="w-full grid grid-cols-3 gap-2 mb-4">
-          <div className="glass-panel p-2.5 rounded-xl border border-cyber-border text-center">
+          <div className="bg-slate-900/80 backdrop-blur-xl p-2.5 rounded-xl border border-white/10 text-center shadow-lg">
             <div className="text-[10px] text-slate-400 font-mono">USERS</div>
             <div className="text-base font-bold font-mono text-white mt-0.5">{stats.totalUsers}</div>
           </div>
-          <div className="glass-panel p-2.5 rounded-xl border border-cyber-border text-center">
+          <div className="bg-slate-900/80 backdrop-blur-xl p-2.5 rounded-xl border border-white/10 text-center shadow-lg">
             <div className="text-[10px] text-slate-400 font-mono">MISSIONS</div>
-            <div className="text-base font-bold font-mono text-cyber-cyan mt-0.5">
+            <div className="text-base font-bold font-mono text-blue-400 mt-0.5">
               {stats.activeMissionsCount}
             </div>
           </div>
-          <div className="glass-panel p-2.5 rounded-xl border border-cyber-border text-center">
+          <div className="bg-slate-900/80 backdrop-blur-xl p-2.5 rounded-xl border border-white/10 text-center shadow-lg">
             <div className="text-[10px] text-slate-400 font-mono">PENDING WD</div>
-            <div className="text-base font-bold font-mono text-cyber-gold mt-0.5">
+            <div className="text-base font-bold font-mono text-amber-400 mt-0.5">
               {stats.pendingWithdrawalsCount}
             </div>
           </div>
@@ -278,13 +278,13 @@ export const AdminPage: React.FC = () => {
       )}
 
       {/* Navigation Sub-Tabs */}
-      <div className="w-full grid grid-cols-3 gap-1.5 p-1 bg-cyber-bg/90 border border-cyber-border rounded-xl mb-4">
+      <div className="w-full grid grid-cols-3 gap-1.5 p-1 bg-slate-950/70 border border-white/10 rounded-xl mb-4">
         <button
           onClick={() => setAdminTab('promos')}
           className={`py-2 px-1 text-center rounded-lg text-xs font-mono font-bold transition-all flex items-center justify-center space-x-1.5 ${
             adminTab === 'promos'
-              ? 'bg-cyber-gold/20 text-cyber-gold border border-cyber-gold/40 shadow-glow-gold'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-blue-600 text-white font-bold shadow-[0_0_12px_rgba(37,99,235,0.5)]'
+              : 'bg-slate-900/60 text-slate-400 border border-white/10 hover:text-white'
           }`}
         >
           <Ticket size={13} />
@@ -295,8 +295,8 @@ export const AdminPage: React.FC = () => {
           onClick={() => setAdminTab('rewards')}
           className={`py-2 px-1 text-center rounded-lg text-xs font-mono font-bold transition-all flex items-center justify-center space-x-1.5 ${
             adminTab === 'rewards'
-              ? 'bg-cyber-cyan/20 text-cyber-cyan border border-cyber-cyan/40 shadow-glow-cyan'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-blue-600 text-white font-bold shadow-[0_0_12px_rgba(37,99,235,0.5)]'
+              : 'bg-slate-900/60 text-slate-400 border border-white/10 hover:text-white'
           }`}
         >
           <Sliders size={13} />
@@ -307,8 +307,8 @@ export const AdminPage: React.FC = () => {
           onClick={() => setAdminTab('missions')}
           className={`py-2 px-1 text-center rounded-lg text-xs font-mono font-bold transition-all flex items-center justify-center space-x-1.5 ${
             adminTab === 'missions'
-              ? 'bg-cyber-green/20 text-cyber-green border border-cyber-green/40'
-              : 'text-slate-400 hover:text-white'
+              ? 'bg-blue-600 text-white font-bold shadow-[0_0_12px_rgba(37,99,235,0.5)]'
+              : 'bg-slate-900/60 text-slate-400 border border-white/10 hover:text-white'
           }`}
         >
           <PlusCircle size={13} />
@@ -340,8 +340,8 @@ export const AdminPage: React.FC = () => {
                   onClick={() => setRatesSubTab(tab.id as any)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
                     isActive
-                      ? 'bg-cyber-cyan text-cyber-bg shadow-glow-cyan/40 scale-102'
-                      : 'bg-cyber-bg/80 text-slate-400 hover:text-white border border-cyber-border'
+                      ? 'bg-blue-600 text-white font-bold shadow-[0_0_12px_rgba(37,99,235,0.5)]'
+                      : 'bg-slate-900/60 text-slate-400 border border-white/10 hover:text-white'
                   }`}
                 >
                   <Icon size={12} />
@@ -353,21 +353,21 @@ export const AdminPage: React.FC = () => {
 
           {/* 1. DAILY STREAK LADDER CONTROLS */}
           {(ratesSubTab === 'all' || ratesSubTab === 'daily') && (
-            <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border">
+            <div className="w-full bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-lg">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center space-x-1.5">
-                  <Calendar size={15} className="text-yellow-400" />
+                  <Calendar size={15} className="text-amber-400" />
                   <span>Daily Bonus Ladder (Days 1–7)</span>
                 </h3>
-                <span className="text-[10px] font-mono text-slate-500">7 Days Config</span>
+                <span className="text-[10px] font-mono text-slate-400">7 Days Config</span>
               </div>
 
               <div className="space-y-3">
                 {dailyDays.map((d) => (
-                  <div key={d.dayNumber} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border/80">
+                  <div key={d.dayNumber} className="p-3 rounded-xl bg-slate-900/80 border border-white/10 text-slate-100 shadow-lg">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-yellow-500/20 text-yellow-400 font-mono font-bold text-xs flex items-center justify-center">
+                        <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold text-xs flex items-center justify-center border border-amber-400/40">
                           {d.dayNumber}
                         </span>
                         <span className="text-xs font-bold text-white">
@@ -396,7 +396,7 @@ export const AdminPage: React.FC = () => {
                               prev.map((item) => (item.dayNumber === d.dayNumber ? { ...item, ncReward: val } : item))
                             );
                           }}
-                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2 py-1.5 text-xs text-cyber-gold font-mono font-bold"
+                          className="w-full bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-400"
                         />
                       </div>
 
@@ -414,7 +414,7 @@ export const AdminPage: React.FC = () => {
                               prev.map((item) => (item.dayNumber === d.dayNumber ? { ...item, tonReward: val } : item))
                             );
                           }}
-                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
+                          className="w-full bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-400"
                         />
                       </div>
 
@@ -434,7 +434,7 @@ export const AdminPage: React.FC = () => {
                               prev.map((item) => (item.dayNumber === d.dayNumber ? { ...item, batteryBonusPct: val } : item))
                             );
                           }}
-                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2 py-1.5 text-xs text-emerald-400 font-mono font-bold"
+                          className="w-full bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-400"
                         />
                       </div>
                     </div>
@@ -442,7 +442,7 @@ export const AdminPage: React.FC = () => {
                     <button
                       onClick={() => handleUpdateDailyStreak(d)}
                       disabled={savingDaily === d.dayNumber}
-                      className="w-full py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 border border-yellow-500/40 text-yellow-400 text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
+                      className="w-full py-2 rounded-lg bg-amber-500/20 border border-amber-400/60 text-amber-300 hover:bg-amber-500/30 text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1 cursor-pointer"
                     >
                       {savingDaily === d.dayNumber ? (
                         <Loader2 size={12} className="animate-spin" />
@@ -458,21 +458,21 @@ export const AdminPage: React.FC = () => {
 
           {/* 2. REFERRAL MILESTONES (1, 3, 7, 10 REFERRALS) */}
           {(ratesSubTab === 'all' || ratesSubTab === 'milestones') && (
-            <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border">
+            <div className="w-full bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-lg">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-bold font-mono uppercase text-slate-300 flex items-center space-x-1.5">
-                  <Award size={15} className="text-indigo-400" />
+                  <Award size={15} className="text-blue-400" />
                   <span>Referral Milestones (1, 3, 7, 10 Invites)</span>
                 </h3>
-                <span className="text-[10px] font-mono text-slate-500">Tier Bounties</span>
+                <span className="text-[10px] font-mono text-slate-400">Tier Bounties</span>
               </div>
 
               <div className="space-y-3">
                 {milestones.map((m) => (
-                  <div key={m.targetCount} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border/80">
+                  <div key={m.targetCount} className="p-3 rounded-xl bg-slate-950/70 border border-white/10">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-mono font-bold text-xs flex items-center justify-center border border-indigo-500/30">
+                        <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-300 font-mono font-bold text-xs flex items-center justify-center border border-blue-400/30">
                           {m.targetCount}
                         </span>
                         <input
@@ -484,10 +484,10 @@ export const AdminPage: React.FC = () => {
                               prev.map((item) => (item.targetCount === m.targetCount ? { ...item, displayName: val } : item))
                             );
                           }}
-                          className="bg-transparent border-b border-dashed border-neutral-700 font-bold text-xs text-white focus:outline-none focus:border-indigo-400 px-1 py-0.5"
+                          className="bg-transparent border-b border-dashed border-white/20 font-bold text-xs text-white focus:outline-none focus:border-blue-400 px-1 py-0.5"
                         />
                       </div>
-                      <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-500/30">
+                      <span className="text-[10px] font-mono text-blue-300 bg-blue-500/15 px-2 py-0.5 rounded border border-blue-400/30">
                         {m.targetCount} Referrals
                       </span>
                     </div>
@@ -507,7 +507,7 @@ export const AdminPage: React.FC = () => {
                               prev.map((item) => (item.targetCount === m.targetCount ? { ...item, ncReward: val } : item))
                             );
                           }}
-                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-gold font-mono font-bold"
+                          className="w-full bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-400"
                         />
                       </div>
 
@@ -525,7 +525,7 @@ export const AdminPage: React.FC = () => {
                               prev.map((item) => (item.targetCount === m.targetCount ? { ...item, tonReward: val } : item))
                             );
                           }}
-                          className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
+                          className="w-full bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-400"
                         />
                       </div>
                     </div>
@@ -533,7 +533,7 @@ export const AdminPage: React.FC = () => {
                     <button
                       onClick={() => handleUpdateMilestone(m)}
                       disabled={savingMilestone === m.targetCount}
-                      className="w-full py-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
+                      className="w-full py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-400/50 text-blue-300 text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1 cursor-pointer"
                     >
                       {savingMilestone === m.targetCount ? (
                         <Loader2 size={12} className="animate-spin" />
@@ -549,9 +549,9 @@ export const AdminPage: React.FC = () => {
 
           {/* 3. GAME, AD, AND GENERAL REWARDS */}
           {(ratesSubTab === 'all' || ratesSubTab === 'games' || ratesSubTab === 'ads' || ratesSubTab === 'referrals') && (
-            <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border">
+            <div className="w-full bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-lg">
               <h3 className="text-xs font-bold font-mono uppercase text-slate-300 mb-3 flex items-center space-x-1.5">
-                <Sliders size={16} className="text-cyber-cyan" />
+                <Sliders size={16} className="text-blue-400" />
                 <span>
                   {ratesSubTab === 'games'
                     ? '🎮 Arcade Game Bonuses'
@@ -583,15 +583,15 @@ export const AdminPage: React.FC = () => {
                     const isRef = actionType.startsWith('referral_');
 
                     return (
-                      <div key={actionType} className="p-3 rounded-xl bg-cyber-bg border border-cyber-border">
+                      <div key={actionType} className="p-3 rounded-xl bg-slate-950/70 border border-white/10">
                         <div className="flex items-center justify-between mb-2">
                           <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                            {isGame && <Gamepad2 size={13} className="text-cyber-cyan" />}
+                            {isGame && <Gamepad2 size={13} className="text-blue-400" />}
                             {isAd && <Tv size={13} className="text-amber-400" />}
-                            {isRef && <Users size={13} className="text-blue-400" />}
+                            {isRef && <Users size={13} className="text-emerald-400" />}
                             <span>{displayName}</span>
                           </div>
-                          <span className="text-[9px] font-mono text-slate-500 uppercase px-1.5 py-0.5 bg-black/40 rounded border border-cyber-border/40">
+                          <span className="text-[9px] font-mono text-slate-400 uppercase px-1.5 py-0.5 bg-white/5 rounded border border-white/10">
                             {actionType}
                           </span>
                         </div>
@@ -615,7 +615,7 @@ export const AdminPage: React.FC = () => {
                                   )
                                 );
                               }}
-                              className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-gold font-mono font-bold"
+                              className="w-full bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-400"
                             />
                           </div>
 
@@ -637,7 +637,7 @@ export const AdminPage: React.FC = () => {
                                   )
                                 );
                               }}
-                              className="w-full bg-cyber-surface border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-cyan font-mono font-bold"
+                              className="w-full bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-400"
                             />
                           </div>
                         </div>
@@ -645,7 +645,7 @@ export const AdminPage: React.FC = () => {
                         <button
                           onClick={() => handleUpdateReward(cfg)}
                           disabled={savingConfig === actionType}
-                          className="w-full py-1.5 rounded-lg bg-cyber-card hover:bg-cyber-surface border border-cyber-cyan/40 text-cyber-cyan text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1"
+                          className="w-full py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-400/50 text-blue-300 text-xs font-bold transition-all active:scale-98 flex items-center justify-center space-x-1 cursor-pointer"
                         >
                           {savingConfig === actionType ? (
                             <Loader2 size={12} className="animate-spin" />
@@ -666,9 +666,9 @@ export const AdminPage: React.FC = () => {
       {adminTab === 'missions' && (
         <>
           {/* Add Priority Mission Form */}
-          <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border mb-4">
+          <div className="w-full bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-lg mb-4">
             <h3 className="text-xs font-bold font-mono uppercase text-slate-300 mb-3 flex items-center space-x-1.5">
-              <PlusCircle size={16} className="text-cyber-gold" />
+              <PlusCircle size={16} className="text-amber-400" />
               <span>Add Priority Mission</span>
             </h3>
 
@@ -680,7 +680,7 @@ export const AdminPage: React.FC = () => {
                 <select
                   value={newTaskType}
                   onChange={(e) => setNewTaskType(e.target.value as any)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-2.5 text-white text-xs"
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-white text-xs focus:outline-none focus:border-blue-500"
                 >
                   <option value="telegram_join">Telegram Channel (Auto-Verify via Bot)</option>
                   <option value="screenshot_social">Social Follow / YouTube Subscribe (Screenshot Proof)</option>
@@ -695,7 +695,7 @@ export const AdminPage: React.FC = () => {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
+                className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
               />
               <textarea
                 placeholder="Mission Description"
@@ -703,7 +703,7 @@ export const AdminPage: React.FC = () => {
                 onChange={(e) => setNewDesc(e.target.value)}
                 rows={2}
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
+                className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
               />
               <input
                 type="url"
@@ -711,7 +711,7 @@ export const AdminPage: React.FC = () => {
                 value={newUrl}
                 onChange={(e) => setNewUrl(e.target.value)}
                 required
-                className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
+                className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
               />
 
               {newTaskType === 'screenshot_social' && (
@@ -724,7 +724,7 @@ export const AdminPage: React.FC = () => {
                     placeholder="Proof instructions (e.g. Upload screenshot showing subscribed)"
                     value={newProofInstructions}
                     onChange={(e) => setNewProofInstructions(e.target.value)}
-                    className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
+                    className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
               )}
@@ -735,7 +735,7 @@ export const AdminPage: React.FC = () => {
                   placeholder="Telegram Chat ID (e.g. @channel)"
                   value={newChatId}
                   onChange={(e) => setNewChatId(e.target.value)}
-                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white"
+                  className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                 />
               )}
 
@@ -749,7 +749,7 @@ export const AdminPage: React.FC = () => {
                     type="number"
                     value={newNc}
                     onChange={(e) => setNewNc(e.target.value)}
-                    className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-cyber-gold font-mono"
+                    className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-emerald-400 font-mono"
                   />
                 </div>
                 <div>
@@ -761,7 +761,7 @@ export const AdminPage: React.FC = () => {
                     type="text"
                     value={newTon}
                     onChange={(e) => setNewTon(e.target.value)}
-                    className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-cyber-cyan font-mono"
+                    className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-blue-400 font-mono"
                   />
                 </div>
                 <div>
@@ -770,7 +770,7 @@ export const AdminPage: React.FC = () => {
                     type="number"
                     value={newTarget}
                     onChange={(e) => setNewTarget(e.target.value)}
-                    className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-white font-mono"
+                    className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white font-mono"
                   />
                 </div>
                 <div>
@@ -779,7 +779,7 @@ export const AdminPage: React.FC = () => {
                     type="number"
                     value={newPriority}
                     onChange={(e) => setNewPriority(e.target.value)}
-                    className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-2 py-1.5 text-xs text-white font-mono"
+                    className="w-full bg-slate-950/70 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white font-mono"
                   />
                 </div>
               </div>
@@ -787,7 +787,7 @@ export const AdminPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={creatingMission}
-                className="w-full py-2.5 rounded-xl bg-cyber-cyan/20 border border-cyber-cyan text-cyber-cyan font-bold text-xs uppercase tracking-wide active:scale-98 transition-all flex items-center justify-center space-x-1 mt-2"
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wide active:scale-98 transition-all flex items-center justify-center space-x-1 mt-2 shadow-lg shadow-blue-600/30 cursor-pointer"
               >
                 {creatingMission ? <Loader2 size={14} className="animate-spin" /> : <span>Publish Priority Mission</span>}
               </button>
@@ -795,10 +795,10 @@ export const AdminPage: React.FC = () => {
           </div>
 
           {/* Manage Missions List */}
-          <div className="w-full glass-panel p-4 rounded-2xl border border-cyber-border mb-4">
+          <div className="w-full bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-lg mb-4">
             <h3 className="text-xs font-bold font-mono uppercase text-slate-300 mb-3 flex items-center justify-between">
               <span className="flex items-center space-x-1.5">
-                <Power size={16} className="text-cyber-green" />
+                <Power size={16} className="text-emerald-400" />
                 <span>Mission Controls ({missions.length})</span>
               </span>
               <span className="text-[10px] text-slate-400 font-mono">Delete or Toggle Missions</span>
@@ -816,7 +816,7 @@ export const AdminPage: React.FC = () => {
                   return (
                     <div
                       key={m.id}
-                      className="p-3 rounded-xl bg-cyber-bg border border-cyber-border flex items-center justify-between text-xs transition-all hover:border-slate-600"
+                      className="p-3 rounded-xl bg-slate-950/70 border border-white/10 flex items-center justify-between text-xs transition-all hover:border-white/20"
                     >
                       <div className="flex-1 pr-3">
                         <div className="flex items-center space-x-2">
@@ -836,11 +836,11 @@ export const AdminPage: React.FC = () => {
                           <span>•</span>
                           <span>{m.completedCount ?? 0} claims</span>
                           <span>•</span>
-                          <span className="text-cyber-gold font-bold">{m.ncReward} NC</span>
+                          <span className="text-emerald-400 font-bold">{m.ncReward} NC</span>
                           {m.tonReward && Number(m.tonReward) > 0 && (
                             <>
                               <span>•</span>
-                              <span className="text-cyber-cyan font-bold">{m.tonReward} TON</span>
+                              <span className="text-blue-400 font-bold">{m.tonReward} TON</span>
                             </>
                           )}
                         </div>
@@ -849,10 +849,10 @@ export const AdminPage: React.FC = () => {
                       <div className="flex items-center space-x-2 shrink-0">
                         <button
                           onClick={() => handleToggleMission(m.id, isActive)}
-                          className={`p-2 rounded-xl border transition-all ${
+                          className={`p-2 rounded-xl border transition-all cursor-pointer ${
                             isActive
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                              : 'bg-slate-900 text-slate-400 border-white/10 hover:text-white'
                           }`}
                           title={isActive ? 'Disable Mission' : 'Activate Mission'}
                         >
@@ -862,7 +862,7 @@ export const AdminPage: React.FC = () => {
                         <button
                           onClick={() => handleDeleteMission(m.id, m.title)}
                           disabled={isDeleting}
-                          className="p-2 rounded-xl bg-red-950/40 text-red-400 border border-red-500/30 hover:bg-red-900/50 hover:text-red-300 hover:border-red-500/60 active:scale-95 transition-all"
+                          className="p-2 rounded-xl bg-red-950/40 text-red-400 border border-red-500/30 hover:bg-red-900/50 hover:text-red-300 hover:border-red-500/60 active:scale-95 transition-all cursor-pointer"
                           title="Permanently Delete Mission"
                         >
                           {isDeleting ? <Loader2 size={14} className="animate-spin text-red-400" /> : <Trash2 size={14} />}
