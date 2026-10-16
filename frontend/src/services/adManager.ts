@@ -72,9 +72,7 @@ export const REWARDED_COOLDOWN_MS = 30 * 1000;     // 30 seconds
 import { adService } from "./adService.js";
 
 // Game Mode State Tracking (suppresses 60s interstitial ads during active gameplay)
-let isGameActiveGlobal = false;
 export const setGameActiveState = (active: boolean) => {
-  isGameActiveGlobal = active;
   adService.setIsPlayingGame(active);
   console.log(`[AdManager] Game mode: ${active ? "ACTIVE (60s ads paused)" : "INACTIVE (60s ads resumed)"}`);
   if (typeof window !== "undefined") {
@@ -105,93 +103,29 @@ declare global {
 export const Providers = {
   // --- MONETAG ---
   async showMonetagRewarded(): Promise<boolean> {
-    const fn = window.show_11886350 || window.show_MONETAG_ZONE_ID;
-    if (typeof fn === "function") {
-      await fn();
-      return true;
-    }
-    // Sandbox / dev simulation fallback
-    await new Promise((r) => setTimeout(r, 600));
-    return true;
+    return await adService.showMonetagAd("rewarded", "Monetag High-CPM Video");
   },
 
   async showMonetagInterstitial(): Promise<boolean> {
-    const fn = window.show_11886350 || window.show_MONETAG_ZONE_ID;
-    if (typeof fn === "function") {
-      try {
-        await fn("pop");
-        return true;
-      } catch (e) {
-        await fn();
-        return true;
-      }
-    }
-    if (typeof window.showMonetagInterstitial === "function") {
-      return await window.showMonetagInterstitial();
-    }
-    await new Promise((r) => setTimeout(r, 500));
-    return true;
+    return await adService.showMonetagAd("interstitial", "Monetag Interstitial");
   },
 
-  // --- GIGAPUB ---
+  // --- GIGAPUB (Strictly Isolated - NEVER calls Monetag) ---
   async showGigapubRewarded(): Promise<boolean> {
-    const getShowGiga = () => (window as any).showGiga;
-    if (typeof getShowGiga() === "function") {
-      await getShowGiga()("main");
-      return true;
-    }
-    // Check if SDK is still asynchronously loading
-    for (let i = 0; i < 8; i++) {
-      await new Promise((r) => setTimeout(r, 250));
-      if (typeof getShowGiga() === "function") {
-        await getShowGiga()("main");
-        return true;
-      }
-    }
-    if ((window as any).Gigapub && typeof (window as any).Gigapub.showRewarded === "function") {
-      const res = await (window as any).Gigapub.showRewarded();
-      if (res) return true;
-    }
-    throw new Error("GigaPub ad player unavailable. Please disable ad-blockers and try again.");
+    return await adService.showGigapubAd("rewarded", "Gigapub Native Video");
   },
 
   async showGigapubInterstitial(): Promise<boolean> {
-    const getShowGiga = () => (window as any).showGiga;
-    if (typeof getShowGiga() === "function") {
-      await getShowGiga()("main");
-      return true;
-    }
-    for (let i = 0; i < 6; i++) {
-      await new Promise((r) => setTimeout(r, 250));
-      if (typeof getShowGiga() === "function") {
-        await getShowGiga()("main");
-        return true;
-      }
-    }
-    if ((window as any).Gigapub && typeof (window as any).Gigapub.showInterstitial === "function") {
-      const res = await (window as any).Gigapub.showInterstitial();
-      if (res) return true;
-    }
-    throw new Error("GigaPub interstitial unavailable.");
+    return await adService.showGigapubAd("interstitial", "Gigapub Interstitial");
   },
 
   // --- ADSGRAM ---
   async showAdsgramRewarded(): Promise<boolean> {
-    if (window.Adsgram) {
-      try {
-        const AdController = window.Adsgram.init({ blockId: "12571" });
-        await AdController.show();
-        return true;
-      } catch (err) {
-        console.warn("[Adsgram] show error:", err);
-      }
-    }
-    await new Promise((r) => setTimeout(r, 600));
-    return true;
+    return await adService.showAdsgramAd("rewarded", "Adsgram Video Reward");
   },
 };
 
-// 2. REWARDED AD: Priority (Monetag -> Gigapub -> Adsgram) + Smart CPM Protection
+// 2. REWARDED AD: Single-network turn execution (Monetag -> Gigapub -> Adsgram) with ZERO fallback overlap
 export async function showSmartRewardedAd(ignoreCooldown = false): Promise<RewardedResult> {
   const now = Date.now();
   const timeLeft = Math.ceil((AD_STATE.lastRewardedTime + REWARDED_COOLDOWN_MS - now) / 1000);
@@ -203,50 +137,59 @@ export async function showSmartRewardedAd(ignoreCooldown = false): Promise<Rewar
     };
   }
 
-  // Priority List: 1. Monetag -> 2. Gigapub -> 3. Adsgram
-  // Pattern: Monetag -> Gigapub -> Monetag -> Adsgram
-  const stepIndex = AD_STATE.rewardedStep % 4;
-  const preferredOrder: ("monetag" | "gigapub" | "adsgram")[] =
-    stepIndex === 0
-      ? ["monetag", "gigapub", "adsgram"]
-      : stepIndex === 1
-      ? ["gigapub", "monetag", "adsgram"]
-      : stepIndex === 2
-      ? ["monetag", "adsgram", "gigapub"]
-      : ["adsgram", "monetag", "gigapub"];
-
-  for (const network of preferredOrder) {
-    if (AD_STATE.counts[network] >= AD_STATE.dailyCaps[network]) continue;
-
-    try {
-      if (network === "monetag") await Providers.showMonetagRewarded();
-      else if (network === "gigapub") await Providers.showGigapubRewarded();
-      else if (network === "adsgram") await Providers.showAdsgramRewarded();
-
-      // Update state upon success
-      AD_STATE.counts[network] += 1;
-      AD_STATE.rewardedStep += 1;
-      AD_STATE.lastRewardedTime = Date.now();
-      AD_STATE.lastRewardedByProvider[network] = Date.now();
-
-      const totalWatched =
-        AD_STATE.counts.monetag + AD_STATE.counts.gigapub + AD_STATE.counts.adsgram;
-
-      return {
-        success: true,
-        provider: network.toUpperCase(),
-        totalWatched,
-        reward: calculateTierReward(totalWatched),
-      };
-    } catch (err) {
-      console.warn(`[AdManager] ${network} failed, trying next priority provider...`);
-    }
+  if (!adService.canPlayAd()) {
+    return {
+      success: false,
+      reason: "An ad is currently playing or on cooldown (5s mutex). Please wait.",
+    };
   }
 
-  return {
-    success: false,
-    reason: "No ad fill available right now. Please try again shortly.",
-  };
+  // Single Network Turn: 0: Monetag -> 1: Gigapub -> 2: Adsgram
+  const stepIndex = AD_STATE.rewardedStep % 3;
+  const network: "monetag" | "gigapub" | "adsgram" =
+    stepIndex === 0 ? "monetag" : stepIndex === 1 ? "gigapub" : "adsgram";
+
+  if (AD_STATE.counts[network] >= AD_STATE.dailyCaps[network]) {
+    return {
+      success: false,
+      reason: `${network.toUpperCase()} daily cap of ${AD_STATE.dailyCaps[network]} ads reached!`,
+    };
+  }
+
+  try {
+    let success = false;
+    if (network === "monetag") success = await Providers.showMonetagRewarded();
+    else if (network === "gigapub") success = await Providers.showGigapubRewarded();
+    else if (network === "adsgram") success = await Providers.showAdsgramRewarded();
+
+    if (!success) {
+      return {
+        success: false,
+        reason: `${network.toUpperCase()} ad was dismissed or cancelled.`,
+      };
+    }
+
+    // Update state upon success
+    AD_STATE.counts[network] += 1;
+    AD_STATE.rewardedStep += 1;
+    AD_STATE.lastRewardedTime = Date.now();
+    AD_STATE.lastRewardedByProvider[network] = Date.now();
+
+    const totalWatched =
+      AD_STATE.counts.monetag + AD_STATE.counts.gigapub + AD_STATE.counts.adsgram;
+
+    return {
+      success: true,
+      provider: network.toUpperCase(),
+      totalWatched,
+      reward: calculateTierReward(totalWatched),
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      reason: err?.message || `${network.toUpperCase()} ad error.`,
+    };
+  }
 }
 
 // 2b. SPECIFIC PROVIDER REWARDED AD: Dedicated Button Trigger with 30s Cooldown
@@ -262,6 +205,13 @@ export async function showSpecificRewardedAd(
     return {
       success: false,
       reason: `${provider.toUpperCase()} is cooling down (${timeLeft}s remaining).`,
+    };
+  }
+
+  if (!adService.canPlayAd()) {
+    return {
+      success: false,
+      reason: "An ad is currently playing or on cooldown (5s mutex). Please wait.",
     };
   }
 
@@ -299,59 +249,15 @@ export async function showSpecificRewardedAd(
   }
 }
 
-// 3. INTERSTITIAL AD: 1:1 Alternating (1 Monetag, 1 Gigapub one after another) with 30s Cooldown
-export async function triggerAlternatingInterstitial(ignoreCooldown = false): Promise<InterstitialResult> {
-  // CRITICAL: Block 30s interstitial ads if the user is in Game Mode!
-  if (isGameActiveGlobal && !ignoreCooldown) {
-    return { shown: false, reason: "Game mode active (interstitials paused during gameplay)" };
-  }
-
-  const now = Date.now();
-  if (!ignoreCooldown && now - AD_STATE.lastInterstitialTime < INTERSTITIAL_COOLDOWN_MS) {
-    const remaining = Math.ceil((INTERSTITIAL_COOLDOWN_MS - (now - AD_STATE.lastInterstitialTime)) / 1000);
-    return { shown: false, reason: `Interstitial cooldown active (${remaining}s remaining)` };
-  }
-
-  // Read persisted last provider so alternation is strictly 1:1 across tabs, reloads, and sessions
-  const savedLast =
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem("nc_last_tab_ad_provider")
-      : null;
-  const last: "monetag" | "gigapub" =
-    savedLast === "monetag" || savedLast === "gigapub"
-      ? savedLast
-      : AD_STATE.lastInterstitialProvider;
-
-  // Next provider alternates: Monetag -> Gigapub -> Monetag -> Gigapub
-  const primary: "monetag" | "gigapub" = last === "monetag" ? "gigapub" : "monetag";
-  const fallback: "monetag" | "gigapub" = primary === "monetag" ? "gigapub" : "monetag";
-
-  const tryShow = async (provider: "monetag" | "gigapub") => {
-    if (provider === "monetag") return await Providers.showMonetagInterstitial();
-    if (provider === "gigapub") return await Providers.showGigapubInterstitial();
+// 3. INTERSTITIAL AD: 1:1 Alternating with strict mutex protection
+export async function triggerAlternatingInterstitial(_ignoreCooldown = false): Promise<InterstitialResult> {
+  const shown = await adService.triggerAlternatingInterstitial("adManager");
+  const currentProvider = adService.getSnapshot().lastInterstitialProvider.toUpperCase();
+  return {
+    shown,
+    provider: currentProvider,
+    reason: shown ? undefined : "Interstitial suppressed by cooldown or mutex lock",
   };
-
-  try {
-    await tryShow(primary);
-    AD_STATE.lastInterstitialProvider = primary;
-    AD_STATE.lastInterstitialTime = Date.now();
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem("nc_last_tab_ad_provider", primary);
-    }
-    return { shown: true, provider: primary.toUpperCase() };
-  } catch (err) {
-    try {
-      await tryShow(fallback);
-      AD_STATE.lastInterstitialProvider = fallback;
-      AD_STATE.lastInterstitialTime = Date.now();
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("nc_last_tab_ad_provider", fallback);
-      }
-      return { shown: true, provider: fallback.toUpperCase() };
-    } catch (fallbackErr) {
-      return { shown: false, reason: "Both Monetag and Gigapub interstitials had no fill" };
-    }
-  }
 }
 
 // 4. 3-Tier Dynamic Reward Calculator (protects TON against remnant CPM)

@@ -56,10 +56,10 @@ export function useAdManager(
     }
   };
 
-  // 1. Play Rewarded Monetag Ad (100 Daily Cap with Tiered Payouts)
+  // 1. Play Rewarded Monetag Ad (Strictly Monetag only)
   const showMonetagRewarded = useCallback(async () => {
     try {
-      const watched = await adService.showAd("monetag", "rewarded", "Monetag High-CPM Video");
+      const watched = await adService.showMonetagAd("rewarded", "Monetag High-CPM Video");
       if (watched) {
         return await claimReward("monetag");
       }
@@ -69,10 +69,23 @@ export function useAdManager(
     return null;
   }, [userId]);
 
-  // 2. Play Rewarded Adsgram Video (100 Daily Cap with Tiered Payouts)
+  // 2. Play Rewarded Gigapub Ad (Strictly Gigapub only - never Monetag)
+  const showGigapubRewarded = useCallback(async () => {
+    try {
+      const watched = await adService.showGigapubAd("rewarded", "Gigapub Native Video");
+      if (watched) {
+        return await claimReward("monetag"); // Backend reward claim
+      }
+    } catch (e: any) {
+      console.warn("Gigapub error or dismissed:", e?.message || e);
+    }
+    return null;
+  }, [userId]);
+
+  // 3. Play Rewarded Adsgram Video (Strictly Adsgram only)
   const showAdsgramRewarded = useCallback(async () => {
     try {
-      const watched = await adService.showAd("adsgram", "rewarded", "Adsgram Video Reward");
+      const watched = await adService.showAdsgramAd("rewarded", "Adsgram Video Reward");
       if (watched) {
         return await claimReward("adsgram");
       }
@@ -82,7 +95,7 @@ export function useAdManager(
     return null;
   }, [userId]);
 
-  // 3. Interstitial Trigger (Alternating 1:1, guarded against mid-game)
+  // 4. Interstitial Trigger (Alternating 1:1, guarded against mid-game)
   const triggerInterstitial = useCallback(
     async (
       reason: "nav" | "start" | "withdraw" | "game_start" | "game_end" | "auto_30s" | "auto_60s"
@@ -92,18 +105,18 @@ export function useAdManager(
     []
   );
 
-  // 4. Pre-Game Helper
+  // 5. Pre-Game Helper
   const showPreGameAd = useCallback(async (): Promise<boolean> => {
     return await triggerInterstitial("game_start");
   }, [triggerInterstitial]);
 
-  // 5. Post-Game Interstitial (Immediately fires queued or post-game ad)
+  // 6. Post-Game Interstitial (Immediately fires queued or post-game ad)
   const showPostGameAd = useCallback(async (): Promise<boolean> => {
     console.log("[AdManager] Triggering post-game ad via adService.onGameEnd()...");
     return await adService.onGameEnd();
   }, []);
 
-  // 6. Withdrawal Limit Ad (Rewarded video/interstitial for 30 daily / 100 weekly limit pass)
+  // 7. Withdrawal Limit Ad (Rewarded video/interstitial for 30 daily / 100 weekly limit pass)
   const showWithdrawalLimitAd = useCallback(async (): Promise<any> => {
     const claimLimitAd = async () => {
       try {
@@ -131,12 +144,13 @@ export function useAdManager(
     };
 
     // Show monetag ad via adService
-    await adService.showAd("monetag", "rewarded", "Withdrawal Limit Breaker");
+    await adService.showMonetagAd("rewarded", "Withdrawal Limit Breaker");
     return await claimLimitAd();
   }, [userId, onRewardClaimed]);
 
   return {
     showAdsgramRewarded,
+    showGigapubRewarded,
     showMonetagRewarded,
     showWithdrawalLimitAd,
     triggerInterstitial,

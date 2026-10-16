@@ -93,6 +93,11 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     if (loadingStep !== null) return;
     if (adEngineState.comboStep !== step) return;
 
+    if (adEngineState.isAdPlaying || !adService.canPlayAd()) {
+      setAdFeedback("An ad is currently playing or cooling down (5s mutex window). Please wait.");
+      return;
+    }
+
     setLoadingStep(step);
     setAdFeedback(null);
     setComboBonusToast(null);
@@ -105,13 +110,30 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     const provider = providerMap[step];
 
     try {
-      // 1. Show Ad via real SDK or 5-second Obsidian Glass fallback modal
-      console.log(`[AdMissions] Watching Step ${step}: ${provider.toUpperCase()}...`);
-      const success = await adService.showAd(
-        provider,
-        "rewarded",
-        `Step ${step} of 3: ${provider.toUpperCase()}`
-      );
+      // 1. STRICT PROVIDER ISOLATION:
+      // Clicking Monetag MUST ONLY call Monetag SDK/modal. Never Gigapub or Adsgram.
+      // Clicking Gigapub MUST ONLY call Gigapub SDK/modal. Never fallback to Monetag.
+      // Clicking Adsgram MUST ONLY call Adsgram SDK/modal.
+      let success = false;
+      if (step === 1) {
+        console.log("[AdMissions] Watching Step 1: Strictly executing MONETAG ONLY...");
+        success = await adService.showMonetagAd(
+          "rewarded",
+          "Step 1 of 3: MONETAG"
+        );
+      } else if (step === 2) {
+        console.log("[AdMissions] Watching Step 2: Strictly executing GIGAPUB ONLY (No Monetag fallback)...");
+        success = await adService.showGigapubAd(
+          "rewarded",
+          "Step 2 of 3: GIGAPUB"
+        );
+      } else if (step === 3) {
+        console.log("[AdMissions] Watching Step 3: Strictly executing ADSGRAM ONLY...");
+        success = await adService.showAdsgramAd(
+          "rewarded",
+          "Step 3 of 3: ADSGRAM"
+        );
+      }
 
       if (!success) {
         setAdFeedback(`Playback cancelled or timed out. Please try again.`);
@@ -412,11 +434,13 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
             {currentStep === 1 ? (
               <button
                 onClick={() => handleWatchComboStep(1)}
-                disabled={loadingStep !== null}
-                className="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-emerald-500/25 cursor-pointer"
+                disabled={loadingStep !== null || adEngineState.isAdPlaying || !adService.canPlayAd()}
+                className="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-emerald-500/25 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loadingStep === 1 ? (
                   <span>STREAMING MONETAG AD...</span>
+                ) : adEngineState.isAdPlaying ? (
+                  <span>AD IN PROGRESS...</span>
                 ) : (
                   <>
                     <Play size={13} className="fill-slate-950" />
@@ -490,11 +514,13 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
             {currentStep === 2 ? (
               <button
                 onClick={() => handleWatchComboStep(2)}
-                disabled={loadingStep !== null}
-                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-blue-500/25 cursor-pointer"
+                disabled={loadingStep !== null || adEngineState.isAdPlaying || !adService.canPlayAd()}
+                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-blue-500/25 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loadingStep === 2 ? (
                   <span>STREAMING GIGAPUB AD...</span>
+                ) : adEngineState.isAdPlaying ? (
+                  <span>AD IN PROGRESS...</span>
                 ) : (
                   <>
                     <Play size={13} className="fill-white" />
@@ -560,11 +586,13 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
             {currentStep === 3 ? (
               <button
                 onClick={() => handleWatchComboStep(3)}
-                disabled={loadingStep !== null}
-                className="w-full py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-purple-500/30 cursor-pointer"
+                disabled={loadingStep !== null || adEngineState.isAdPlaying || !adService.canPlayAd()}
+                className="w-full py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-purple-500/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loadingStep === 3 ? (
                   <span>STREAMING ADSGRAM AD...</span>
+                ) : adEngineState.isAdPlaying ? (
+                  <span>AD IN PROGRESS...</span>
                 ) : (
                   <>
                     <Sparkles size={13} className="text-amber-300 animate-spin" />

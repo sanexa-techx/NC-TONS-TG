@@ -1,7 +1,10 @@
 // src/services/adService.ts
-// Comprehensive singleton multi-network ad engine with game protection,
-// 60-second 1:1 alternating interstitials, 3-step missions combo lock,
-// and 5-second Obsidian Glass fallback modal.
+// Comprehensive singleton multi-network ad engine with:
+// 1. Strict Mutex Lock (isAdPlaying = true with minimum 5s lock window)
+// 2. Strict Provider Isolation (No fallback between Monetag, Gigapub, and Adsgram)
+// 3. Single Global setTimeout Chain for 60s Alternating Interstitials (protected by window.__NC_AD_TIMER_INITIALIZED__)
+// 4. Gameplay Ad Protection (No ads mid-game; queued for onGameEnd)
+// 5. Missions Tab 3-Step Combo Lock (Monetag -> Gigapub -> Adsgram -> +Combo Bonus)
 
 export type AdProvider = "monetag" | "gigapub" | "adsgram";
 export type AdType = "interstitial" | "rewarded";
@@ -23,6 +26,7 @@ export interface AdServiceState {
   lastInterstitialProvider: "monetag" | "gigapub";
   isPlayingGame: boolean;
   interstitialQueued: boolean;
+  isAdPlaying: boolean;
   comboStep: 1 | 2 | 3;
   comboCompletions: number;
   modal: AdModalState;
@@ -31,6 +35,7 @@ export interface AdServiceState {
 
 declare global {
   interface Window {
+    __NC_AD_TIMER_INITIALIZED__?: boolean;
     show_11886350?: (options?: any) => Promise<any>;
     show_MONETAG_ZONE_ID?: (options?: any) => Promise<any>;
     show_MONETAG?: (options?: any) => Promise<any>;
@@ -51,18 +56,22 @@ declare global {
 const MONETAG_ZONE_ID = "11886350";
 const ADSGRAM_BLOCK_ID = "12571";
 const INTERSTITIAL_CYCLE_SECONDS = 60;
+const MUTEX_COOLDOWN_MS = 5000; // Minimum 5-second lock window after ad closes
 
 class AdService {
   private lastInterstitialProvider: "monetag" | "gigapub" = "gigapub"; // So 1st interstitial is Monetag
   private secondsUntilNextInterstitial: number = INTERSTITIAL_CYCLE_SECONDS;
   private isPlayingGame: boolean = false;
   private interstitialQueued: boolean = false;
+  private isAdPlaying: boolean = false;
+  private adLockUntil: number = 0;
   private comboStep: 1 | 2 | 3 = 1;
   private comboCompletions: number = 0;
   private appOpenTriggered: boolean = false;
   private isInitialized: boolean = false;
-  private timerId: any = null;
   private currentUserId: string = "";
+  private countdownTimerId: any = null;
+  private interstitialTimeoutId: any = null;
 
   private modalState: AdModalState = {
     isOpen: false,
@@ -94,32 +103,68 @@ class AdService {
   // --- INITIALIZATION ---
   public init(userId: string | number) {
     this.currentUserId = String(userId || "");
+
+    // Global guard to prevent duplicate timer chains across StrictMode or re-renders
+    if (typeof window !== "undefined") {
+      if (window.__NC_AD_TIMER_INITIALIZED__) {
+        console.log("[AdService] Timer already initialized on window. Skipping duplicate chain.");
+        return;
+      }
+      window.__NC_AD_TIMER_INITIALIZED__ = true;
+    }
+
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    console.log("[AdService] Initializing global multi-network ad engine...");
+    console.log("[AdService] Initializing single global ad engine & setTimeout chain...");
 
-    // 1. Initial App Open Trigger: 2 Seconds Delay -> First Interstitial from MONETAG
+    // Start 1-second countdown tick for UI indicators
+    if (!this.countdownTimerId && typeof window !== "undefined") {
+      this.countdownTimerId = setInterval(() => this.tick(), 1000);
+    }
+
+    // Sequence: On initial App Open (after 3s), Show ONLY 1 MONETAG interstitial
     if (!this.appOpenTriggered) {
       setTimeout(() => {
         if (!this.appOpenTriggered) {
-          console.log("[AdService] Initial App Open (2s delay): Triggering MONETAG Interstitial...");
+          console.log("[AdService] Initial App Open (after 3s): Triggering MONETAG Interstitial...");
           this.triggerAppOpenInterstitial();
         }
-      }, 2000);
-    }
-
-    // 2. Start Persistent 60-Second Alternating Loop
-    if (!this.timerId && typeof window !== "undefined") {
-      this.timerId = setInterval(() => this.tick(), 1000);
+      }, 3000);
     }
 
     this.notify();
   }
 
-  // --- TICK LOOP (Every 1 Second) ---
+  // --- MUTEX LOCK MANAGEMENT ---
+  public canPlayAd(): boolean {
+    const now = Date.now();
+    if (this.isAdPlaying) {
+      console.warn("[AdService] Ad trigger blocked: An ad is currently active (isAdPlaying = true)");
+      return false;
+    }
+    if (now < this.adLockUntil) {
+      const remainingSec = Math.ceil((this.adLockUntil - now) / 1000);
+      console.warn(`[AdService] Ad trigger blocked: Mutex lock active (${remainingSec}s remaining)`);
+      return false;
+    }
+    return true;
+  }
+
+  private acquireLock() {
+    this.isAdPlaying = true;
+    this.notify();
+  }
+
+  private releaseLock() {
+    this.adLockUntil = Date.now() + MUTEX_COOLDOWN_MS;
+    this.isAdPlaying = false;
+    this.notify();
+  }
+
+  // --- 1-SECOND TICK (For UI countdowns) ---
   private tick() {
-    // 1. Modal Countdown
+    // 1. Modal countdown
     if (this.modalState.isOpen && this.modalState.secondsLeft > 0) {
       this.modalState.secondsLeft -= 1;
       if (this.modalState.secondsLeft <= 0) {
@@ -130,62 +175,82 @@ class AdService {
       this.notify();
     }
 
-    // 2. Interstitial Countdown
+    // 2. Countdown display tick
     if (this.secondsUntilNextInterstitial > 0) {
       this.secondsUntilNextInterstitial -= 1;
       this.notify();
-    } else {
-      // Timer reached 0!
-      if (this.isPlayingGame) {
-        // GAMEPLAY AD PROTECTION: DO NOT show ad mid-game!
-        if (!this.interstitialQueued) {
-          console.log("[AdService] 60s timer reached 0 while game is active! Queueing interstitial for post-game.");
-          this.interstitialQueued = true;
-          this.notify();
-        }
-      } else {
-        // Outside of game: trigger strictly alternating 1:1 interstitial
-        this.secondsUntilNextInterstitial = INTERSTITIAL_CYCLE_SECONDS;
-        this.triggerAlternatingInterstitial("timer_60s");
-      }
     }
+  }
+
+  // --- 60-SECOND INTERSTITIAL TIMEOUT SCHEDULER (Single setTimeout Chain) ---
+  public scheduleNextInterstitial(seconds: number = INTERSTITIAL_CYCLE_SECONDS) {
+    if (this.interstitialTimeoutId) {
+      clearTimeout(this.interstitialTimeoutId);
+      this.interstitialTimeoutId = null;
+    }
+
+    this.secondsUntilNextInterstitial = seconds;
+    this.notify();
+
+    console.log(`[AdService] Next interstitial scheduled in ${seconds}s`);
+
+    this.interstitialTimeoutId = setTimeout(async () => {
+      this.interstitialTimeoutId = null;
+
+      // If user is actively playing a game, DO NOT show ad mid-game; queue it!
+      if (this.isPlayingGame) {
+        console.log("[AdService] 60s timer reached 0 while game is active. Queueing single interstitial ad.");
+        this.interstitialQueued = true;
+        this.notify();
+        return;
+      }
+
+      // If an ad is currently playing or locked, push back by 10s
+      if (!this.canPlayAd()) {
+        console.log("[AdService] Mutex busy when 60s timer finished. Retrying in 10s...");
+        this.scheduleNextInterstitial(10);
+        return;
+      }
+
+      await this.triggerAlternatingInterstitial("timer_60s");
+    }, seconds * 1000);
+  }
+
+  // Reset 60s interstitial timer (e.g. after manual mission ad is completed)
+  public resetInterstitialTimer(seconds: number = INTERSTITIAL_CYCLE_SECONDS) {
+    console.log(`[AdService] Interstitial timer reset: Next ad in ${seconds}s.`);
+    this.scheduleNextInterstitial(seconds);
   }
 
   // --- SDK AVAILABILITY DETECTION ---
-  public isSdkAvailable(provider: AdProvider): boolean {
+  public isMonetagAvailable(): boolean {
     if (typeof window === "undefined") return false;
+    return (
+      typeof window.show_11886350 === "function" ||
+      typeof window.show_MONETAG_ZONE_ID === "function" ||
+      typeof (window as any)[`show_${MONETAG_ZONE_ID}`] === "function" ||
+      typeof (window as any).show_MONETAG === "function" ||
+      typeof window.showMonetagInterstitial === "function"
+    );
+  }
 
-    if (provider === "monetag") {
-      return (
-        typeof window.show_11886350 === "function" ||
-        typeof window.show_MONETAG_ZONE_ID === "function" ||
-        typeof (window as any)[`show_${MONETAG_ZONE_ID}`] === "function" ||
-        typeof (window as any).show_MONETAG === "function" ||
-        typeof window.showMonetagInterstitial === "function"
-      );
-    }
+  public isGigapubAvailable(): boolean {
+    if (typeof window === "undefined") return false;
+    return (
+      typeof window.showGiga === "function" ||
+      (Boolean(window.Gigapub) &&
+        (typeof window.Gigapub?.showRewarded === "function" ||
+          typeof window.Gigapub?.showInterstitial === "function"))
+    );
+  }
 
-    if (provider === "gigapub") {
-      return (
-        typeof window.showGiga === "function" ||
-        (Boolean(window.Gigapub) &&
-          (typeof window.Gigapub?.showRewarded === "function" ||
-            typeof window.Gigapub?.showInterstitial === "function"))
-      );
-    }
-
-    if (provider === "adsgram") {
-      return (
-        Boolean(window.Adsgram) &&
-        typeof window.Adsgram?.init === "function"
-      );
-    }
-
-    return false;
+  public isAdsgramAvailable(): boolean {
+    if (typeof window === "undefined") return false;
+    return Boolean(window.Adsgram) && typeof window.Adsgram?.init === "function";
   }
 
   // --- SLEEK OBSIDIAN GLASS MODAL FALLBACK TRIGGER ---
-  public showModalFallback(
+  private showModalFallback(
     provider: AdProvider,
     rewardText?: string
   ): Promise<boolean> {
@@ -213,23 +278,22 @@ class AdService {
     });
   }
 
-  // --- CORE AD EXECUTION WITH SDK + SLEEK FALLBACK MODAL ---
-  public async showAd(
-    provider: AdProvider,
-    type: AdType = "interstitial",
+  // =========================================================================
+  // STRICT PROVIDER ISOLATION: NO AUTO-FALLBACK BETWEEN NETWORKS
+  // =========================================================================
+
+  // 1. STRICT MONETAG EXECUTION (Never calls Gigapub or Adsgram)
+  public async showMonetagAd(
+    type: AdType = "rewarded",
     rewardText?: string
   ): Promise<boolean> {
-    console.log(`[AdService] Requesting ${type.toUpperCase()} from [${provider.toUpperCase()}]...`);
+    if (!this.canPlayAd()) return false;
+    this.acquireLock();
+    console.log(`[AdService] Starting strictly isolated MONETAG ${type} ad...`);
 
-    // 1. If SDK is not loaded (dev / local / preview / adblocked), open 5s Obsidian Glass Modal
-    if (!this.isSdkAvailable(provider)) {
-      console.log(`[AdService] Real SDK for ${provider} not detected. Displaying Obsidian Glass fallback modal...`);
-      return await this.showModalFallback(provider, rewardText);
-    }
-
-    // 2. Real SDK execution with timeout and fallback
+    let result = false;
     try {
-      if (provider === "monetag") {
+      if (this.isMonetagAvailable()) {
         const fn =
           window.show_11886350 ||
           window.show_MONETAG_ZONE_ID ||
@@ -239,130 +303,196 @@ class AdService {
         if (typeof fn === "function") {
           try {
             await fn({ ymid: this.currentUserId || "miner" });
-            return true;
+            result = true;
           } catch (e) {
-            console.warn("[AdService] Monetag standard format failed, attempting pop:", e);
+            console.warn("[AdService] Monetag standard call failed, attempting pop:", e);
             try {
               await fn("pop");
-              return true;
+              result = true;
             } catch (popErr) {
-              console.warn("[AdService] Monetag pop error, falling back to modal:", popErr);
-              return await this.showModalFallback(provider, rewardText);
+              console.warn("[AdService] Monetag pop error, displaying Monetag modal:", popErr);
+              result = await this.showModalFallback("monetag", rewardText);
             }
           }
         } else if (typeof window.showMonetagInterstitial === "function") {
           const res = await window.showMonetagInterstitial();
-          return Boolean(res);
+          result = Boolean(res);
         }
-      } else if (provider === "gigapub") {
+      } else {
+        console.log("[AdService] Monetag SDK not ready. Showing Monetag Obsidian modal...");
+        result = await this.showModalFallback("monetag", rewardText);
+      }
+    } catch (err) {
+      console.warn("[AdService] Monetag error:", err);
+      result = await this.showModalFallback("monetag", rewardText);
+    } finally {
+      this.releaseLock();
+      this.resetInterstitialTimer(60);
+    }
+
+    return result;
+  }
+
+  // 2. STRICT GIGAPUB EXECUTION (Never calls Monetag or Adsgram)
+  public async showGigapubAd(
+    type: AdType = "rewarded",
+    rewardText?: string
+  ): Promise<boolean> {
+    if (!this.canPlayAd()) return false;
+    this.acquireLock();
+    console.log(`[AdService] Starting strictly isolated GIGAPUB ${type} ad...`);
+
+    let result = false;
+    try {
+      if (this.isGigapubAvailable()) {
         if (typeof window.showGiga === "function") {
           await window.showGiga("main");
-          return true;
+          result = true;
         } else if (window.Gigapub) {
           if (type === "rewarded" && typeof window.Gigapub.showRewarded === "function") {
             const res = await window.Gigapub.showRewarded();
-            return Boolean(res);
+            result = Boolean(res);
           } else if (typeof window.Gigapub.showInterstitial === "function") {
             const res = await window.Gigapub.showInterstitial();
-            return Boolean(res);
+            result = Boolean(res);
           }
         }
-      } else if (provider === "adsgram") {
-        if (window.Adsgram && typeof window.Adsgram.init === "function") {
-          const ad = window.Adsgram.init({
-            blockId: ADSGRAM_BLOCK_ID,
-            userId: this.currentUserId,
-          });
-          const res = await ad.show();
-          return Boolean(res?.done);
-        }
+      } else {
+        console.log("[AdService] Gigapub SDK not ready. Showing Gigapub Obsidian modal...");
+        result = await this.showModalFallback("gigapub", rewardText);
       }
-    } catch (sdkError) {
-      console.warn(`[AdService] Real SDK execution for ${provider} failed, falling back to modal:`, sdkError);
-      return await this.showModalFallback(provider, rewardText);
+    } catch (err) {
+      console.warn("[AdService] Gigapub error, showing Gigapub modal (NO MONETAG FALLBACK):", err);
+      result = await this.showModalFallback("gigapub", rewardText);
+    } finally {
+      this.releaseLock();
+      this.resetInterstitialTimer(60);
     }
 
-    // Default fallback to ensure user never gets stuck
-    return await this.showModalFallback(provider, rewardText);
+    return result;
   }
 
-  // --- APP OPEN INTERSTITIAL (2s: MONETAG) ---
+  // 3. STRICT ADSGRAM EXECUTION (Never calls Monetag or Gigapub)
+  public async showAdsgramAd(
+    type: AdType = "rewarded",
+    rewardText?: string
+  ): Promise<boolean> {
+    if (!this.canPlayAd()) return false;
+    this.acquireLock();
+    console.log(`[AdService] Starting strictly isolated ADSGRAM ${type} ad...`);
+
+    let result = false;
+    try {
+      if (this.isAdsgramAvailable() && window.Adsgram) {
+        const ad = window.Adsgram.init({
+          blockId: ADSGRAM_BLOCK_ID,
+          userId: this.currentUserId,
+        });
+        const res = await ad.show();
+        result = Boolean(res?.done);
+      } else {
+        console.log("[AdService] Adsgram SDK not ready. Showing Adsgram Obsidian modal...");
+        result = await this.showModalFallback("adsgram", rewardText);
+      }
+    } catch (err) {
+      console.warn("[AdService] Adsgram error, showing Adsgram modal:", err);
+      result = await this.showModalFallback("adsgram", rewardText);
+    } finally {
+      this.releaseLock();
+      this.resetInterstitialTimer(60);
+    }
+
+    return result;
+  }
+
+  // Generic router dispatching to strictly isolated provider methods
+  public async showAd(
+    provider: AdProvider,
+    type: AdType = "interstitial",
+    rewardText?: string
+  ): Promise<boolean> {
+    if (provider === "monetag") return await this.showMonetagAd(type, rewardText);
+    if (provider === "gigapub") return await this.showGigapubAd(type, rewardText);
+    if (provider === "adsgram") return await this.showAdsgramAd(type, rewardText);
+    return false;
+  }
+
+  // --- APP OPEN INTERSTITIAL (After 3s: ONLY 1 MONETAG) ---
   public async triggerAppOpenInterstitial(): Promise<boolean> {
+    if (this.appOpenTriggered) return false;
     this.appOpenTriggered = true;
     this.lastInterstitialProvider = "monetag";
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("nc_last_tab_ad_provider", "monetag");
     }
-    this.secondsUntilNextInterstitial = INTERSTITIAL_CYCLE_SECONDS;
-    this.notify();
 
-    console.log("[AdService] Playing App Open Interstitial (MONETAG)...");
-    const res = await this.showAd("monetag", "interstitial", "Welcome to NC TONs Mining Rig");
-    this.secondsUntilNextInterstitial = INTERSTITIAL_CYCLE_SECONDS;
-    this.notify();
+    console.log("[AdService] Playing App Open Interstitial (MONETAG ONLY)...");
+    const res = await this.showMonetagAd("interstitial", "Welcome to NC TONs Mining Rig");
+
+    // Strictly wait 60 seconds AFTER the ad closes before showing GIGAPUB
+    this.scheduleNextInterstitial(60);
     return res;
   }
 
-  // --- 1:1 STRICTLY ALTERNATING INTERSTITIAL ENGINE (MONETAG <-> GIGAPUB) ---
-  public async triggerAlternatingInterstitial(reason: string = "manual"): Promise<boolean> {
-    // If game is active and not a post-game trigger, block it!
+  // --- 1:1 STRICTLY ALTERNATING INTERSTITIAL ENGINE (NO CROSS-FALLBACK) ---
+  public async triggerAlternatingInterstitial(reason: string = "timer"): Promise<boolean> {
+    // If gameplay active, mark queued and abort!
     if (this.isPlayingGame && reason !== "game_end" && reason !== "game_queued") {
-      console.log(`[AdService] Interstitial blocked (${reason}): Gameplay active!`);
+      console.log(`[AdService] Interstitial blocked (${reason}): Gameplay active! Queuing ad.`);
       this.interstitialQueued = true;
       this.notify();
       return false;
     }
 
-    // Determine 1:1 strictly alternating next provider:
-    // Open (2s): Monetag -> 60s: Gigapub -> 120s: Monetag -> 180s: Gigapub...
+    if (!this.canPlayAd()) {
+      console.log(`[AdService] Interstitial skipped (${reason}): Ad is currently playing or locked.`);
+      return false;
+    }
+
+    // Strictly alternate: Monetag -> 60s -> Gigapub -> 60s -> Monetag...
     const next: "monetag" | "gigapub" =
       this.lastInterstitialProvider === "monetag" ? "gigapub" : "monetag";
-    const fallback: "monetag" | "gigapub" =
-      next === "monetag" ? "gigapub" : "monetag";
 
     console.log(
-      `[AdService] 1:1 Interstitial (${reason}): Triggering ${next.toUpperCase()} (last was ${this.lastInterstitialProvider.toUpperCase()})`
+      `[AdService] 1:1 Interstitial (${reason}): Showing ${next.toUpperCase()} (last was ${this.lastInterstitialProvider.toUpperCase()})`
     );
 
     let shown = false;
     try {
-      shown = await this.showAd(next, "interstitial");
+      if (next === "monetag") {
+        shown = await this.showMonetagAd("interstitial");
+      } else {
+        shown = await this.showGigapubAd("interstitial");
+      }
+
       if (shown) {
         this.lastInterstitialProvider = next;
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("nc_last_tab_ad_provider", next);
+        }
       }
     } catch (e) {
-      console.warn(`[AdService] ${next} interstitial failed, falling back to ${fallback}:`, e);
-      try {
-        shown = await this.showAd(fallback, "interstitial");
-        if (shown) {
-          this.lastInterstitialProvider = fallback;
-        }
-      } catch (fallbackErr) {
-        console.warn("[AdService] Both providers failed for interstitial:", fallbackErr);
-      }
+      console.warn(`[AdService] ${next} interstitial error:`, e);
+      // STRICT REQUIREMENT: NEVER FALLBACK TO OPPOSITE NETWORK!
     }
 
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem("nc_last_tab_ad_provider", this.lastInterstitialProvider);
-    }
-
-    this.secondsUntilNextInterstitial = INTERSTITIAL_CYCLE_SECONDS;
-    this.notify();
+    // Schedule next interstitial strictly 60s after ad finishes
+    this.scheduleNextInterstitial(60);
     return shown;
   }
 
   // --- GAMEPLAY AD PROTECTION ---
   public setIsPlayingGame(playing: boolean) {
     this.isPlayingGame = playing;
-    console.log(`[AdService] Gameplay state changed: ${playing ? "PLAYING (Ads Protected)" : "IDLE"}`);
+    console.log(`[AdService] Gameplay state: ${playing ? "ACTIVE (Ads Protected)" : "IDLE"}`);
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("nc_game_mode_changed", { detail: { active: playing } }));
     }
 
-    // If game ended and ad was queued, fire queued ad immediately
+    // If game ended and an interstitial was queued, fire that single queued ad immediately
     if (!playing && this.interstitialQueued) {
-      console.log("[AdService] Game ended with an interstitial queued! Firing queued ad now...");
+      console.log("[AdService] Game ended with queued interstitial. Firing single queued ad now...");
       this.interstitialQueued = false;
       this.triggerAlternatingInterstitial("game_queued");
     }
@@ -375,23 +505,16 @@ class AdService {
   }
 
   public onGameEnd(): Promise<boolean> {
-    console.log("[AdService] onGameEnd called. Checking queued ads & triggering post-game ad...");
+    console.log("[AdService] onGameEnd: Firing post-game interstitial & resetting 60s timer...");
     this.isPlayingGame = false;
     const wasQueued = this.interstitialQueued;
     this.interstitialQueued = false;
-
-    // Reset countdown from 60 seconds
-    this.secondsUntilNextInterstitial = INTERSTITIAL_CYCLE_SECONDS;
     this.notify();
 
-    // Trigger post-game interstitial (strictly alternating 1:1)
     return this.triggerAlternatingInterstitial(wasQueued ? "game_queued" : "game_end");
   }
 
   // --- MISSIONS TAB: MANDATORY 3-CATEGORY COMBO LOCK ---
-  // Step 1: Watch MONETAG (Unlocked first). Completing locks Monetag and unlocks Step 2.
-  // Step 2: Watch GIGAPUB (Locked until Step 1 done). Completing locks Gigapub and unlocks Step 3.
-  // Step 3: Watch ADSGRAM (Locked until Step 2 done). Completing awards "+Combo Bonus" & resets to Step 1.
   public getComboStep(): 1 | 2 | 3 {
     return this.comboStep;
   }
@@ -431,7 +554,6 @@ class AdService {
     return { completedStep, nextStep, comboBonusReady };
   }
 
-  // Reset combo back to Step 1
   public resetComboCycle() {
     this.comboStep = 1;
     if (typeof localStorage !== "undefined") {
@@ -440,7 +562,6 @@ class AdService {
     this.notify();
   }
 
-  // Dismiss fallback modal
   public dismissModal() {
     if (this.modalState.onDismiss) {
       this.modalState.onDismiss();
@@ -459,6 +580,7 @@ class AdService {
       lastInterstitialProvider: this.lastInterstitialProvider,
       isPlayingGame: this.isPlayingGame,
       interstitialQueued: this.interstitialQueued,
+      isAdPlaying: this.isAdPlaying,
       comboStep: this.comboStep,
       comboCompletions: this.comboCompletions,
       modal: { ...this.modalState },
@@ -484,6 +606,5 @@ class AdService {
   }
 }
 
-// Export singleton
 export const adService = new AdService();
 export default adService;
