@@ -5,7 +5,7 @@ import { MemoryGame } from '../components/games/MemoryGame.js';
 import { Game2048 } from '../components/games/Game2048.js';
 import { CarRaceGame } from '../components/games/CarRaceGame.js';
 import { ColorTubeSort } from '../components/games/ColorTubeSort.js';
-import { useAdManager, setGameActiveState } from '../hooks/useAdManager.js';
+import { adService } from '../services/adService.js';
 
 interface GamePageProps {
   onGameFinished: (ncAwarded: number, tonAwarded: string) => void;
@@ -14,40 +14,39 @@ interface GamePageProps {
 
 export const GamePage: React.FC<GamePageProps> = ({ onGameFinished, userId }) => {
   const [activeGame, setActiveGame] = useState<ActiveGameType | null>(null);
-  const { showPostGameAd } = useAdManager(userId || '');
 
-  // Start Game: Enter game mode (suppresses background 30s auto-interstitial loop)
+  // Start Game: Enter game mode (suppresses background 60s auto-interstitial loop)
   const handleSelectGame = (type: ActiveGameType) => {
-    setGameActiveState(true);
+    adService.setIsPlayingGame(true);
     setActiveGame(type);
   };
 
-  // Finish Game: Show 1:1 alternating interstitial (Monetag <-> Gigapub) after finishing game
+  // Finish Game: As soon as the game ends or a level completes, immediately fire queued Interstitial Ad before returning to scoreboard
   const handleLevelFinished = async (ncAwarded: number, tonAwarded: string) => {
     try {
-      console.log('[GamePage] Game finished! Triggering post-game alternating interstitial ad...');
-      await showPostGameAd();
+      console.log('[GamePage] Game finished! Triggering post-game ad via adService.onGameEnd()...');
+      await adService.onGameEnd();
     } catch (e) {
       console.warn('[GamePage] Interstitial ad trigger error:', e);
     } finally {
-      setGameActiveState(false);
+      adService.setIsPlayingGame(false);
     }
     onGameFinished(ncAwarded, tonAwarded);
   };
 
-  // Back to Hub: If player was in a game, show post-game ad and exit game mode
+  // Back to Hub: If player was in a game, fire queued/post-game ad and return to hub
   const handleBackToHub = async () => {
     if (activeGame !== null) {
       try {
-        await showPostGameAd();
+        await adService.onGameEnd();
       } catch (e) {
         console.warn('[GamePage] Exit game interstitial error:', e);
       } finally {
-        setGameActiveState(false);
+        adService.setIsPlayingGame(false);
         setActiveGame(null);
       }
     } else {
-      setGameActiveState(false);
+      adService.setIsPlayingGame(false);
       setActiveGame(null);
     }
   };

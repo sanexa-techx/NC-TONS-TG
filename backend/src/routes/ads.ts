@@ -25,6 +25,7 @@ export function calculateAdReward(currentCount: number): { nc: number; ton: numb
 export const AD_LIMITS = {
   adsgram: { max: MAX_ADS_PER_PROVIDER, minWithdraw: 0 },
   monetag: { max: MAX_ADS_PER_PROVIDER, minWithdraw: 4 },
+  gigapub: { max: MAX_ADS_PER_PROVIDER, minWithdraw: 0 },
 };
 
 // GET /api/ads/status
@@ -37,15 +38,26 @@ router.get("/status", async (req, res) => {
   if (!userId) return res.status(400).json({ error: "Missing userId" });
 
   try {
-    const resDb = await pool.query(
-      `SELECT adsgram_count, monetag_count, limit_ads_count,
-              EXTRACT(EPOCH FROM (NOW() - last_ad_at))::INT as elapsed_seconds
-       FROM user_daily_ads 
-       WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
-      [userId]
-    );
+    let resDb;
+    try {
+      resDb = await pool.query(
+        `SELECT adsgram_count, monetag_count, COALESCE(gigapub_count, 0) as gigapub_count, limit_ads_count,
+                EXTRACT(EPOCH FROM (NOW() - last_ad_at))::INT as elapsed_seconds
+         FROM user_daily_ads 
+         WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
+        [userId]
+      );
+    } catch {
+      resDb = await pool.query(
+        `SELECT adsgram_count, monetag_count, limit_ads_count,
+                EXTRACT(EPOCH FROM (NOW() - last_ad_at))::INT as elapsed_seconds
+         FROM user_daily_ads 
+         WHERE user_id = $1 AND ad_date = CURRENT_DATE`,
+        [userId]
+      );
+    }
 
-    const record = resDb.rows[0] || { adsgram_count: 0, monetag_count: 0, limit_ads_count: 0, elapsed_seconds: 999 };
+    const record = resDb.rows[0] || { adsgram_count: 0, monetag_count: 0, gigapub_count: 0, limit_ads_count: 0, elapsed_seconds: 999 };
     const elapsed = record.elapsed_seconds != null ? Number(record.elapsed_seconds) : 999;
     const cooldownRemaining = Math.max(0, AD_COOLDOWN_SECONDS - elapsed);
 
@@ -58,6 +70,7 @@ router.get("/status", async (req, res) => {
 
     const adsgramCount = Number(record.adsgram_count || 0);
     const monetagCount = Number(record.monetag_count || 0);
+    const gigapubCount = Number(record.gigapub_count || 0);
 
     return res.json({
       adsgram: {
@@ -72,8 +85,14 @@ router.get("/status", async (req, res) => {
         requiredForWithdraw: 4,
         isWithdrawUnlocked: monetagCount >= 4,
       },
-      totalWatched: adsgramCount + monetagCount,
-      totalMax: MAX_ADS_PER_PROVIDER * 2, // 200 total daily ads
+      gigapub: {
+        watched: gigapubCount,
+        max: MAX_ADS_PER_PROVIDER,
+        requiredForWithdraw: 0,
+        isWithdrawUnlocked: true,
+      },
+      totalWatched: adsgramCount + monetagCount + gigapubCount,
+      totalMax: MAX_ADS_PER_PROVIDER * 3,
       cooldownRemaining,
       canWithdraw: limits ? limits.canWithdraw : monetagCount >= 4,
       withdrawalLimits: limits,
@@ -91,9 +110,9 @@ router.post("/claim", async (req, res) => {
     req.headers["x-telegram-user-id"] ||
     req.headers["x-dev-telegram-id"] ||
     (req as any).telegramUser?.id;
-  const provider = req.body.provider; // 'monetag' | 'adsgram'
+  const provider = req.body.provider; // 'monetag' | 'adsgram' | 'gigapub'
 
-  if (!userId || !["monetag", "adsgram"].includes(provider)) {
+  if (!userId || !["monetag", "adsgram", "gigapub"].includes(provider)) {
     return res.status(400).json({ error: "Invalid parameters" });
   }
 
@@ -135,6 +154,8 @@ router.post("/claim", async (req, res) => {
     const currentCount = record
       ? provider === "monetag"
         ? Number(record.monetag_count || 0)
+        : provider === "gigapub"
+        ? Number(record.gigapub_count || 0)
         : Number(record.adsgram_count || 0)
       : 0;
 
@@ -149,14 +170,36 @@ router.post("/claim", async (req, res) => {
     const reward = calculateAdReward(currentCount);
 
     // 5. Update user daily ads counter and set last_ad_at timestamp
-    const countCol = provider === "monetag" ? "monetag_count" : "adsgram_count";
-    await client.query(
-      `INSERT INTO user_daily_ads (user_id, ad_date, ${countCol}, last_ad_at)
-       VALUES ($1, CURRENT_DATE, 1, NOW())
-       ON CONFLICT (user_id, ad_date) 
-       DO UPDATE SET ${countCol} = user_daily_ads.${countCol} + 1, last_ad_at = NOW()`,
-      [userId]
-    );
+    const countCol =
+      provider === "monetag"
+        ? "monetag_count"
+        : provider === "gigapub"
+        ? "gigapub_count"
+        : "adsgram_count";
+
+    try {
+      await client.query(
+        `INSERT INTO user_daily_ads (user_id, ad_date, ${countCol}, last_ad_at)
+         VALUES ($1, CURRENT_DATE, 1, NOW())
+         ON CONFLICT (user_id, ad_date) 
+         DO UPDATE SET ${countCol} = COALESCE(user_daily_ads.${countCol}, 0) + 1, last_ad_at = NOW()`,
+        [userId]
+      );
+    } catch {
+      // If gigapub_count column was missing, add it and retry
+      try {
+        await client.query(`ALTER TABLE user_daily_ads ADD COLUMN IF NOT EXISTS gigapub_count INT DEFAULT 0;`);
+        await client.query(
+          `INSERT INTO user_daily_ads (user_id, ad_date, ${countCol}, last_ad_at)
+           VALUES ($1, CURRENT_DATE, 1, NOW())
+           ON CONFLICT (user_id, ad_date) 
+           DO UPDATE SET ${countCol} = COALESCE(user_daily_ads.${countCol}, 0) + 1, last_ad_at = NOW()`,
+          [userId]
+        );
+      } catch (colErr) {
+        console.warn("Could not write gigapub_count column, continuing claim:", colErr);
+      }
+    }
 
     // 6. Atomically credit user balances
     const updatedUser = await client.query(
@@ -181,6 +224,55 @@ router.post("/claim", async (req, res) => {
     await client.query("ROLLBACK");
     console.error("Ad claim error:", err);
     return res.status(500).json({ error: "Failed to record ad view" });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/ads/claim-combo (3-Step Combo Lock completion reward)
+router.post("/claim-combo", async (req, res) => {
+  const userId =
+    req.body.userId ||
+    req.headers["x-telegram-user-id"] ||
+    req.headers["x-dev-telegram-id"] ||
+    (req as any).telegramUser?.id;
+
+  if (!userId) {
+    return res.status(400).json({ error: "Missing userId" });
+  }
+
+  const COMBO_BONUS_NC = 500;
+  const COMBO_BONUS_TON = 0.000500;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO users (id, first_name)
+       VALUES ($1, 'Miner')
+       ON CONFLICT (id) DO NOTHING`,
+      [userId]
+    );
+
+    const updatedUser = await client.query(
+      `UPDATE users 
+       SET nc_balance = nc_balance + $1,
+           ton_balance = ton_balance + $2
+       WHERE id = $3
+       RETURNING nc_balance, ton_balance`,
+      [COMBO_BONUS_NC, COMBO_BONUS_TON, userId]
+    );
+
+    await client.query("COMMIT");
+    return res.json({
+      success: true,
+      reward: { nc: COMBO_BONUS_NC, ton: COMBO_BONUS_TON },
+      newBalances: updatedUser.rows[0],
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Combo claim error:", err);
+    return res.status(500).json({ error: "Failed to claim combo bonus" });
   } finally {
     client.release();
   }

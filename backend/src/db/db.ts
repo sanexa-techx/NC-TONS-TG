@@ -228,6 +228,7 @@ const memoryStore = {
     ad_date: string;
     adsgram_count: number;
     monetag_count: number;
+    gigapub_count?: number;
     limit_ads_count: number;
     last_ad_at: Date;
   }>(),
@@ -1227,6 +1228,7 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
         {
           adsgram_count: record.adsgram_count,
           monetag_count: record.monetag_count,
+          gigapub_count: record.gigapub_count || 0,
           limit_ads_count: record.limit_ads_count || 0,
           last_ad_at: record.last_ad_at,
         },
@@ -1541,6 +1543,7 @@ function executeMockQuery(sql: string, params: any[] = []): { rows: any[]; rowCo
         ad_date: todayStr,
         adsgram_count: 0,
         monetag_count: 0,
+        gigapub_count: 0,
         limit_ads_count: 0,
         last_ad_at: new Date(Date.now() - 30000), // Default older than 20s cooldown
       });
@@ -1907,7 +1910,8 @@ export async function connectDB() {
         `);
         await realPool.query(`
           ALTER TABLE user_daily_ads 
-          ADD COLUMN IF NOT EXISTS limit_ads_count INT DEFAULT 0;
+          ADD COLUMN IF NOT EXISTS limit_ads_count INT DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS gigapub_count INT DEFAULT 0;
 
           ALTER TABLE user_daily_ads 
           DROP CONSTRAINT IF EXISTS user_daily_ads_adsgram_count_check,

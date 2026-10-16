@@ -214,6 +214,7 @@ export interface AdNetworkStats {
 export interface DailyAdStatusResponse {
   adsgram: AdNetworkStats;
   monetag: AdNetworkStats;
+  gigapub?: AdNetworkStats;
   totalWatched?: number;
   totalMax?: number;
   cooldownRemaining?: number;

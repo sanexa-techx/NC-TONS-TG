@@ -1,7 +1,20 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { ShieldCheck, Lock, Video, Clock, ExternalLink, ArrowRight, CheckCircle2, Play, Sparkles } from "lucide-react";
+import {
+  ShieldCheck,
+  Lock,
+  Unlock,
+  Video,
+  Clock,
+  ExternalLink,
+  ArrowRight,
+  CheckCircle2,
+  Play,
+  Sparkles,
+  Flame,
+  RotateCcw,
+} from "lucide-react";
 import { TonIcon, NcIcon } from "./icons/index.js";
-import { showSmartRewardedAd, showSpecificRewardedAd, getAdManagerStats, AD_STATE } from "../services/adManager.js";
+import { adService, AdServiceState } from "../services/adService.js";
 import { api } from "../services/api.js";
 import { DailyAdStatusResponse } from "../types/index.js";
 import confetti from "canvas-confetti";
@@ -16,49 +29,25 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
   onRewardClaimed,
 }) => {
   const [adStatus, setAdStatus] = useState<DailyAdStatusResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [activeProviderLoading, setActiveProviderLoading] = useState<string | null>(null);
+  const [loadingStep, setLoadingStep] = useState<number | null>(null);
   const [adFeedback, setAdFeedback] = useState<string | null>(null);
+  const [comboBonusToast, setComboBonusToast] = useState<string | null>(null);
+
+  // AdService reactive subscription
+  const [adEngineState, setAdEngineState] = useState<AdServiceState>(() =>
+    adService.getSnapshot()
+  );
+
+  useEffect(() => {
+    return adService.subscribe((state) => {
+      setAdEngineState(state);
+    });
+  }, []);
 
   // Dwell partner link state: 15s countdown with 11s left default
   const [dwellSecondsLeft, setDwellSecondsLeft] = useState<number>(11);
   const [isDwelling, setIsDwelling] = useState<boolean>(false);
   const [dwellClaimed, setDwellClaimed] = useState<boolean>(false);
-
-  // Global & Provider-specific 30s cooldowns
-  const [adCooldown, setAdCooldown] = useState<number>(() => {
-    const stats = getAdManagerStats();
-    return stats.rewardedCooldownLeft;
-  });
-
-  const [providerCooldowns, setProviderCooldowns] = useState(() => {
-    const stats = getAdManagerStats();
-    return (
-      stats.providerCooldowns || {
-        monetag: 0,
-        gigapub: 0,
-        adsgram: 0,
-      }
-    );
-  });
-
-  const [liveCounts, setLiveCounts] = useState(() => ({
-    monetag: AD_STATE.counts.monetag,
-    gigapub: AD_STATE.counts.gigapub,
-    adsgram: AD_STATE.counts.adsgram,
-  }));
-
-  // Countdown loop for cooldowns (ticks every 1s)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const stats = getAdManagerStats();
-      setAdCooldown(stats.rewardedCooldownLeft);
-      if (stats.providerCooldowns) {
-        setProviderCooldowns(stats.providerCooldowns);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Countdown loop for 15s Dwell Partner Link
   useEffect(() => {
@@ -98,110 +87,107 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     fetchStatus();
   }, [fetchStatus]);
 
-  // Handler for separate ad provider buttons (Monetag, Gigapub, Adsgram)
-  const handleWatchProviderAd = async (provider: "monetag" | "gigapub" | "adsgram") => {
-    if (providerCooldowns[provider] > 0 || activeProviderLoading || loading) return;
-    setActiveProviderLoading(provider);
+  // Mandatory 3-Category Combo Lock Execution:
+  // Step 1: MONETAG -> Step 2: GIGAPUB -> Step 3: ADSGRAM -> Combo Bonus!
+  const handleWatchComboStep = async (step: 1 | 2 | 3) => {
+    if (loadingStep !== null) return;
+    if (adEngineState.comboStep !== step) return;
+
+    setLoadingStep(step);
     setAdFeedback(null);
+    setComboBonusToast(null);
+
+    const providerMap: Record<1 | 2 | 3, "monetag" | "gigapub" | "adsgram"> = {
+      1: "monetag",
+      2: "gigapub",
+      3: "adsgram",
+    };
+    const provider = providerMap[step];
 
     try {
-      const res = await showSpecificRewardedAd(provider, false);
-      if (res.success) {
-        setLiveCounts({
-          monetag: AD_STATE.counts.monetag,
-          gigapub: AD_STATE.counts.gigapub,
-          adsgram: AD_STATE.counts.adsgram,
-        });
+      // 1. Show Ad via real SDK or 5-second Obsidian Glass fallback modal
+      console.log(`[AdMissions] Watching Step ${step}: ${provider.toUpperCase()}...`);
+      const success = await adService.showAd(
+        provider,
+        "rewarded",
+        `Step ${step} of 3: ${provider.toUpperCase()}`
+      );
 
-        const stats = getAdManagerStats();
-        if (stats.providerCooldowns) {
-          setProviderCooldowns(stats.providerCooldowns);
-        }
-
-        try {
-          const confettiColors =
-            provider === "monetag"
-              ? ["#10B981", "#34D399", "#A7F3D0"]
-              : provider === "gigapub"
-              ? ["#2563EB", "#60A5FA", "#BFDBFE"]
-              : ["#9333EA", "#C084FC", "#E9D5FF"];
-          confetti({
-            particleCount: 95,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: confettiColors,
-          });
-        } catch (_) {}
-
-        setAdFeedback(
-          `🎉 ${res.provider} ad completed! Earned +${res.reward?.nc} NC & +${res.reward?.ton} TON (${res.reward?.tier})`
-        );
-        fetchStatus();
-        if (onRewardClaimed) onRewardClaimed();
-      } else {
-        setAdFeedback(res.reason || `${provider.toUpperCase()} ad could not be displayed.`);
+      if (!success) {
+        setAdFeedback(`Playback cancelled or timed out. Please try again.`);
+        setLoadingStep(null);
+        return;
       }
-    } catch (err: any) {
-      setAdFeedback(err.message || `Failed to trigger ${provider} ad.`);
-    } finally {
-      setActiveProviderLoading(null);
-    }
-  };
 
-  // Handler for global auto-waterfall ad
-  const handleWatchSmartAd = async () => {
-    if (adCooldown > 0 || loading || activeProviderLoading) return;
-    setLoading(true);
-    setAdFeedback(null);
+      // 2. Claim step reward from backend
+      try {
+        await api.claimAdReward(provider, userId);
+      } catch (claimErr) {
+        console.warn("[AdMissions] Backend claim fallback:", claimErr);
+      }
 
-    try {
-      const res = await showSmartRewardedAd(false);
-      if (res.success) {
-        setLiveCounts({
-          monetag: AD_STATE.counts.monetag,
-          gigapub: AD_STATE.counts.gigapub,
-          adsgram: AD_STATE.counts.adsgram,
+      // 3. Advance Combo Step
+      const { nextStep, comboBonusReady } = adService.advanceComboStep();
+
+      // Confetti burst for step completion
+      try {
+        const stepColors =
+          step === 1
+            ? ["#10B981", "#34D399", "#A7F3D0"]
+            : step === 2
+            ? ["#2563EB", "#60A5FA", "#BFDBFE"]
+            : ["#9333EA", "#C084FC", "#E9D5FF"];
+        confetti({
+          particleCount: 70,
+          spread: 60,
+          origin: { y: 0.6 },
+          colors: stepColors,
         });
+      } catch (_) {}
 
-        const stats = getAdManagerStats();
-        if (stats.providerCooldowns) {
-          setProviderCooldowns(stats.providerCooldowns);
+      // 4. If Step 3 completed, award COMBO BONUS!
+      if (comboBonusReady) {
+        try {
+          await api.claimComboReward(userId);
+        } catch (comboErr) {
+          console.warn("[AdMissions] Claim combo error:", comboErr);
         }
 
         try {
           confetti({
-            particleCount: 90,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ["#10B981", "#2563EB", "#9333EA"],
+            particleCount: 140,
+            spread: 90,
+            origin: { y: 0.5 },
+            colors: ["#F59E0B", "#10B981", "#2563EB", "#9333EA"],
           });
         } catch (_) {}
 
-        setAdFeedback(
-          `🎉 Ad delivered via ${res.provider}! Earned +${res.reward?.nc} NC & +${res.reward?.ton} TON (${res.reward?.tier})`
+        setComboBonusToast(
+          "🔥 +COMBO BONUS UNLOCKED! +500 NC & +0.0005 TON CREDITED! Cycle reset to Step 1."
         );
-        fetchStatus();
-        if (onRewardClaimed) onRewardClaimed();
       } else {
-        setAdFeedback(res.reason || "Ad playback unavailable. Please try again.");
+        setAdFeedback(
+          `🎉 Step ${step} (${provider.toUpperCase()}) Completed! Step ${nextStep} is now unlocked.`
+        );
       }
+
+      fetchStatus();
+      if (onRewardClaimed) onRewardClaimed();
     } catch (err: any) {
-      setAdFeedback(err.message || "Failed to trigger ad.");
+      setAdFeedback(err.message || `Failed to complete ${provider.toUpperCase()} ad.`);
     } finally {
-      setLoading(false);
+      setLoadingStep(null);
     }
   };
 
   const handleStartDwell = () => {
     if (dwellClaimed) return;
     setIsDwelling(true);
-    // Optionally open demo sponsor link
     window.open("https://t.me/toncoin", "_blank");
   };
 
-  const totalWatched = liveCounts.monetag + liveCounts.gigapub + liveCounts.adsgram;
-  const totalMax = 200;
-  const totalPercent = Math.min(100, Math.round((totalWatched / totalMax) * 100));
+  const currentStep = adEngineState.comboStep;
+  const comboCompletions = adEngineState.comboCompletions;
 
   return (
     <div className="w-full space-y-3.5">
@@ -267,299 +253,341 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
         </button>
       </div>
 
-      {/* 2. "WATCH ADS (200 DAILY SYSTEM)" Card */}
-      <div className="w-full bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 text-slate-100 shadow-lg space-y-3">
-        {/* Header & Daily Total */}
+      {/* 2. MANDATORY 3-CATEGORY COMBO LOCK CARD (MONETAG -> GIGAPUB -> ADSGRAM) */}
+      <div className="w-full bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 text-slate-100 shadow-lg space-y-3 relative overflow-hidden">
+        {/* Ambient Glow */}
+        <div className="absolute top-0 right-0 w-36 h-36 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Card Header & Combo Counter */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-              <Video size={17} />
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+              <Flame size={17} />
             </div>
             <div>
-              <h4 className="text-xs font-black uppercase text-white tracking-wider">
-                WATCH ADS (200 DAILY SYSTEM)
+              <h4 className="text-xs font-black uppercase text-white tracking-wider flex items-center gap-1.5">
+                <span>3-CATEGORY COMBO LOCK</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  Anti-Spam
+                </span>
               </h4>
-              <p className="text-[10px] font-mono text-slate-400">Multi-network high-CPM waterfall</p>
+              <p className="text-[10px] font-mono text-slate-400">
+                Monetag → Gigapub → Adsgram cycle for +Combo Bonus
+              </p>
             </div>
           </div>
 
           <div className="text-right">
-            <span className="font-mono font-black text-xs text-blue-400">
-              {totalWatched} / {totalMax}
+            <span className="font-mono font-black text-xs text-amber-400 flex items-center justify-end gap-1">
+              <Sparkles size={12} />
+              <span>{comboCompletions} Combos</span>
             </span>
-            <span className="text-[9px] text-slate-400 block font-mono">Daily Viewed</span>
+            <span className="text-[9px] text-slate-400 block font-mono">Completed</span>
           </div>
         </div>
 
-        {/* Total Progress Bar */}
-        <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-white/10">
+        {/* 3-Step Rotation HUD Indicator */}
+        <div className="bg-slate-950/70 p-2.5 rounded-xl border border-white/10 flex items-center justify-between text-[11px] font-mono">
+          {/* Step 1 Pill */}
           <div
-            className="h-full bg-gradient-to-r from-emerald-500 to-[#10B981] rounded-full transition-all duration-500"
-            style={{ width: `${totalPercent}%` }}
-          />
+            className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all ${
+              currentStep === 1
+                ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)] font-black"
+                : currentStep > 1
+                ? "bg-slate-900 border-emerald-500/30 text-emerald-400/70 font-semibold"
+                : "bg-slate-900/40 border-white/10 text-slate-500"
+            }`}
+          >
+            {currentStep > 1 ? (
+              <CheckCircle2 size={12} className="text-emerald-400" />
+            ) : currentStep === 1 ? (
+              <Unlock size={12} className="text-emerald-400 animate-pulse" />
+            ) : (
+              <Lock size={12} />
+            )}
+            <span>1. MONETAG</span>
+          </div>
+
+          <ArrowRight size={13} className="text-slate-500" />
+
+          {/* Step 2 Pill */}
+          <div
+            className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all ${
+              currentStep === 2
+                ? "bg-blue-500/20 border-blue-400/60 text-blue-300 shadow-[0_0_10px_rgba(37,99,235,0.3)] font-black"
+                : currentStep > 2
+                ? "bg-slate-900 border-blue-500/30 text-blue-400/70 font-semibold"
+                : "bg-slate-900/40 border-white/10 text-slate-500"
+            }`}
+          >
+            {currentStep > 2 ? (
+              <CheckCircle2 size={12} className="text-blue-400" />
+            ) : currentStep === 2 ? (
+              <Unlock size={12} className="text-blue-400 animate-pulse" />
+            ) : (
+              <Lock size={12} />
+            )}
+            <span>2. GIGAPUB</span>
+          </div>
+
+          <ArrowRight size={13} className="text-slate-500" />
+
+          {/* Step 3 Pill */}
+          <div
+            className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition-all ${
+              currentStep === 3
+                ? "bg-purple-500/20 border-purple-400/60 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.3)] font-black"
+                : "bg-slate-900/40 border-white/10 text-slate-500"
+            }`}
+          >
+            {currentStep === 3 ? (
+              <Unlock size={12} className="text-purple-400 animate-pulse" />
+            ) : (
+              <Lock size={12} />
+            )}
+            <span>3. ADSGRAM</span>
+          </div>
         </div>
 
-        {/* Priority Waterfall Queue Flow Banner */}
-        <div className="bg-slate-950/70 p-2.5 rounded-xl border border-white/10 space-y-1">
-          <div className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center justify-between">
-            <span>Priority Waterfall Queue</span>
-            <span className="text-blue-400 font-bold">Smart Micro-Rotation</span>
+        {/* Combo Bonus Reward Callout */}
+        <div className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-emerald-500/15 border border-amber-500/30 flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center space-x-1.5 text-amber-300 font-bold">
+            <Sparkles size={14} className="text-amber-400" />
+            <span>FINISH STEP 3 FOR COMBO BONUS:</span>
           </div>
-          <div className="flex items-center justify-between text-[11px] font-mono pt-0.5">
-            <span className="px-2 py-0.5 rounded bg-slate-900 text-emerald-400 border border-emerald-500/30 font-bold">
-              1. Monetag
-            </span>
-            <ArrowRight size={12} className="text-slate-400" />
-            <span className="px-2 py-0.5 rounded bg-slate-900 text-blue-400 border border-blue-500/30 font-bold">
-              2. Gigapub
-            </span>
-            <ArrowRight size={12} className="text-slate-400" />
-            <span className="px-2 py-0.5 rounded bg-slate-900 text-purple-400 border border-purple-500/30 font-bold">
-              3. Adsgram
-            </span>
+          <div className="flex items-center space-x-2 font-black">
+            <span className="text-emerald-400">+500 NC</span>
+            <span className="text-slate-500">•</span>
+            <span className="text-cyan-400">+0.0005 TON</span>
           </div>
         </div>
 
-        {/* 3-Tier CPM Protection Pills */}
-        <div className="grid grid-cols-1 gap-1.5 pt-1">
-          <div className="px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono flex items-center justify-between">
-            <span className="font-bold">ADS 1-20: HIGH (NC + Full TON)</span>
-            <span className="text-emerald-400 font-bold">+300 NC • 0.0005 TON</span>
-          </div>
-          <div className="px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-blue-500/30 text-blue-300 text-[10px] font-mono flex items-center justify-between">
-            <span className="font-bold">ADS 21-50: MID (NC + 50% TON)</span>
-            <span className="text-blue-400 font-bold">+200 NC • 0.0002 TON</span>
-          </div>
-          <div className="px-2.5 py-1.5 rounded-xl bg-slate-950/70 border border-amber-500/30 text-amber-300 text-[10px] font-mono flex items-center justify-between">
-            <span className="font-bold">ADS 51+: FUEL & NC ONLY (0 TON)</span>
-            <span className="text-amber-400 font-bold">+150 NC • Fuel Boost</span>
-          </div>
-        </div>
-
-        {/* Separate Ad Provider Cards & Dedicated Buttons with 30s Cooldown */}
-        <div className="space-y-3 pt-1 border-t border-white/10">
-          <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-400 uppercase">
-            <span>Choose Ad Provider</span>
-            <span className="text-[10px] text-slate-500 font-normal">30s cooldown per ad</span>
-          </div>
-
-          {/* 1. MONETAG DEDICATED CARD & BUTTON */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 shadow-md space-y-2.5 hover:border-emerald-500/40 transition-all">
-            <div className="flex items-center justify-between">
+        {/* THE 3 SEQUENTIAL STEP CARDS */}
+        <div className="space-y-3 pt-1">
+          {/* STEP 1: MONETAG CARD */}
+          <div
+            className={`p-3.5 rounded-2xl border transition-all ${
+              currentStep === 1
+                ? "bg-slate-950/85 border-emerald-500/50 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/30"
+                : currentStep > 1
+                ? "bg-slate-950/50 border-emerald-500/20 opacity-80"
+                : "bg-slate-950/40 border-white/5 opacity-50"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    currentStep === 1
+                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                      : "bg-slate-900 text-slate-400 border border-white/10"
+                  }`}
+                >
                   <Video size={14} />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black text-white tracking-wide">
-                      MONETAG
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      Priority #1
-                    </span>
+                    <span className="text-xs font-black text-white">STEP 1: MONETAG</span>
+                    {currentStep === 1 && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                        ACTIVE STEP
+                      </span>
+                    )}
+                    {currentStep > 1 && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-950/50 text-emerald-400 border border-emerald-500/30">
+                        COMPLETED ✅
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400">High-CPM Rewarded Video</span>
+                  <span className="text-[10px] font-mono text-slate-400">High-CPM Interstitial / Rewarded</span>
                 </div>
               </div>
 
-              <div className="text-right">
-                <span className="text-xs font-mono font-black text-emerald-400">
-                  {liveCounts.monetag} / {AD_STATE.dailyCaps.monetag}
-                </span>
-                <span className="text-[9px] text-slate-400 block font-mono">Daily Cap</span>
+              <div className="text-right font-mono text-[11px] text-emerald-400 font-bold">
+                +150 - 300 NC
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-white/10">
-              <div
-                className="bg-[#10B981] h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${Math.min(100, (liveCounts.monetag / AD_STATE.dailyCaps.monetag) * 100)}%`,
-                }}
-              />
-            </div>
-
-            {/* Monetag Dedicated 30s Cooldown & Action Button */}
-            {providerCooldowns.monetag > 0 ? (
+            {/* Action Button */}
+            {currentStep === 1 ? (
               <button
-                disabled
-                className="w-full py-2.5 px-3 rounded-xl bg-slate-900 border border-emerald-500/30 text-emerald-400 font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed animate-pulse shadow-2xs"
+                onClick={() => handleWatchComboStep(1)}
+                disabled={loadingStep !== null}
+                className="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-emerald-500/25 cursor-pointer"
               >
-                <Clock size={13} className="text-emerald-400 animate-spin" />
-                <span>MONETAG COOLDOWN: {providerCooldowns.monetag}s REMAINING</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => handleWatchProviderAd("monetag")}
-                disabled={activeProviderLoading !== null || loading || liveCounts.monetag >= AD_STATE.dailyCaps.monetag}
-                className="w-full py-2.5 px-3 rounded-xl bg-[#10B981] hover:bg-[#059669] disabled:bg-slate-900 disabled:text-slate-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-sm shadow-emerald-500/20 cursor-pointer"
-              >
-                {activeProviderLoading === "monetag" ? (
-                  <span>DELIVERING MONETAG AD...</span>
-                ) : liveCounts.monetag >= AD_STATE.dailyCaps.monetag ? (
-                  <span>MONETAG DAILY CAP REACHED (80/80)</span>
+                {loadingStep === 1 ? (
+                  <span>STREAMING MONETAG AD...</span>
                 ) : (
                   <>
-                    <Play size={13} className="fill-white" />
-                    <span>WATCH MONETAG AD (+NC & TON)</span>
+                    <Play size={13} className="fill-slate-950" />
+                    <span>WATCH STEP 1 (MONETAG)</span>
                   </>
                 )}
               </button>
+            ) : currentStep > 1 ? (
+              <div className="w-full py-2 px-3 rounded-xl bg-slate-900/60 border border-emerald-500/20 text-emerald-400/80 font-mono text-xs font-semibold flex items-center justify-center gap-2">
+                <CheckCircle2 size={13} />
+                <span>STEP 1 LOCKED (COMPLETED — PROCEED TO STEP 2)</span>
+              </div>
+            ) : (
+              <div className="w-full py-2 px-3 rounded-xl bg-slate-900/40 border border-white/5 text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
+                <Lock size={13} />
+                <span>LOCKED</span>
+              </div>
             )}
           </div>
 
-          {/* 2. GIGAPUB DEDICATED CARD & BUTTON */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 shadow-md space-y-2.5 hover:border-blue-500/40 transition-all">
-            <div className="flex items-center justify-between">
+          {/* STEP 2: GIGAPUB CARD */}
+          <div
+            className={`p-3.5 rounded-2xl border transition-all ${
+              currentStep === 2
+                ? "bg-slate-950/85 border-blue-500/50 shadow-md shadow-blue-500/10 ring-1 ring-blue-500/30"
+                : currentStep > 2
+                ? "bg-slate-950/50 border-blue-500/20 opacity-80"
+                : "bg-slate-950/40 border-white/5 opacity-60"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    currentStep === 2
+                      ? "bg-blue-600/20 text-blue-400 border border-blue-500/40"
+                      : "bg-slate-900 text-slate-400 border border-white/10"
+                  }`}
+                >
                   <Video size={14} />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black text-white tracking-wide">
-                      GIGAPUB
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-blue-600/20 text-blue-300 border border-blue-500/40">
-                      Priority #2 • showGiga
-                    </span>
+                    <span className="text-xs font-black text-white">STEP 2: GIGAPUB</span>
+                    {currentStep === 2 && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-blue-600/20 text-blue-300 border border-blue-500/40">
+                        ACTIVE STEP
+                      </span>
+                    )}
+                    {currentStep > 2 && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-blue-950/50 text-blue-400 border border-blue-500/30">
+                        COMPLETED ✅
+                      </span>
+                    )}
+                    {currentStep < 2 && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-900 text-slate-500 border border-white/10">
+                        LOCKED
+                      </span>
+                    )}
                   </div>
                   <span className="text-[10px] font-mono text-slate-400">Telegram Native Rewarded</span>
                 </div>
               </div>
 
-              <div className="text-right">
-                <span className="text-xs font-mono font-black text-blue-400">
-                  {liveCounts.gigapub} / {AD_STATE.dailyCaps.gigapub}
-                </span>
-                <span className="text-[9px] text-slate-400 block font-mono">Daily Cap</span>
+              <div className="text-right font-mono text-[11px] text-blue-400 font-bold">
+                +150 - 300 NC
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-white/10">
-              <div
-                className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${Math.min(100, (liveCounts.gigapub / AD_STATE.dailyCaps.gigapub) * 100)}%`,
-                }}
-              />
-            </div>
-
-            {/* Gigapub Dedicated 30s Cooldown & Action Button */}
-            {providerCooldowns.gigapub > 0 ? (
+            {/* Action Button */}
+            {currentStep === 2 ? (
               <button
-                disabled
-                className="w-full py-2.5 px-3 rounded-xl bg-slate-900 border border-blue-500/30 text-blue-400 font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed animate-pulse shadow-2xs"
+                onClick={() => handleWatchComboStep(2)}
+                disabled={loadingStep !== null}
+                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-blue-500/25 cursor-pointer"
               >
-                <Clock size={13} className="text-blue-400 animate-spin" />
-                <span>GIGAPUB COOLDOWN: {providerCooldowns.gigapub}s REMAINING</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => handleWatchProviderAd("gigapub")}
-                disabled={activeProviderLoading !== null || loading || liveCounts.gigapub >= AD_STATE.dailyCaps.gigapub}
-                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-900 disabled:text-slate-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-sm shadow-blue-500/20 cursor-pointer"
-              >
-                {activeProviderLoading === "gigapub" ? (
-                  <span>DELIVERING GIGAPUB AD (showGiga)...</span>
-                ) : liveCounts.gigapub >= AD_STATE.dailyCaps.gigapub ? (
-                  <span>GIGAPUB DAILY CAP REACHED (70/70)</span>
+                {loadingStep === 2 ? (
+                  <span>STREAMING GIGAPUB AD...</span>
                 ) : (
                   <>
                     <Play size={13} className="fill-white" />
-                    <span>WATCH GIGAPUB AD (+NC & TON)</span>
+                    <span>WATCH STEP 2 (GIGAPUB)</span>
                   </>
                 )}
               </button>
+            ) : currentStep > 2 ? (
+              <div className="w-full py-2 px-3 rounded-xl bg-slate-900/60 border border-blue-500/20 text-blue-400/80 font-mono text-xs font-semibold flex items-center justify-center gap-2">
+                <CheckCircle2 size={13} />
+                <span>STEP 2 LOCKED (COMPLETED — PROCEED TO STEP 3)</span>
+              </div>
+            ) : (
+              <div className="w-full py-2 px-3 rounded-xl bg-slate-900/40 border border-white/5 text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
+                <Lock size={13} />
+                <span>LOCKED (COMPLETE STEP 1 FIRST)</span>
+              </div>
             )}
           </div>
 
-          {/* 3. ADSGRAM DEDICATED CARD & BUTTON */}
-          <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/10 shadow-md space-y-2.5 hover:border-purple-500/40 transition-all">
-            <div className="flex items-center justify-between">
+          {/* STEP 3: ADSGRAM CARD */}
+          <div
+            className={`p-3.5 rounded-2xl border transition-all ${
+              currentStep === 3
+                ? "bg-slate-950/85 border-purple-500/50 shadow-md shadow-purple-500/10 ring-1 ring-purple-500/30"
+                : "bg-slate-950/40 border-white/5 opacity-60"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <div
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                    currentStep === 3
+                      ? "bg-purple-600/20 text-purple-400 border border-purple-500/40"
+                      : "bg-slate-900 text-slate-400 border border-white/10"
+                  }`}
+                >
                   <Video size={14} />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black text-white tracking-wide">
-                      ADSGRAM
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-600/20 text-purple-300 border border-purple-500/40">
-                      Priority #3
-                    </span>
+                    <span className="text-xs font-black text-white">STEP 3: ADSGRAM</span>
+                    {currentStep === 3 ? (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-purple-600/20 text-purple-300 border border-purple-500/40 animate-pulse">
+                        FINAL STEP • +COMBO BONUS
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-900 text-slate-500 border border-white/10">
+                        LOCKED
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400">Telegram Adsgram Network</span>
+                  <span className="text-[10px] font-mono text-slate-400">Telegram Sad Adsgram Video</span>
                 </div>
               </div>
 
-              <div className="text-right">
-                <span className="text-xs font-mono font-black text-purple-400">
-                  {liveCounts.adsgram} / {AD_STATE.dailyCaps.adsgram}
-                </span>
-                <span className="text-[9px] text-slate-400 block font-mono">Daily Cap</span>
+              <div className="text-right font-mono text-[11px] text-purple-400 font-bold">
+                +150 - 300 NC
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden border border-white/10">
-              <div
-                className="bg-purple-500 h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${Math.min(100, (liveCounts.adsgram / AD_STATE.dailyCaps.adsgram) * 100)}%`,
-                }}
-              />
-            </div>
-
-            {/* Adsgram Dedicated 30s Cooldown & Action Button */}
-            {providerCooldowns.adsgram > 0 ? (
+            {/* Action Button */}
+            {currentStep === 3 ? (
               <button
-                disabled
-                className="w-full py-2.5 px-3 rounded-xl bg-slate-900 border border-purple-500/30 text-purple-400 font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed animate-pulse shadow-2xs"
+                onClick={() => handleWatchComboStep(3)}
+                disabled={loadingStep !== null}
+                className="w-full py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-md shadow-purple-500/30 cursor-pointer"
               >
-                <Clock size={13} className="text-purple-400 animate-spin" />
-                <span>ADSGRAM COOLDOWN: {providerCooldowns.adsgram}s REMAINING</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => handleWatchProviderAd("adsgram")}
-                disabled={activeProviderLoading !== null || loading || liveCounts.adsgram >= AD_STATE.dailyCaps.adsgram}
-                className="w-full py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-slate-900 disabled:text-slate-500 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 shadow-sm shadow-purple-500/20 cursor-pointer"
-              >
-                {activeProviderLoading === "adsgram" ? (
-                  <span>DELIVERING ADSGRAM AD...</span>
-                ) : liveCounts.adsgram >= AD_STATE.dailyCaps.adsgram ? (
-                  <span>ADSGRAM DAILY CAP REACHED (50/50)</span>
+                {loadingStep === 3 ? (
+                  <span>STREAMING ADSGRAM AD...</span>
                 ) : (
                   <>
-                    <Play size={13} className="fill-white" />
-                    <span>▶ Watch Ad (+NC & TON)</span>
+                    <Sparkles size={13} className="text-amber-300 animate-spin" />
+                    <span>WATCH STEP 3 & CLAIM COMBO BONUS</span>
                   </>
                 )}
               </button>
+            ) : (
+              <div className="w-full py-2 px-3 rounded-xl bg-slate-900/40 border border-white/5 text-slate-500 font-mono text-xs flex items-center justify-center gap-2">
+                <Lock size={13} />
+                <span>LOCKED (COMPLETE STEP 2 FIRST)</span>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Global Auto Waterfall Quick Button */}
-        <div className="pt-1 border-t border-white/10">
-          <button
-            onClick={handleWatchSmartAd}
-            disabled={loading || activeProviderLoading !== null || adCooldown > 0 || totalWatched >= totalMax}
-            className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/50 disabled:bg-slate-900/60 disabled:text-slate-500 text-amber-300 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer shadow-xs"
-          >
-            <Sparkles size={14} className="text-amber-400" />
-            <span>
-              {adCooldown > 0
-                ? `⚡ Smart Auto-Ad (${adCooldown}s)`
-                : "⚡ Smart Auto-Ad"}
-            </span>
-          </button>
-        </div>
+        {/* Feedback Messages */}
+        {comboBonusToast && (
+          <div className="p-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-emerald-500/20 to-blue-500/20 border border-amber-400/50 text-white text-xs font-mono font-bold text-center flex items-center justify-center gap-2 animate-bounce">
+            <Sparkles size={16} className="text-amber-400" />
+            <span>{comboBonusToast}</span>
+          </div>
+        )}
 
         {adFeedback && (
           <div className="p-2.5 rounded-xl bg-slate-950/70 border border-white/10 text-slate-200 text-xs font-mono text-center flex items-center justify-center gap-1.5">
@@ -567,6 +595,18 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
             <span>{adFeedback}</span>
           </div>
         )}
+
+        {/* Reset Combo Option if needed */}
+        <div className="flex items-center justify-end pt-1">
+          <button
+            onClick={() => adService.resetComboCycle()}
+            className="text-[10px] font-mono text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors cursor-pointer"
+            title="Reset Combo Cycle"
+          >
+            <RotateCcw size={10} />
+            <span>Reset Cycle to Step 1</span>
+          </button>
+        </div>
       </div>
 
       {/* Daily Withdrawal Requirement Badge */}
@@ -603,3 +643,5 @@ export const AdMissionsSection: React.FC<AdMissionsSectionProps> = ({
     </div>
   );
 };
+
+export default AdMissionsSection;

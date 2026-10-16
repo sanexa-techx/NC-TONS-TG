@@ -69,16 +69,19 @@ export const AD_STATE: AdState = {
 export const INTERSTITIAL_COOLDOWN_MS = 60 * 1000; // 60 seconds (1:1 alternating ad cooldown)
 export const REWARDED_COOLDOWN_MS = 30 * 1000;     // 30 seconds
 
+import { adService } from "./adService.js";
+
 // Game Mode State Tracking (suppresses 60s interstitial ads during active gameplay)
 let isGameActiveGlobal = false;
 export const setGameActiveState = (active: boolean) => {
   isGameActiveGlobal = active;
-  console.log(`[AdManager] Game mode: ${active ? "ACTIVE (30s ads paused)" : "INACTIVE (30s ads resumed)"}`);
+  adService.setIsPlayingGame(active);
+  console.log(`[AdManager] Game mode: ${active ? "ACTIVE (60s ads paused)" : "INACTIVE (60s ads resumed)"}`);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("nc_game_mode_changed", { detail: { active } }));
   }
 };
-export const isGameActive = () => isGameActiveGlobal;
+export const isGameActive = () => adService.getIsPlayingGame();
 
 // 1. Provider SDK call functions with safe fallbacks
 declare global {

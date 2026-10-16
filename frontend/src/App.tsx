@@ -14,7 +14,9 @@ import { OnlinePlayersBadge } from './components/OnlinePlayersBadge.js';
 import { UserProfileHeader } from './components/UserProfileHeader.js';
 import DailyStreakModal from './components/DailyStreakModal.js';
 import { DailyStreakStatusResponse } from './types/index.js';
-import { useAdManager, isGameActive } from './hooks/useAdManager.js';
+import { adService } from './services/adService.js';
+import { AdCountdownBadge } from './components/AdCountdownBadge.js';
+import { AdOverlayModal } from './components/AdOverlayModal.js';
 import { Loader2 } from 'lucide-react';
 import ForceJoinGate, { ChannelItem } from './components/ForceJoinGate.js';
 
@@ -76,34 +78,18 @@ export const App: React.FC = () => {
     setMiningState,
   } = useMining();
 
-  const { triggerInterstitial } = useAdManager(user?.id || '');
+  // Initialize Global Singleton adService (starts 2s app-open Monetag ad & persistent 60s alternating timer)
+  useEffect(() => {
+    adService.init(currentUserId);
+  }, [currentUserId]);
 
   const handleTabChange = (newTab: NavTab) => {
     if (newTab !== activeTab) {
       console.log(`[Navigation] Tab changed: ${activeTab} -> ${newTab}. Triggering 1:1 alternating ad (Monetag <-> Gigapub)...`);
-      triggerInterstitial('nav').catch((err) => console.warn('[App] Tab interstitial error:', err));
+      adService.triggerAlternatingInterstitial('nav').catch((err) => console.warn('[App] Tab interstitial error:', err));
       setActiveTab(newTab);
     }
   };
-
-  // 60-Second Automatic Interstitial Loop (Monetag -> 60s -> Gigapub -> 60s -> Monetag...)
-  // Strictly suppressed while user is in Game Mode!
-  // When a game finishes, post-game ad is shown and 60s cooldown resets.
-  useEffect(() => {
-    const timer = setInterval(async () => {
-      // Do not show ads during active gameplay
-      if (isGameActive()) {
-        return;
-      }
-      try {
-        await triggerInterstitial('auto_60s');
-      } catch (err) {
-        console.warn('[App] 60s auto-interstitial error:', err);
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [triggerInterstitial]);
 
   const initAuth = useCallback(async () => {
     setAuthLoading(true);
@@ -201,13 +187,16 @@ export const App: React.FC = () => {
 
         {/* Sticky Profile Header — Obsidian Glassmorphism */}
         <header className="sticky top-0 z-20 w-full bg-slate-950/80 backdrop-blur-2xl border-b border-white/10 px-4 py-2.5 shadow-2xl shadow-black/80">
-          <div className="w-full max-w-md mx-auto flex items-center justify-between gap-3">
+          <div className="w-full max-w-md mx-auto flex items-center justify-between gap-2">
             <UserProfileHeader
               user={user}
               livePowerPercentage={livePowerPercentage}
               liveTonBalance={liveTonBalance}
             />
-            <OnlinePlayersBadge userId={user?.id} />
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <AdCountdownBadge />
+              <OnlinePlayersBadge userId={user?.id} />
+            </div>
           </div>
         </header>
 
@@ -278,6 +267,9 @@ export const App: React.FC = () => {
             onClaimSuccess={handleDailyClaimSuccess}
           />
         )}
+
+        {/* Obsidian Glass Full-Screen Ad Overlay Modal (5s Countdown Fallback) */}
+        <AdOverlayModal />
       </div>
     </TonConnectUIProvider>
   );

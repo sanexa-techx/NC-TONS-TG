@@ -1,250 +1,16 @@
 import { useCallback } from "react";
-import createAdHandler from "monetag-tg-sdk";
-
-declare global {
-  interface Window {
-    Adsgram?: {
-      init: (params: { blockId: string; debug?: boolean; userId?: string }) => {
-        show: () => Promise<{ done: boolean }>;
-      };
-    };
-    showMonetagInterstitial?: () => Promise<boolean>;
-    show_11886350?: (options?: any) => Promise<any>;
-    showGiga?: (zone?: string) => Promise<any>;
-    Gigapub?: {
-      showRewarded?: () => Promise<boolean>;
-      showInterstitial?: () => Promise<boolean>;
-    };
-  }
-}
-
-const rawMonetagZone = (import.meta as any).env?.VITE_MONETAG_ZONE_ID || "11886350";
-const MONETAG_ZONE_ID = rawMonetagZone ? parseInt(rawMonetagZone, 10) : 11886350;
-const MONETAG_SDK_FN = `show_${MONETAG_ZONE_ID}`;
-
-let monetagHandler: ((options?: any) => Promise<void>) | null = null;
-if (typeof window !== "undefined" && MONETAG_ZONE_ID > 0) {
-  try {
-    monetagHandler = createAdHandler(MONETAG_ZONE_ID);
-    console.log(`[Monetag] Initialized monetag-tg-sdk with Zone ID: ${MONETAG_ZONE_ID}`);
-  } catch (err) {
-    console.warn("[Monetag] Failed to initialize monetag-tg-sdk:", err);
-  }
-}
+import { adService } from "../services/adService.js";
 
 // Global state tracking to prevent any ad from interrupting active gameplay
-let isGameActiveGlobal = false;
-let globalLastInterstitialTime = Date.now(); // Starts from app mount; first auto ad in 60s
-
 export const setGameActiveState = (active: boolean) => {
-  isGameActiveGlobal = active;
+  adService.setIsPlayingGame(active);
   console.log(`[AdManager] Active game state: ${active ? "ACTIVE (60s ads paused)" : "INACTIVE (60s ads active)"}`);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("nc_game_mode_changed", { detail: { active } }));
   }
 };
 
-export const isGameActive = () => isGameActiveGlobal;
-
-// Internal executor for Monetag on-demand interstitial display with safety timeout
-async function executeMonetagInterstitial(
-  userId: number | string
-): Promise<boolean> {
-  const timeoutMs = 6000;
-
-  const showPromise = new Promise<boolean>(async (resolve) => {
-    try {
-      const globalMonetag = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
-      const hasMonetag =
-        Boolean(globalMonetag) ||
-        Boolean(monetagHandler) ||
-        (typeof window !== "undefined" && Boolean(window.showMonetagInterstitial));
-
-      // In dev mode without loaded Monetag SDK, resolve cleanly
-      if (!hasMonetag) {
-        console.log("[AdManager Dev] Simulating Monetag interstitial ad");
-        setTimeout(() => resolve(true), 350);
-        return;
-      }
-
-      let displayed = false;
-
-      // Execute Monetag interstitial
-      try {
-        if (typeof globalMonetag === "function") {
-          await globalMonetag({ ymid: String(userId) });
-          displayed = true;
-        } else if (monetagHandler) {
-          await monetagHandler({ ymid: String(userId) });
-          displayed = true;
-        } else if (window.showMonetagInterstitial) {
-          displayed = await window.showMonetagInterstitial();
-        }
-      } catch (mErr) {
-        console.warn("[AdManager] Monetag standard interstitial failed, trying pop format:", mErr);
-        try {
-          if (typeof globalMonetag === "function") {
-            await globalMonetag("pop");
-            displayed = true;
-          } else if (monetagHandler) {
-            await monetagHandler("pop");
-            displayed = true;
-          }
-        } catch (popErr) {
-          console.warn("[AdManager] Monetag pop error:", popErr);
-        }
-      }
-
-      resolve(displayed);
-    } catch (err) {
-      console.warn("[AdManager] Monetag Interstitial error:", err);
-      resolve(false);
-    }
-  });
-
-  const timeoutPromise = new Promise<boolean>((resolve) => {
-    setTimeout(() => {
-      console.log(`[AdManager] Monetag interstitial timeout (${timeoutMs}ms) elapsed`);
-      resolve(false);
-    }, timeoutMs);
-  });
-
-  return await Promise.race([showPromise, timeoutPromise]);
-}
-
-// Internal executor for Gigapub on-demand interstitial display with safety timeout
-async function executeGigapubInterstitial(): Promise<boolean> {
-  const timeoutMs = 8000;
-
-  return new Promise<boolean>(async (resolve) => {
-    let finished = false;
-    const finish = (result: boolean) => {
-      if (!finished) {
-        finished = true;
-        resolve(result);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      console.warn("[AdManager] Gigapub interstitial timeout (8s) elapsed");
-      finish(false);
-    }, timeoutMs);
-
-    try {
-      const getShowGiga = () => (window as any).showGiga;
-      if (typeof getShowGiga() === "function") {
-        console.log("[AdManager] Executing Gigapub showGiga('main')...");
-        try {
-          await getShowGiga()("main");
-          clearTimeout(timer);
-          finish(true);
-          return;
-        } catch (e) {
-          console.warn("[AdManager] showGiga call error:", e);
-          clearTimeout(timer);
-          finish(false);
-          return;
-        }
-      }
-
-      // If script is asynchronously initializing, retry briefly
-      for (let i = 0; i < 8; i++) {
-        await new Promise((r) => setTimeout(r, 250));
-        if (typeof getShowGiga() === "function") {
-          console.log("[AdManager] Executing Gigapub showGiga('main') after wait...");
-          try {
-            await getShowGiga()("main");
-            clearTimeout(timer);
-            finish(true);
-            return;
-          } catch (e) {
-            clearTimeout(timer);
-            finish(false);
-            return;
-          }
-        }
-      }
-
-      if ((window as any).Gigapub && typeof (window as any).Gigapub.showInterstitial === "function") {
-        const res = await (window as any).Gigapub.showInterstitial();
-        clearTimeout(timer);
-        finish(Boolean(res));
-        return;
-      }
-
-      clearTimeout(timer);
-      console.warn("[AdManager] Gigapub SDK not ready or showGiga missing");
-      finish(false);
-    } catch (err) {
-      clearTimeout(timer);
-      console.warn("[AdManager] Gigapub Interstitial error:", err);
-      finish(false);
-    }
-  });
-}
-
-// 1:1 Alternating Interstitial Engine (Monetag <-> Gigapub one after another)
-async function executeAlternatingInterstitial(
-  userId: number | string,
-  reason: string = "nav"
-): Promise<boolean> {
-  // Read persisted last provider so alternation is strictly 1:1 across tab clicks and reloads
-  const savedLast =
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem("nc_last_tab_ad_provider")
-      : null;
-  const lastProvider: "monetag" | "gigapub" =
-    savedLast === "monetag" || savedLast === "gigapub" ? savedLast : "gigapub";
-
-  // Determine next provider in 1:1 sequence (Monetag -> Gigapub -> Monetag -> Gigapub)
-  const nextProvider: "monetag" | "gigapub" =
-    lastProvider === "monetag" ? "gigapub" : "monetag";
-  const fallbackProvider: "monetag" | "gigapub" =
-    nextProvider === "monetag" ? "gigapub" : "monetag";
-
-  console.log(
-    `[AdManager] 1:1 Alternating Tab Ad (${reason}): Showing ${nextProvider.toUpperCase()} (last was ${lastProvider.toUpperCase()})`
-  );
-
-  const runProvider = async (p: "monetag" | "gigapub"): Promise<boolean> => {
-    if (p === "monetag") {
-      return await executeMonetagInterstitial(userId);
-    } else {
-      return await executeGigapubInterstitial();
-    }
-  };
-
-  let displayed = false;
-  try {
-    displayed = await runProvider(nextProvider);
-  } catch (err) {
-    console.warn(`[AdManager] Primary provider ${nextProvider} error:`, err);
-    displayed = false;
-  }
-
-  if (displayed) {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem("nc_last_tab_ad_provider", nextProvider);
-    }
-    return true;
-  }
-
-  // Graceful fallback to the opposite network if the primary had zero-fill
-  console.log(`[AdManager] Primary ${nextProvider} had no fill, falling back to ${fallbackProvider}...`);
-  try {
-    const fallbackDisplayed = await runProvider(fallbackProvider);
-    if (fallbackDisplayed) {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("nc_last_tab_ad_provider", fallbackProvider);
-      }
-      return true;
-    }
-  } catch (fallbackErr) {
-    console.warn("[AdManager] Both Monetag and Gigapub interstitials failed:", fallbackErr);
-  }
-
-  return false;
-}
+export const isGameActive = () => adService.getIsPlayingGame();
 
 export function useAdManager(
   userId: number | string,
@@ -293,58 +59,20 @@ export function useAdManager(
   // 1. Play Rewarded Monetag Ad (100 Daily Cap with Tiered Payouts)
   const showMonetagRewarded = useCallback(async () => {
     try {
-      const globalSdkFn = typeof window !== "undefined" ? (window as any)[MONETAG_SDK_FN] : null;
-
-      if (typeof globalSdkFn === "function") {
-        try {
-          console.log(`[Monetag] Calling global ${MONETAG_SDK_FN} interstitial...`);
-          await globalSdkFn({ ymid: String(userId) });
-          return await claimReward("monetag");
-        } catch (interstitialErr) {
-          console.warn(`[Monetag] ${MONETAG_SDK_FN} interstitial failed, trying pop:`, interstitialErr);
-          await globalSdkFn("pop");
-          return await claimReward("monetag");
-        }
-      } else if (monetagHandler) {
-        try {
-          console.log("[Monetag] Calling monetag-tg-sdk handler...");
-          await monetagHandler({ ymid: String(userId) });
-          return await claimReward("monetag");
-        } catch (interstitialErr) {
-          console.warn("[Monetag] Interstitial fallback to popup format:", interstitialErr);
-          await monetagHandler("pop");
-          return await claimReward("monetag");
-        }
-      } else if (window.showMonetagInterstitial) {
-        const watched = await window.showMonetagInterstitial();
-        if (watched) return await claimReward("monetag");
-      } else {
-        // Fallback simulation for dev mode or when script is still loading
-        console.log("[Monetag Dev] Simulating Rewarded Ad playback in dev mode...");
+      const watched = await adService.showAd("monetag", "rewarded", "Monetag High-CPM Video");
+      if (watched) {
         return await claimReward("monetag");
       }
     } catch (e: any) {
       console.warn("Monetag error or dismissed:", e?.message || e);
     }
     return null;
-  }, [userId, MONETAG_SDK_FN, monetagHandler]);
+  }, [userId]);
 
   // 2. Play Rewarded Adsgram Video (100 Daily Cap with Tiered Payouts)
   const showAdsgramRewarded = useCallback(async () => {
     try {
-      const adsgram = typeof window !== "undefined" ? (window as any).Adsgram : null;
-      let watched = false;
-
-      if (adsgram && typeof adsgram.init === "function") {
-        const blockId = (import.meta as any).env?.VITE_ADSGRAM_BLOCK_ID || "1234";
-        const ad = adsgram.init({ blockId, userId: String(userId) });
-        const res = await ad.show();
-        watched = Boolean(res?.done);
-      } else {
-        console.log("[Adsgram Dev] Simulating Adsgram Rewarded Video playback...");
-        watched = true;
-      }
-
+      const watched = await adService.showAd("adsgram", "rewarded", "Adsgram Video Reward");
       if (watched) {
         return await claimReward("adsgram");
       }
@@ -354,37 +82,14 @@ export function useAdManager(
     return null;
   }, [userId]);
 
-  // 3. Interstitial Trigger (Guarded against playing while game is active)
-  // 1:1 Alternating between Monetag and Gigapub: Monetag -> 60s -> Gigapub -> 60s -> Monetag...
+  // 3. Interstitial Trigger (Alternating 1:1, guarded against mid-game)
   const triggerInterstitial = useCallback(
     async (
       reason: "nav" | "start" | "withdraw" | "game_start" | "game_end" | "auto_30s" | "auto_60s"
     ): Promise<boolean> => {
-      // CRITICAL: Block any interstitial ad if a game is actively playing!
-      // Only "game_end" is permitted to show after game finishes.
-      if (isGameActiveGlobal && reason !== "game_end") {
-        console.log(`[AdManager] Interstitial blocked: Gameplay active (${reason})`);
-        return false;
-      }
-
-      const now = Date.now();
-      // For game_end, skip cooldown so the post-game ad shows immediately!
-      // For all others (nav, auto_60s, etc.), enforce strictly 60s cooldown.
-      const minCooldown = reason === "game_end" ? 0 : 60000;
-      if (now - globalLastInterstitialTime < minCooldown) {
-        const remaining = Math.ceil((minCooldown - (now - globalLastInterstitialTime)) / 1000);
-        console.log(`[AdManager] Interstitial throttled (${reason}) - ${remaining}s cooldown remaining`);
-        return false;
-      }
-
-      console.log(`[Ad Trigger] Showing 1:1 alternating interstitial for ${reason}...`);
-
-      const shown = await executeAlternatingInterstitial(userId, reason);
-      // Reset the 60-second timer to start counting from now!
-      globalLastInterstitialTime = Date.now();
-      return shown;
+      return await adService.triggerAlternatingInterstitial(reason);
     },
-    [userId]
+    []
   );
 
   // 4. Pre-Game Helper
@@ -392,16 +97,11 @@ export function useAdManager(
     return await triggerInterstitial("game_start");
   }, [triggerInterstitial]);
 
-  // 5. Post-Game Interstitial (After gameplay ends: Monetag <-> Gigapub)
+  // 5. Post-Game Interstitial (Immediately fires queued or post-game ad)
   const showPostGameAd = useCallback(async (): Promise<boolean> => {
-    console.log("[AdManager] Triggering post-game ad (gameplay ended)...");
-    try {
-      return await triggerInterstitial("game_end");
-    } finally {
-      // Reset game mode to inactive; 30s auto loop will resume 30s from now
-      setGameActiveState(false);
-    }
-  }, [triggerInterstitial]);
+    console.log("[AdManager] Triggering post-game ad via adService.onGameEnd()...");
+    return await adService.onGameEnd();
+  }, []);
 
   // 6. Withdrawal Limit Ad (Rewarded video/interstitial for 30 daily / 100 weekly limit pass)
   const showWithdrawalLimitAd = useCallback(async (): Promise<any> => {
@@ -430,8 +130,8 @@ export function useAdManager(
       }
     };
 
-    // Sole/main provider: Monetag
-    await executeMonetagInterstitial(userId);
+    // Show monetag ad via adService
+    await adService.showAd("monetag", "rewarded", "Withdrawal Limit Breaker");
     return await claimLimitAd();
   }, [userId, onRewardClaimed]);
 

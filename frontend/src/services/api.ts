@@ -665,7 +665,7 @@ export const api = {
   },
 
   async claimAdReward(
-    provider: 'adsgram' | 'monetag',
+    provider: 'adsgram' | 'monetag' | 'gigapub',
     userId?: string | number
   ): Promise<{
     success: boolean;
@@ -680,6 +680,22 @@ export const api = {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ provider, userId: id }),
+    });
+    return handleResponse(res);
+  },
+
+  async claimComboReward(
+    userId?: string | number
+  ): Promise<{
+    success: boolean;
+    reward: { nc: number; ton: number };
+    newBalances: any;
+  }> {
+    const id = userId || getDetectedUser()?.id;
+    const res = await fetch('/api/ads/claim-combo', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId: id }),
     });
     return handleResponse(res);
   },
