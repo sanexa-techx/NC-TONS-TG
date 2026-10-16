@@ -3,7 +3,7 @@ import { pool } from "../db/db.js";
 import { getUserWithdrawalLimits, watchWithdrawalLimitAd } from "../controllers/withdrawController.js";
 
 const router = Router();
-export const AD_COOLDOWN_SECONDS = 30;
+export const AD_COOLDOWN_SECONDS = 5;
 export const MAX_ADS_PER_PROVIDER = 100;
 
 // Helper: Calculate tiered reward based on current view number

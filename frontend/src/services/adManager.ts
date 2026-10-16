@@ -81,24 +81,7 @@ export const setGameActiveState = (active: boolean) => {
 };
 export const isGameActive = () => adService.getIsPlayingGame();
 
-// 1. Provider SDK call functions with safe fallbacks
-declare global {
-  interface Window {
-    show_MONETAG_ZONE_ID?: (options?: any) => Promise<any>;
-    show_11886350?: (options?: any) => Promise<any>;
-    showMonetagInterstitial?: () => Promise<boolean>;
-    showGiga?: (zone?: string) => Promise<any>;
-    Gigapub?: {
-      showRewarded?: () => Promise<boolean>;
-      showInterstitial?: () => Promise<boolean>;
-    };
-    Adsgram?: {
-      init: (params: { blockId: string; debug?: boolean; userId?: string }) => {
-        show: () => Promise<{ done: boolean }>;
-      };
-    };
-  }
-}
+
 
 export const Providers = {
   // --- MONETAG ---

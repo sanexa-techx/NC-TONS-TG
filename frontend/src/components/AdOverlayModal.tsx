@@ -49,9 +49,7 @@ export const AdOverlayModal: React.FC = () => {
   };
 
   const handleClaimNow = () => {
-    if (modal.onComplete) {
-      modal.onComplete();
-    }
+    adService.completeModal();
   };
 
   return (

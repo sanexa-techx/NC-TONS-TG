@@ -48,13 +48,16 @@ declare global {
     Adsgram?: {
       init: (params: { blockId: string; debug?: boolean; userId?: string }) => {
         show: () => Promise<{ done: boolean }>;
+        addEventListener?: (event: string, handler: (data?: any) => void) => void;
       };
     };
   }
 }
 
 const MONETAG_ZONE_ID = "11886350";
-const ADSGRAM_BLOCK_ID = "12571";
+const ADSGRAM_BLOCK_ID =
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_ADSGRAM_BLOCK_ID) ||
+  "49696";
 const INTERSTITIAL_CYCLE_SECONDS = 60;
 const MUTEX_COOLDOWN_MS = 5000; // Minimum 5-second lock window after ad closes
 
@@ -165,14 +168,20 @@ class AdService {
   // --- 1-SECOND TICK (For UI countdowns) ---
   private tick() {
     // 1. Modal countdown
-    if (this.modalState.isOpen && this.modalState.secondsLeft > 0) {
-      this.modalState.secondsLeft -= 1;
-      if (this.modalState.secondsLeft <= 0) {
-        const onComplete = this.modalState.onComplete;
-        this.modalState.isOpen = false;
-        if (onComplete) onComplete();
+    if (this.modalState.isOpen) {
+      if (this.modalState.secondsLeft > 0) {
+        this.modalState.secondsLeft -= 1;
+        this.notify();
+      } else if (this.modalState.secondsLeft === 0) {
+        // Countdown reached 0: set to -1 to trigger auto-claim after 1.2s if user didn't tap claim
+        this.modalState.secondsLeft = -1;
+        this.notify();
+        setTimeout(() => {
+          if (this.modalState.isOpen) {
+            this.completeModal();
+          }
+        }, 1500);
       }
-      this.notify();
     }
 
     // 2. Countdown display tick
@@ -384,18 +393,54 @@ class AdService {
     let result = false;
     try {
       if (this.isAdsgramAvailable() && window.Adsgram) {
-        const ad = window.Adsgram.init({
-          blockId: ADSGRAM_BLOCK_ID,
-          userId: this.currentUserId,
-        });
-        const res = await ad.show();
-        result = Boolean(res?.done);
+        const blockId = String(ADSGRAM_BLOCK_ID || "49696");
+        console.log(`[AdService] Invoking Adsgram SDK (blockId: ${blockId})...`);
+
+        try {
+          const adController = window.Adsgram.init({
+            blockId,
+            debug: false,
+          });
+
+          // Suppress intrusive Telegram popups by registering SDK event listeners
+          if (typeof adController.addEventListener === "function") {
+            adController.addEventListener("onError", (err: any) => {
+              console.warn("[AdService] Adsgram SDK onError event:", err);
+            });
+            adController.addEventListener("onBannerNotFound", (err: any) => {
+              console.warn("[AdService] Adsgram SDK onBannerNotFound event:", err);
+            });
+            adController.addEventListener("onSkip", () => {
+              console.log("[AdService] Adsgram SDK onSkip event");
+            });
+          }
+
+          // Race Adsgram playback with 12s timeout guard so users never get frozen
+          const showPromise = adController.show();
+          const timeoutPromise = new Promise<{ done: boolean }>((_, reject) =>
+            setTimeout(() => reject(new Error("Adsgram show timeout")), 12000)
+          );
+
+          const res = (await Promise.race([showPromise, timeoutPromise])) as any;
+          if (res && res.done) {
+            console.log("[AdService] Adsgram ad completed successfully via SDK:", res);
+            result = true;
+          } else {
+            console.warn("[AdService] Adsgram show completed without done: true:", res);
+          }
+        } catch (showErr) {
+          console.warn("[AdService] Adsgram SDK show error/timeout:", showErr);
+        }
       } else {
-        console.log("[AdService] Adsgram SDK not ready. Showing Adsgram Obsidian modal...");
+        console.log("[AdService] Adsgram SDK not loaded on window. Activating Obsidian Modal...");
+      }
+
+      if (!result) {
+        console.log("[AdService] Adsgram SDK inactive or unfulfilled. Activating Obsidian Glass Modal...");
         result = await this.showModalFallback("adsgram", rewardText);
       }
     } catch (err) {
-      console.warn("[AdService] Adsgram error, showing Adsgram modal:", err);
+      console.warn("[AdService] Adsgram general error, showing Adsgram modal:", err);
       result = await this.showModalFallback("adsgram", rewardText);
     } finally {
       this.releaseLock();
@@ -560,6 +605,15 @@ class AdService {
       localStorage.setItem("nc_ad_combo_step", "1");
     }
     this.notify();
+  }
+
+  public completeModal() {
+    if (this.modalState.isOpen) {
+      const onComplete = this.modalState.onComplete;
+      this.modalState.isOpen = false;
+      this.notify();
+      if (onComplete) onComplete();
+    }
   }
 
   public dismissModal() {
